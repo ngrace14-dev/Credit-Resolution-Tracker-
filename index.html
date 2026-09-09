@@ -67,29 +67,41 @@
         <!-- MAIN DASHBOARD -->
         <main v-else class="flex-1 flex flex-col p-6 bg-gray-100 overflow-hidden">
             
-            <!-- MONTH NAVIGATOR -->
-            <div class="bg-white rounded-xl shadow-sm border border-gray-300 p-2 mb-6 flex overflow-x-auto gap-1 shrink-0">
-                <button @click="activeMonth = 'All'" :class="activeMonth === 'All' ? 'bg-gray-800 text-white font-bold' : 'text-gray-600 hover:bg-gray-100 font-medium'" class="px-4 py-2 rounded-lg text-sm transition-colors whitespace-nowrap">All Year</button>
-                <div class="w-px bg-gray-300 mx-1"></div>
-                <button v-for="month in calendarMonths" :key="month" @click="activeMonth = month" 
-                        :class="activeMonth === month ? 'bg-blue-600 text-white font-bold' : 'text-gray-600 hover:bg-blue-50 hover:text-blue-700 font-medium'" 
-                        class="px-4 py-2 rounded-lg text-sm transition-colors whitespace-nowrap flex-1 text-center">
-                    {{ month }}
-                </button>
+            <!-- TOP BAR: MONTH NAVIGATOR & SEARCH -->
+            <div class="flex justify-between items-center mb-6 shrink-0 gap-4">
+                <!-- MONTH NAVIGATOR -->
+                <div class="bg-white rounded-xl shadow-sm border border-gray-300 p-2 flex overflow-x-auto gap-1 flex-1">
+                    <button @click="activeMonth = 'All'" :class="activeMonth === 'All' ? 'bg-gray-800 text-white font-bold' : 'text-gray-600 hover:bg-gray-100 font-medium'" class="px-4 py-2 rounded-lg text-sm transition-colors whitespace-nowrap">All Year</button>
+                    <div class="w-px bg-gray-300 mx-1"></div>
+                    <button v-for="month in calendarMonths" :key="month" @click="activeMonth = month" 
+                            :class="activeMonth === month ? 'bg-blue-600 text-white font-bold' : 'text-gray-600 hover:bg-blue-50 hover:text-blue-700 font-medium'" 
+                            class="px-4 py-2 rounded-lg text-sm transition-colors whitespace-nowrap flex-1 text-center">
+                        {{ month }}
+                    </button>
+                </div>
+
+                <!-- GLOBAL SEARCH BAR -->
+                <div class="relative w-80 shrink-0">
+                    <i data-lucide="search" class="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
+                    <input type="text" v-model="searchQuery" placeholder="Search brand, invoice, type..." class="w-full bg-white border border-gray-300 rounded-xl py-2.5 pl-10 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 shadow-sm transition-shadow">
+                    <button v-if="searchQuery" @click="searchQuery = ''" class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                        <i data-lucide="x-circle" class="w-4 h-4"></i>
+                    </button>
+                </div>
             </div>
 
             <!-- KPIs -->
             <div class="flex gap-6 mb-6 shrink-0">
                 <div class="bg-white border-l-4 border-blue-600 rounded-xl p-5 flex-1 shadow-sm flex items-center justify-between">
                     <div>
-                        <div class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Total Pending Float ({{ activeMonth }})</div>
+                        <div class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Total Pending Float <span v-if="activeMonth !== 'All'">({{ activeMonth }})</span></div>
                         <div class="text-3xl font-extrabold text-blue-900">{{ formatCurrency(totalPending) }}</div>
                     </div>
                     <i data-lucide="clock" class="w-10 h-10 text-blue-100"></i>
                 </div>
                 <div class="bg-white border-l-4 border-green-500 rounded-xl p-5 flex-1 shadow-sm flex items-center justify-between">
                     <div>
-                        <div class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Total Applied / Resolved ({{ activeMonth }})</div>
+                        <div class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Total Applied / Resolved <span v-if="activeMonth !== 'All'">({{ activeMonth }})</span></div>
                         <div class="text-3xl font-extrabold text-green-700">{{ formatCurrency(totalApplied) }}</div>
                     </div>
                     <i data-lucide="check-circle" class="w-10 h-10 text-green-100"></i>
@@ -119,7 +131,8 @@
                         <tbody>
                             <tr v-if="filteredCredits.length === 0">
                                 <td :colspan="activeMonth === 'All' ? 12 : 11" class="text-center py-10 text-gray-500 font-medium bg-gray-50">
-                                    No promo credits found for {{ activeSite }} in {{ activeMonth }}.
+                                    <span v-if="searchQuery">No results found for "{{ searchQuery }}".</span>
+                                    <span v-else>No promo credits found for {{ activeSite }} in {{ activeMonth }}.</span>
                                 </td>
                             </tr>
                             <tr v-for="credit in filteredCredits" :key="credit.id" class="hover:bg-blue-50/50 transition-colors">
@@ -359,7 +372,8 @@
                 const promoCredits = ref([]);
                 
                 const calendarMonths = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-                const activeMonth = ref('August'); // Default tab
+                const activeMonth = ref('August');
+                const searchQuery = ref('');
 
                 const masterBrands = ref([
                     { vendor: "3 Bros", distributor: "Hash Tag Distribution" },
@@ -449,9 +463,21 @@
 
                 const filteredCredits = computed(() => {
                     let base = promoCredits.value.filter(c => c.site === activeSite.value);
+                    
                     if (activeMonth.value !== 'All') {
                         base = base.filter(c => c.trackingMonth === activeMonth.value);
                     }
+                    
+                    if (searchQuery.value.trim() !== '') {
+                        const q = searchQuery.value.toLowerCase();
+                        base = base.filter(c => 
+                            (c.vendor && c.vendor.toLowerCase().includes(q)) ||
+                            (c.distributor && c.distributor.toLowerCase().includes(q)) ||
+                            (c.invoice && c.invoice.toLowerCase().includes(q)) ||
+                            (c.creditType && c.creditType.toLowerCase().includes(q))
+                        );
+                    }
+                    
                     return base.map(c => {
                         const isMapped = masterBrands.value.some(b => b.vendor.toLowerCase() === c.vendor.toLowerCase());
                         return { ...c, needsMapping: !isMapped };
@@ -532,7 +558,6 @@
 
                 const displayGrid = computed(() => {
                     if (pastedGrid.value.length === 0) return [];
-                    // Return rows skipping the super header (row 0) and column header (row 1)
                     return pastedGrid.value.slice(2, 22);
                 });
                 
@@ -542,7 +567,6 @@
                     return calendarMonths.find(m => cleanStr.includes(m.toLowerCase())) || null;
                 };
 
-                // Instantly convert the raw text area paste into the grid
                 const processRawPaste = () => {
                     const text = rawPasteData.value;
                     if (!text.trim()) return;
@@ -550,11 +574,10 @@
                     const rows = text.split('\n').filter(r => r.trim() !== '');
                     const grid = rows.map(r => r.split('\t').map(c => c.trim()));
                     
-                    if (grid.length < 3) return; // Wait until they paste SuperHeader + Header + Data
+                    if (grid.length < 3) return; 
                     
                     pastedGrid.value = grid;
                     
-                    // Auto-guess mapped headers based on row 1 (the actual column names)
                     mappedHeaders.value = grid[1].map(cell => {
                         const lowerCell = cell.toLowerCase();
                         const match = availableHeaders.value.find(h => h !== '-- Ignore Column --' && lowerCell.includes(h.toLowerCase()));
@@ -577,11 +600,8 @@
                 const processImport = () => {
                     let importedCount = 0;
                     
-                    // We need to track the "active" super header month as we scan left to right
-                    // Excel often puts the month in the first column of the chunk, and blanks after.
                     const superHeaders = pastedGrid.value[0];
                     
-                    // Process data rows starting from row 2 (skipping 0: Months, 1: Columns)
                     for (let r = 2; r < pastedGrid.value.length; r++) {
                         const row = pastedGrid.value[r];
                         
@@ -591,7 +611,6 @@
                         let currentChunkMonth = 'Unknown';
                         
                         for (let c = 0; c < row.length; c++) {
-                            // Update chunk month if super header has a valid month here
                             const detectedMonth = detectMonthInString(superHeaders[c]);
                             if (detectedMonth) {
                                 currentChunkMonth = detectedMonth;
@@ -600,7 +619,6 @@
                             const header = mappedHeaders.value[c];
                             if (header === '-- Ignore Column --') continue;
                             
-                            // Horizontal Chunking Logic: If header repeats, save and start fresh
                             if (seenHeadersInChunk.has(header)) {
                                 if (hasData && currentCredit.vendor) {
                                     currentCredit.id = Date.now().toString() + Math.random().toString(36).substr(2,5);
@@ -632,7 +650,6 @@
                             }
                         }
                         
-                        // Push final chunk in row
                         if (hasData && currentCredit.vendor) {
                             currentCredit.id = Date.now().toString() + Math.random().toString(36).substr(2,5);
                             currentCredit.site = activeSite.value;
@@ -662,7 +679,7 @@
                     masterBrands, filteredBrands, showBrandDropdown, selectBrand,
                     showImportModal, openImportModal, closeImportModal, resetImport, 
                     rawPasteData, pastedGrid, displayGrid, mappedHeaders, availableHeaders, processRawPaste, processImport,
-                    calendarMonths, activeMonth, detectMonthInString
+                    calendarMonths, activeMonth, detectMonthInString, searchQuery
                 };
             }
         }).mount('#app');
