@@ -1,0 +1,671 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Promo Credit Tracker</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Calibri:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Calibri', sans-serif; background-color: #f3f4f6; margin: 0; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+        .excel-table { border-collapse: collapse; font-size: 13px; background-color: white; width: 100%; text-align: left; }
+        .excel-table th, .excel-table td { border: 1px solid #d1d5db; padding: 8px 12px; white-space: nowrap; }
+        .excel-table th { font-weight: 700; background-color: #f8f9fa; color: #374151; }
+        [v-cloak] { display: none; }
+        
+        ::-webkit-scrollbar { height: 10px; width: 10px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+    </style>
+</head>
+<body>
+    <div id="app" class="h-full flex flex-col" v-cloak>
+        
+        <!-- HEADER -->
+        <header class="bg-blue-800 text-white px-5 py-3 flex justify-between items-center shrink-0 shadow-md z-20">
+            <div class="flex items-center gap-3">
+                <i data-lucide="badge-dollar-sign" class="w-7 h-7"></i>
+                <div>
+                    <h1 class="font-bold tracking-wide text-lg leading-tight">Promo Credit Tracker</h1>
+                    <div class="text-[10px] uppercase font-bold tracking-widest flex items-center gap-2 text-blue-200">
+                        <span><i data-lucide="cloud" class="w-3 h-3 inline mb-0.5"></i> Cloud Sync Active</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex items-center bg-black/20 p-1 rounded-lg shadow-inner" v-if="isManagerUnlocked">
+                <button @click="activeSite = 'Red Bluff'" :class="activeSite === 'Red Bluff' ? 'bg-white text-blue-800 shadow-sm font-bold' : 'text-white/80 hover:text-white'" class="px-5 py-1.5 rounded text-sm transition-all">Red Bluff</button>
+                <button @click="activeSite = 'Redding'" :class="activeSite === 'Redding' ? 'bg-white text-blue-800 shadow-sm font-bold' : 'text-white/80 hover:text-white'" class="px-5 py-1.5 rounded text-sm transition-all">Redding</button>
+            </div>
+
+            <div class="flex items-center gap-2" v-if="isManagerUnlocked">
+                <div class="flex items-center gap-2 mr-2 bg-white/10 px-3 py-1.5 rounded shadow-inner border border-white/10">
+                    <i data-lucide="user" class="w-4 h-4"></i> <span class="text-sm font-bold">{{ loggedInUser }}</span>
+                </div>
+                <button @click="forceLock" class="bg-red-500 hover:bg-red-600 text-white px-3 py-1.5 rounded flex items-center gap-1.5 text-sm font-bold shadow transition-colors"><i data-lucide="lock" class="w-4 h-4"></i> Lock</button>
+                <button @click="openImportModal" class="bg-indigo-500 hover:bg-indigo-600 text-white px-3 py-1.5 rounded flex items-center gap-1.5 text-sm font-bold shadow transition-colors"><i data-lucide="grid" class="w-4 h-4"></i> Bulk Import</button>
+                <button @click="openPromoModal()" class="bg-green-500 hover:bg-green-600 text-white px-3 py-1.5 rounded flex items-center gap-1.5 text-sm font-bold shadow transition-colors"><i data-lucide="plus" class="w-4 h-4"></i> New Promo</button>
+            </div>
+        </header>
+
+        <!-- LOGIN SCREEN -->
+        <main v-if="!isManagerUnlocked" class="flex-1 flex flex-col items-center justify-center bg-gray-100">
+             <div class="bg-white rounded-2xl shadow-xl p-10 max-w-md w-full mx-4 text-center border border-gray-200">
+                 <div class="bg-blue-50 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6">
+                    <i data-lucide="shield-check" class="w-10 h-10 text-blue-800"></i>
+                 </div>
+                 <h2 class="text-2xl font-bold text-gray-800 mb-2">System Login</h2>
+                 <p class="text-gray-500 mb-6 font-medium">Enter your 4-digit manager PIN.</p>
+                 <input type="password" v-model="pinInput" @keyup.enter="handleLogin" class="border-2 border-gray-300 p-4 w-full rounded-xl focus:border-blue-600 focus:ring-4 focus:ring-blue-600/10 outline-none text-center text-4xl tracking-[0.5em] mb-6 font-mono font-bold text-gray-800 transition-all" placeholder="••••">
+                 <button @click="handleLogin" class="w-full py-3.5 bg-blue-800 hover:bg-blue-900 text-white rounded-xl font-bold text-lg shadow-md transition-colors">Access Tracker</button>
+             </div>
+        </main>
+
+        <!-- MAIN DASHBOARD -->
+        <main v-else class="flex-1 flex flex-col p-6 bg-gray-100 overflow-hidden">
+            
+            <!-- MONTH NAVIGATOR -->
+            <div class="bg-white rounded-xl shadow-sm border border-gray-300 p-2 mb-6 flex overflow-x-auto gap-1 shrink-0">
+                <button @click="activeMonth = 'All'" :class="activeMonth === 'All' ? 'bg-gray-800 text-white font-bold' : 'text-gray-600 hover:bg-gray-100 font-medium'" class="px-4 py-2 rounded-lg text-sm transition-colors whitespace-nowrap">All Year</button>
+                <div class="w-px bg-gray-300 mx-1"></div>
+                <button v-for="month in calendarMonths" :key="month" @click="activeMonth = month" 
+                        :class="activeMonth === month ? 'bg-blue-600 text-white font-bold' : 'text-gray-600 hover:bg-blue-50 hover:text-blue-700 font-medium'" 
+                        class="px-4 py-2 rounded-lg text-sm transition-colors whitespace-nowrap flex-1 text-center">
+                    {{ month }}
+                </button>
+            </div>
+
+            <!-- KPIs -->
+            <div class="flex gap-6 mb-6 shrink-0">
+                <div class="bg-white border-l-4 border-blue-600 rounded-xl p-5 flex-1 shadow-sm flex items-center justify-between">
+                    <div>
+                        <div class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Total Pending Float ({{ activeMonth }})</div>
+                        <div class="text-3xl font-extrabold text-blue-900">{{ formatCurrency(totalPending) }}</div>
+                    </div>
+                    <i data-lucide="clock" class="w-10 h-10 text-blue-100"></i>
+                </div>
+                <div class="bg-white border-l-4 border-green-500 rounded-xl p-5 flex-1 shadow-sm flex items-center justify-between">
+                    <div>
+                        <div class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Total Applied / Resolved ({{ activeMonth }})</div>
+                        <div class="text-3xl font-extrabold text-green-700">{{ formatCurrency(totalApplied) }}</div>
+                    </div>
+                    <i data-lucide="check-circle" class="w-10 h-10 text-green-100"></i>
+                </div>
+            </div>
+
+            <!-- DATA TABLE -->
+            <div class="bg-white rounded-xl border border-gray-300 shadow-sm flex-1 flex flex-col min-h-0 overflow-hidden">
+                <div class="overflow-auto flex-1">
+                    <table class="excel-table relative">
+                        <thead class="sticky top-0 z-10 shadow-sm">
+                            <tr>
+                                <th v-if="activeMonth === 'All'">Tracking Month</th>
+                                <th>Vendor (Brand)</th>
+                                <th>Distributor</th>
+                                <th>Credit Type</th>
+                                <th>Dates</th>
+                                <th>Credit amount $$$</th>
+                                <th>Date requested</th>
+                                <th>Date received</th>
+                                <th>Invoice / Credit Memo</th>
+                                <th>Proof</th>
+                                <th class="text-center">Status</th>
+                                <th class="text-right">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr v-if="filteredCredits.length === 0">
+                                <td :colspan="activeMonth === 'All' ? 12 : 11" class="text-center py-10 text-gray-500 font-medium bg-gray-50">
+                                    No promo credits found for {{ activeSite }} in {{ activeMonth }}.
+                                </td>
+                            </tr>
+                            <tr v-for="credit in filteredCredits" :key="credit.id" class="hover:bg-blue-50/50 transition-colors">
+                                <td v-if="activeMonth === 'All'" class="font-bold text-gray-500">{{ credit.trackingMonth }}</td>
+                                <td class="font-bold text-gray-900 flex items-center gap-2">
+                                    <i v-if="credit.needsMapping" data-lucide="alert-triangle" class="w-4 h-4 text-red-500" title="Brand Unmapped"></i>
+                                    {{ credit.vendor }}
+                                </td>
+                                <td class="text-gray-600">{{ credit.distributor }}</td>
+                                <td>{{ credit.creditType }}</td>
+                                <td>{{ credit.dates }}</td>
+                                <td class="font-bold" :class="credit.status === 'Applied' ? 'text-green-600' : 'text-blue-600'">{{ formatCurrency(credit.amount) }}</td>
+                                <td>{{ credit.dateRequested }}</td>
+                                <td>{{ credit.dateReceived }}</td>
+                                <td class="font-mono text-xs text-gray-600">{{ credit.invoice }}</td>
+                                <td class="text-center">
+                                    <button v-if="credit.attachmentName" class="text-blue-500 hover:text-blue-700 bg-blue-50 p-1 rounded" title="View Attachment">
+                                        <i data-lucide="paperclip" class="w-4 h-4"></i>
+                                    </button>
+                                    <span v-else class="text-gray-300">-</span>
+                                </td>
+                                <td class="text-center">
+                                    <span class="px-2.5 py-1 rounded shadow-sm text-[11px] font-bold uppercase tracking-wider" 
+                                          :class="credit.status === 'Applied' ? 'bg-green-100 text-green-800 border border-green-200' : 'bg-amber-100 text-amber-800 border border-amber-200'">
+                                        {{ credit.status }}
+                                    </span>
+                                </td>
+                                <td class="text-right">
+                                    <button @click="editCredit(credit)" class="text-blue-600 hover:text-white hover:bg-blue-600 px-2 py-1 rounded text-xs font-bold transition-colors">Edit</button>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+
+        <!-- ADD/EDIT MODAL -->
+        <div v-if="showPromoModal" class="fixed inset-0 bg-black/60 flex items-center justify-center z-50 backdrop-blur-sm" @click.self="closePromoModal">
+            <div class="bg-white rounded-2xl shadow-2xl w-[700px] flex flex-col overflow-hidden">
+                <div class="px-6 py-4 border-b bg-gray-50 flex justify-between items-center shrink-0">
+                    <h2 class="font-bold text-xl text-gray-800 flex items-center gap-2">
+                        <i data-lucide="file-edit" class="w-5 h-5 text-blue-600"></i> 
+                        {{ editingId ? 'Edit Promo Credit' : 'Log New Promo Credit' }}
+                    </h2>
+                    <button @click="closePromoModal" class="text-gray-500 hover:text-red-600 transition-colors p-1 hover:bg-gray-200 rounded"><i data-lucide="x" class="w-5 h-5"></i></button>
+                </div>
+                
+                <div class="p-6 grid grid-cols-2 gap-x-6 gap-y-4 overflow-y-auto max-h-[70vh]">
+                    
+                    <div class="col-span-2">
+                        <label class="text-[11px] font-bold text-gray-500 uppercase tracking-wide">Tracking Month</label>
+                        <select v-model="form.trackingMonth" class="border border-gray-300 p-2.5 w-full rounded-lg mt-1 font-bold focus:ring-2 focus:ring-blue-500 outline-none">
+                            <option v-for="m in calendarMonths" :key="m" :value="m">{{ m }}</option>
+                        </select>
+                    </div>
+
+                    <div class="col-span-2 border-t pt-2"></div>
+
+                    <!-- Brand Autocomplete -->
+                    <div class="col-span-2 relative">
+                        <label class="text-[11px] font-bold text-gray-500 uppercase tracking-wide">Vendor (Brand)</label>
+                        <input type="text" v-model="form.vendor" @focus="showBrandDropdown = true" @input="showBrandDropdown = true" class="border border-gray-300 p-2.5 w-full rounded-lg mt-1 font-bold focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Search Brand Name...">
+                        
+                        <div v-if="showBrandDropdown && filteredBrands.length > 0" class="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 shadow-xl rounded-lg max-h-48 overflow-y-auto z-50">
+                            <div v-for="brand in filteredBrands" :key="brand.vendor" @click="selectBrand(brand)" class="px-4 py-2 hover:bg-blue-50 cursor-pointer border-b last:border-0 flex justify-between items-center">
+                                <span class="font-bold text-gray-800">{{ brand.vendor }}</span>
+                                <span class="text-xs font-medium text-gray-400">{{ brand.distributor }}</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="text-[11px] font-bold text-gray-500 uppercase tracking-wide">Distributor</label>
+                        <input type="text" v-model="form.distributor" class="border border-gray-300 bg-gray-50 p-2.5 w-full rounded-lg mt-1 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                    </div>
+                    <div>
+                        <label class="text-[11px] font-bold text-gray-500 uppercase tracking-wide">Credit Type</label>
+                        <input type="text" v-model="form.creditType" class="border border-gray-300 p-2.5 w-full rounded-lg mt-1 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                    </div>
+                    <div>
+                        <label class="text-[11px] font-bold text-gray-500 uppercase tracking-wide">Dates</label>
+                        <input type="text" v-model="form.dates" class="border border-gray-300 p-2.5 w-full rounded-lg mt-1 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                    </div>
+                    <div>
+                        <label class="text-[11px] font-bold text-gray-500 uppercase tracking-wide">Credit Amount $$$</label>
+                        <div class="relative">
+                            <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 font-bold">$</span>
+                            <input type="number" v-model.number="form.amount" class="border border-gray-300 pl-7 p-2.5 w-full rounded-lg mt-1 font-bold text-blue-900 focus:ring-2 focus:ring-blue-500 outline-none" step="0.01">
+                        </div>
+                    </div>
+                    
+                    <div class="col-span-2 border-t pt-4 mt-2"></div>
+
+                    <div>
+                        <label class="text-[11px] font-bold text-gray-500 uppercase tracking-wide">Date Requested</label>
+                        <input type="text" v-model="form.dateRequested" class="border border-gray-300 p-2.5 w-full rounded-lg mt-1 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                    </div>
+                    <div>
+                        <label class="text-[11px] font-bold text-gray-500 uppercase tracking-wide">Date Received</label>
+                        <input type="text" v-model="form.dateReceived" class="border border-gray-300 p-2.5 w-full rounded-lg mt-1 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                    </div>
+                    
+                    <div>
+                        <label class="text-[11px] font-bold text-gray-500 uppercase tracking-wide">Invoice / Credit Memo #</label>
+                        <input type="text" v-model="form.invoice" class="border border-gray-300 p-2.5 w-full rounded-lg mt-1 font-mono text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                    </div>
+                    <div>
+                        <label class="text-[11px] font-bold text-gray-500 uppercase tracking-wide">Status</label>
+                        <select v-model="form.status" class="border border-gray-300 p-2.5 w-full rounded-lg mt-1 font-bold cursor-pointer focus:ring-2 focus:ring-blue-500 outline-none" :class="form.status === 'Applied' ? 'bg-green-50 text-green-800' : 'bg-amber-50 text-amber-800'">
+                            <option value="Pending">Pending</option>
+                            <option value="Applied">Applied</option>
+                        </select>
+                    </div>
+
+                    <!-- Attachment Block -->
+                    <div class="col-span-2 mt-2">
+                        <label class="text-[11px] font-bold text-gray-500 uppercase tracking-wide mb-1 block">Vendor Outcome Proof (Attachment)</label>
+                        <div class="border-2 border-dashed border-gray-300 rounded-xl p-4 text-center bg-gray-50 hover:bg-gray-100 cursor-pointer transition-colors relative">
+                            <input type="file" @change="handleFileUpload" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" accept="application/pdf,image/*">
+                            <i data-lucide="paperclip" class="w-6 h-6 text-gray-400 mx-auto mb-2"></i>
+                            <span v-if="!form.attachmentName" class="text-sm font-medium text-gray-500">Click or drag PDF/Image here</span>
+                            <span v-else class="text-sm font-bold text-blue-600">{{ form.attachmentName }}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="px-6 py-4 border-t bg-gray-50 flex justify-between items-center shrink-0">
+                    <button v-if="editingId" @click="deleteCredit" class="text-red-500 hover:text-red-700 text-sm font-bold flex items-center gap-1"><i data-lucide="trash-2" class="w-4 h-4"></i> Delete</button>
+                    <div v-else></div>
+                    <div class="flex gap-3">
+                        <button @click="closePromoModal" class="px-5 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded-lg font-bold transition-colors">Cancel</button>
+                        <button @click="saveCredit" class="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold shadow-md transition-colors flex items-center gap-2">
+                            <i data-lucide="save" class="w-4 h-4"></i> Save
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- DYNAMIC GRID IMPORT MODAL -->
+        <div v-if="showImportModal" class="fixed inset-0 bg-black/60 flex items-center justify-center z-50 backdrop-blur-sm" @click.self="closeImportModal">
+            <div class="bg-white rounded-2xl shadow-2xl w-[95vw] max-w-7xl flex flex-col overflow-hidden max-h-[90vh]">
+                <div class="px-6 py-4 border-b bg-gray-50 flex justify-between items-center shrink-0">
+                    <h2 class="font-bold text-xl text-gray-800 flex items-center gap-2">
+                        <i data-lucide="grid" class="w-5 h-5 text-indigo-600"></i> Spreadsheet Import & 12-Month Auto-Parser
+                    </h2>
+                    <button @click="closeImportModal" class="text-gray-500 hover:text-red-600 transition-colors p-1 hover:bg-gray-200 rounded"><i data-lucide="x" class="w-5 h-5"></i></button>
+                </div>
+                
+                <div class="p-6 flex-1 overflow-hidden flex flex-col">
+                    <!-- Visible Text Area for Easy Pasting -->
+                    <div v-if="pastedGrid.length === 0" class="flex-1 flex flex-col">
+                        <div class="bg-indigo-50 border border-indigo-200 p-4 rounded-xl text-sm text-indigo-900 mb-4 shadow-sm">
+                            <strong>Excel Import:</strong> Paste your entire horizontal Excel sheet below. <br>
+                            <em>Ensure you include the top "Super Header" row (the row that says August, July, June) so the parser can automatically organize the chunks into the correct tracking months!</em>
+                        </div>
+                        <textarea 
+                            v-model="rawPasteData" 
+                            @input="processRawPaste" 
+                            class="flex-1 w-full border-2 border-dashed border-indigo-300 rounded-xl p-6 text-sm font-mono bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 outline-none resize-none shadow-inner transition-all" 
+                            placeholder="Click here and press Ctrl+V to paste your Excel data..."></textarea>
+                    </div>
+
+                    <!-- Mappable Grid Preview -->
+                    <div v-else class="flex-1 overflow-auto rounded-xl border border-gray-300 bg-white">
+                        <table class="excel-table w-full">
+                            <thead class="sticky top-0 z-20 shadow-md">
+                                <!-- Super Header Display (Row 0 from Excel) -->
+                                <tr>
+                                    <th v-for="(col, cIndex) in pastedGrid[0]" :key="'super-'+cIndex" class="bg-gray-800 text-white p-2 border-gray-700 text-center text-xs">
+                                        {{ detectMonthInString(col) || '-' }}
+                                    </th>
+                                </tr>
+                                <!-- Column Mapping Headers -->
+                                <tr>
+                                    <th v-for="(col, cIndex) in pastedGrid[0]" :key="'head-'+cIndex" class="bg-indigo-100 border-indigo-200 p-2 min-w-[150px]">
+                                        <select v-model="mappedHeaders[cIndex]" class="w-full text-xs font-bold text-indigo-900 bg-white border border-indigo-300 rounded p-1 cursor-pointer outline-none">
+                                            <option v-for="opt in availableHeaders" :key="opt" :value="opt">{{ opt }}</option>
+                                        </select>
+                                    </th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr v-for="(row, rIndex) in displayGrid" :key="'row-'+rIndex">
+                                    <td v-for="(cell, cIndex) in row" :key="'cell-'+cIndex" class="text-xs truncate max-w-[200px]" :title="cell">
+                                        {{ cell }}
+                                    </td>
+                                </tr>
+                                <tr v-if="pastedGrid.length > 21">
+                                    <td :colspan="pastedGrid[0].length" class="text-center text-gray-500 text-xs py-3 font-medium bg-gray-50">
+                                        ... previewing 20 of {{ pastedGrid.length - 2 }} rows ...
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="px-6 py-4 border-t bg-gray-50 flex justify-between items-center shrink-0">
+                    <div>
+                        <span v-if="pastedGrid.length > 0" class="text-xs font-bold text-indigo-600 uppercase tracking-wide bg-indigo-50 px-3 py-1.5 rounded-md border border-indigo-100">
+                            <i data-lucide="git-merge" class="w-3 h-3 inline mb-0.5"></i> Chunks will be tagged by month automatically!
+                        </span>
+                    </div>
+                    <div class="flex gap-3">
+                        <button v-if="pastedGrid.length > 0" @click="resetImport" class="px-5 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded-lg font-bold transition-colors">Clear Grid</button>
+                        <button v-else @click="closeImportModal" class="px-5 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded-lg font-bold transition-colors">Close</button>
+                        
+                        <button v-if="pastedGrid.length > 0" @click="processImport" class="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-bold shadow-md transition-colors flex items-center gap-2">
+                            <i data-lucide="zap" class="w-4 h-4"></i> Extract & Import Data
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <script type="module">
+        const { createApp, ref, computed, nextTick, onMounted } = window.Vue;
+
+        createApp({
+            setup() {
+                const isManagerUnlocked = ref(false);
+                const loggedInUser = ref('');
+                const pinInput = ref('');
+                const activeSite = ref('Red Bluff');
+                
+                const systemUsers = {
+                    '4095': { name: 'Lenay A.', access: ['Red Bluff', 'Redding'] },
+                    '7444': { name: 'Tricia K.', access: ['Red Bluff', 'Redding'] },
+                    '2437': { name: 'Whitney M.', access: ['Red Bluff', 'Redding'] },
+                    '0500': { name: 'Nicholas G.', access: ['Red Bluff', 'Redding'] }
+                };
+
+                const promoCredits = ref([]);
+                
+                const calendarMonths = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+                const activeMonth = ref('August'); // Default tab
+
+                const masterBrands = ref([
+                    { vendor: "3 Bros", distributor: "Hash Tag Distribution" },
+                    { vendor: "710 LABS", distributor: "Fluids Manufacturing Inc" },
+                    { vendor: "ABX", distributor: "Groundwork Holdings, Inc." },
+                    { vendor: "Alien Labs", distributor: "Connected International LLC" },
+                    { vendor: "Bear Labs", distributor: "Cleanline Management LLC" },
+                    { vendor: "BIG PETE'S", distributor: "Big Petes" },
+                    { vendor: "CAM", distributor: "California Artisanal Medicine" },
+                    { vendor: "Connected", distributor: "Connected International LLC" },
+                    { vendor: "DIME BAG", distributor: "StateHouse" },
+                    { vendor: "KANHA", distributor: "Sunderstorm Bay LLC" },
+                    { vendor: "KIVA", distributor: "Kiva Sales & Services" },
+                    { vendor: "RAW GARDEN", distributor: "Raw Garden" },
+                    { vendor: "STIIIZY", distributor: "Ironworks Collective Inc" },
+                    { vendor: "WYLD", distributor: "Northwest Confections California LLC" }
+                ]);
+
+                // Modals & Forms
+                const showPromoModal = ref(false);
+                const showBrandDropdown = ref(false);
+                const editingId = ref(null);
+                
+                // Import Grid State
+                const showImportModal = ref(false);
+                const rawPasteData = ref('');
+                const pastedGrid = ref([]);
+                const mappedHeaders = ref([]);
+                const availableHeaders = ref([
+                    '-- Ignore Column --',
+                    'Vendor',
+                    'Distributor',
+                    'Credit Type',
+                    'Dates',
+                    'Credit amount $$$',
+                    'Date requested',
+                    'Date received',
+                    'Invoice / Credit Memo',
+                    'Status'
+                ]);
+                
+                const getEmptyForm = () => ({ 
+                    trackingMonth: activeMonth.value === 'All' ? 'August' : activeMonth.value,
+                    vendor: '', distributor: '', creditType: '', dates: '', 
+                    amount: '', dateRequested: '', dateReceived: '', 
+                    invoice: '', status: 'Pending', attachmentName: '', attachmentData: null 
+                });
+                
+                const form = ref(getEmptyForm());
+
+                const handleLogin = () => {
+                    const pin = pinInput.value.trim();
+                    if (systemUsers[pin]) {
+                        loggedInUser.value = systemUsers[pin].name;
+                        activeSite.value = systemUsers[pin].access[0];
+                        isManagerUnlocked.value = true;
+                        pinInput.value = '';
+                        refreshIcons();
+                    } else {
+                        alert("Invalid PIN. Access Denied.");
+                        pinInput.value = '';
+                    }
+                };
+
+                const forceLock = () => {
+                    isManagerUnlocked.value = false;
+                    loggedInUser.value = '';
+                };
+
+                const filteredBrands = computed(() => {
+                    const query = (form.value.vendor || '').toLowerCase();
+                    if (!query) return masterBrands.value;
+                    return masterBrands.value.filter(b => b.vendor.toLowerCase().includes(query));
+                });
+
+                const selectBrand = (brand) => {
+                    form.value.vendor = brand.vendor;
+                    form.value.distributor = brand.distributor;
+                    showBrandDropdown.value = false;
+                };
+
+                const formatCurrency = (val) => {
+                    const num = parseFloat(val);
+                    if (isNaN(num)) return '$0.00';
+                    return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(num);
+                };
+
+                const filteredCredits = computed(() => {
+                    let base = promoCredits.value.filter(c => c.site === activeSite.value);
+                    if (activeMonth.value !== 'All') {
+                        base = base.filter(c => c.trackingMonth === activeMonth.value);
+                    }
+                    return base.map(c => {
+                        const isMapped = masterBrands.value.some(b => b.vendor.toLowerCase() === c.vendor.toLowerCase());
+                        return { ...c, needsMapping: !isMapped };
+                    });
+                });
+
+                const totalPending = computed(() => filteredCredits.value.filter(c => c.status !== 'Applied').reduce((sum, c) => sum + (parseFloat(c.amount) || 0), 0));
+                const totalApplied = computed(() => filteredCredits.value.filter(c => c.status === 'Applied').reduce((sum, c) => sum + (parseFloat(c.amount) || 0), 0));
+
+                const openPromoModal = () => {
+                    form.value = getEmptyForm();
+                    editingId.value = null;
+                    showPromoModal.value = true;
+                    refreshIcons();
+                };
+
+                const closePromoModal = () => {
+                    showPromoModal.value = false;
+                    showBrandDropdown.value = false;
+                };
+
+                const handleFileUpload = (event) => {
+                    const file = event.target.files[0];
+                    if (!file) return;
+                    if (file.size > 800000) {
+                        return alert("File is too large. Please keep attachments under 800KB.");
+                    }
+                    form.value.attachmentName = file.name;
+                    form.value.attachmentData = "mock_file_data"; 
+                };
+
+                const saveCredit = () => {
+                    if (!form.value.vendor) return alert("Vendor (Brand) is required.");
+                    if (!form.value.trackingMonth) return alert("Tracking Month is required.");
+                    
+                    const payload = { ...form.value, site: activeSite.value };
+                    
+                    if (editingId.value) {
+                        const idx = promoCredits.value.findIndex(c => c.id === editingId.value);
+                        if (idx !== -1) promoCredits.value[idx] = payload;
+                    } else {
+                        payload.id = Date.now().toString() + Math.random().toString(36).substr(2,5);
+                        promoCredits.value.unshift(payload);
+                    }
+                    closePromoModal();
+                    refreshIcons();
+                };
+
+                const editCredit = (credit) => {
+                    form.value = { ...credit };
+                    editingId.value = credit.id;
+                    showPromoModal.value = true;
+                    refreshIcons();
+                };
+
+                const deleteCredit = () => {
+                    if (confirm("Are you sure you want to permanently delete this credit?")) {
+                        promoCredits.value = promoCredits.value.filter(c => c.id !== editingId.value);
+                        closePromoModal();
+                    }
+                };
+                
+                const openImportModal = () => {
+                    resetImport();
+                    showImportModal.value = true;
+                    refreshIcons();
+                };
+
+                const closeImportModal = () => {
+                    showImportModal.value = false;
+                };
+
+                const resetImport = () => {
+                    pastedGrid.value = [];
+                    mappedHeaders.value = [];
+                    rawPasteData.value = '';
+                };
+
+                const displayGrid = computed(() => {
+                    if (pastedGrid.value.length === 0) return [];
+                    // Return rows skipping the super header (row 0) and column header (row 1)
+                    return pastedGrid.value.slice(2, 22);
+                });
+                
+                const detectMonthInString = (str) => {
+                    if (!str) return null;
+                    const cleanStr = str.toLowerCase();
+                    return calendarMonths.find(m => cleanStr.includes(m.toLowerCase())) || null;
+                };
+
+                // Instantly convert the raw text area paste into the grid
+                const processRawPaste = () => {
+                    const text = rawPasteData.value;
+                    if (!text.trim()) return;
+                    
+                    const rows = text.split('\n').filter(r => r.trim() !== '');
+                    const grid = rows.map(r => r.split('\t').map(c => c.trim()));
+                    
+                    if (grid.length < 3) return; // Wait until they paste SuperHeader + Header + Data
+                    
+                    pastedGrid.value = grid;
+                    
+                    // Auto-guess mapped headers based on row 1 (the actual column names)
+                    mappedHeaders.value = grid[1].map(cell => {
+                        const lowerCell = cell.toLowerCase();
+                        const match = availableHeaders.value.find(h => h !== '-- Ignore Column --' && lowerCell.includes(h.toLowerCase()));
+                        return match || '-- Ignore Column --';
+                    });
+                };
+
+                const headerToFormKey = {
+                    'Vendor': 'vendor',
+                    'Distributor': 'distributor',
+                    'Credit Type': 'creditType',
+                    'Dates': 'dates',
+                    'Credit amount $$$': 'amount',
+                    'Date requested': 'dateRequested',
+                    'Date received': 'dateReceived',
+                    'Invoice / Credit Memo': 'invoice',
+                    'Status': 'status'
+                };
+
+                const processImport = () => {
+                    let importedCount = 0;
+                    
+                    // We need to track the "active" super header month as we scan left to right
+                    // Excel often puts the month in the first column of the chunk, and blanks after.
+                    const superHeaders = pastedGrid.value[0];
+                    
+                    // Process data rows starting from row 2 (skipping 0: Months, 1: Columns)
+                    for (let r = 2; r < pastedGrid.value.length; r++) {
+                        const row = pastedGrid.value[r];
+                        
+                        let currentCredit = getEmptyForm();
+                        let hasData = false;
+                        let seenHeadersInChunk = new Set();
+                        let currentChunkMonth = 'Unknown';
+                        
+                        for (let c = 0; c < row.length; c++) {
+                            // Update chunk month if super header has a valid month here
+                            const detectedMonth = detectMonthInString(superHeaders[c]);
+                            if (detectedMonth) {
+                                currentChunkMonth = detectedMonth;
+                            }
+
+                            const header = mappedHeaders.value[c];
+                            if (header === '-- Ignore Column --') continue;
+                            
+                            // Horizontal Chunking Logic: If header repeats, save and start fresh
+                            if (seenHeadersInChunk.has(header)) {
+                                if (hasData && currentCredit.vendor) {
+                                    currentCredit.id = Date.now().toString() + Math.random().toString(36).substr(2,5);
+                                    currentCredit.site = activeSite.value;
+                                    currentCredit.trackingMonth = currentChunkMonth !== 'Unknown' ? currentChunkMonth : 'August';
+                                    currentCredit.amount = parseFloat(String(currentCredit.amount).replace(/[^0-9.-]+/g,"")) || 0;
+                                    promoCredits.value.unshift(currentCredit);
+                                    importedCount++;
+                                }
+                                currentCredit = getEmptyForm();
+                                hasData = false;
+                                seenHeadersInChunk.clear();
+                            }
+                            
+                            const val = row[c];
+                            if (val) hasData = true;
+                            
+                            const key = headerToFormKey[header];
+                            if (key) {
+                                currentCredit[key] = val;
+                                seenHeadersInChunk.add(header);
+                                
+                                if (key === 'vendor' && val) {
+                                    const exists = masterBrands.value.find(b => b.vendor.toLowerCase() === val.toLowerCase());
+                                    if (!exists) {
+                                        masterBrands.value.push({ vendor: val, distributor: 'Auto-Imported' });
+                                    }
+                                }
+                            }
+                        }
+                        
+                        // Push final chunk in row
+                        if (hasData && currentCredit.vendor) {
+                            currentCredit.id = Date.now().toString() + Math.random().toString(36).substr(2,5);
+                            currentCredit.site = activeSite.value;
+                            currentCredit.trackingMonth = currentChunkMonth !== 'Unknown' ? currentChunkMonth : 'August';
+                            currentCredit.amount = parseFloat(String(currentCredit.amount).replace(/[^0-9.-]+/g,"")) || 0;
+                            promoCredits.value.unshift(currentCredit);
+                            importedCount++;
+                        }
+                    }
+                    
+                    alert(`Successfully extracted and imported ${importedCount} individual promo credits to ${activeSite.value}! They are now organized by month.`);
+                    closeImportModal();
+                    refreshIcons();
+                };
+
+                const refreshIcons = () => {
+                    nextTick(() => { if(window.lucide) window.lucide.createIcons(); });
+                };
+
+                onMounted(() => refreshIcons());
+
+                return {
+                    isManagerUnlocked, loggedInUser, pinInput, handleLogin, forceLock, activeSite, 
+                    promoCredits, filteredCredits, showPromoModal, form, editingId, 
+                    openPromoModal, closePromoModal, saveCredit, editCredit, deleteCredit, handleFileUpload,
+                    formatCurrency, totalPending, totalApplied,
+                    masterBrands, filteredBrands, showBrandDropdown, selectBrand,
+                    showImportModal, openImportModal, closeImportModal, resetImport, 
+                    rawPasteData, pastedGrid, displayGrid, mappedHeaders, availableHeaders, processRawPaste, processImport,
+                    calendarMonths, activeMonth, detectMonthInString
+                };
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>
