@@ -464,7 +464,6 @@ createApp({
             let updatedCount = 0;
             let newCount = 0;
 
-            // Strip the header row if you accidentally copied it
             const firstRowRaw = rows[0].toLowerCase();
             const dataRows = firstRowRaw.includes('brand') ? rows.slice(1) : rows;
 
@@ -476,29 +475,43 @@ createApp({
                 const vendorName = cols[0] || '';
                 const repName = cols[1] || '';
                 const email = cols[2] || '';
-                const distributor = cols[5] || ''; // Column F is the Distro!
+                const treesName = cols[3] || '';
+                const assetLibrary = cols[4] || '';
+                const distributor = cols[5] || ''; 
+                const orderFrom = cols[6] || '';
+                const payee = cols[7] || '';
+                const notes = cols[8] || '';
 
-                // Skip alphabetical group headers (like "A", "B", "Q") from your sheet
                 if (!vendorName || vendorName.length === 1) return; 
 
                 const existingBrand = masterBrands.value.find(b => b.vendor.toLowerCase() === vendorName.toLowerCase());
                 
                 if (existingBrand) {
+                    if (repName) existingBrand.rep = repName;
                     if (email) existingBrand.email = email;
-                    // Overwrite the bad distributor data with the correct one
+                    if (treesName) existingBrand.treesName = treesName;
+                    if (assetLibrary) existingBrand.assetLibrary = assetLibrary;
                     if (distributor) existingBrand.distributor = distributor;
+                    if (orderFrom) existingBrand.orderFrom = orderFrom;
+                    if (payee) existingBrand.payee = payee;
+                    if (notes) existingBrand.notes = notes;
                     updatedCount++;
                 } else {
                     masterBrands.value.push({ 
                         vendor: vendorName, 
-                        distributor: distributor, 
-                        email: email 
+                        rep: repName,
+                        email: email,
+                        treesName: treesName,
+                        assetLibrary: assetLibrary,
+                        distributor: distributor,
+                        orderFrom: orderFrom,
+                        payee: payee,
+                        notes: notes
                     });
                     newCount++;
                 }
             });
 
-            // Sort alphabetically for a clean UI
             masterBrands.value.sort((a, b) => a.vendor.localeCompare(b.vendor));
 
             alert(`Success! Added ${newCount} new brands and updated ${updatedCount} existing entries.`);
