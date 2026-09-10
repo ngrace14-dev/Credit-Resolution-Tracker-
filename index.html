@@ -9,7 +9,6 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Calibri:wght@400;700&display=swap" rel="stylesheet">
     
     <!-- External CSS -->
@@ -243,8 +242,6 @@
             </div>
         </div>
 
-        <!-- (OTHER TABS AND MODALS REMAIN UNCHANGED BELOW) -->
-
         <!-- TREES SALES REPORTS TAB -->
         <main v-if="isManagerUnlocked && activeTab === 'Sales'" class="flex-1 flex flex-col p-4 md:p-6 pt-4 bg-gray-100 overflow-hidden">
             <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 shrink-0 gap-4">
@@ -350,21 +347,21 @@
                             </tr>
                         </thead>
                         <tbody>
-                            <tr v-for="(brand, index) in masterBrands" :key="index" class="hover:bg-blue-50/50" :class="{'bg-blue-50/30': selectedBrands.includes(brand.vendor)}">
+                            <tr v-for="(brand, index) in masterBrands" :key="brand.id" class="hover:bg-blue-50/50" :class="{'bg-blue-50/30': selectedBrands.includes(brand.id)}">
                                 <td class="font-bold text-gray-900 sticky left-0 bg-white shadow-[1px_0_0_#e5e7eb] z-10 whitespace-nowrap">
                                     <div class="flex items-center gap-2">
-                                        <input type="checkbox" :value="brand.vendor" v-model="selectedBrands" class="w-4 h-4 cursor-pointer text-blue-600">
+                                        <input type="checkbox" :value="brand.id" v-model="selectedBrands" class="w-4 h-4 cursor-pointer text-blue-600">
                                         {{ brand.vendor }}
                                     </div>
                                 </td>
-                                <td><input type="text" v-model="brand.rep" placeholder="-" class="w-full min-w-[120px] bg-transparent border-b border-dashed border-transparent hover:border-gray-300 focus:border-blue-500 outline-none px-1 py-0.5"></td>
-                                <td><input type="email" v-model="brand.email" placeholder="-" class="w-full min-w-[180px] bg-transparent border-b border-dashed border-transparent hover:border-gray-300 focus:border-blue-500 outline-none px-1 py-0.5 text-blue-600"></td>
-                                <td><input type="text" v-model="brand.treesName" placeholder="-" class="w-full min-w-[160px] bg-transparent border-b border-dashed border-transparent hover:border-gray-300 focus:border-blue-500 outline-none px-1 py-0.5"></td>
-                                <td><input type="text" v-model="brand.distributor" placeholder="-" class="w-full min-w-[140px] bg-transparent border-b border-dashed border-transparent hover:border-gray-300 focus:border-blue-500 outline-none px-1 py-0.5"></td>
-                                <td><input type="text" v-model="brand.assetLibrary" placeholder="-" class="w-full min-w-[180px] bg-transparent border-b border-dashed border-transparent hover:border-gray-300 focus:border-blue-500 outline-none px-1 py-0.5 text-xs text-blue-500"></td>
-                                <td><input type="text" v-model="brand.orderFrom" placeholder="-" class="w-full min-w-[120px] bg-transparent border-b border-dashed border-transparent hover:border-gray-300 focus:border-blue-500 outline-none px-1 py-0.5"></td>
-                                <td><input type="text" v-model="brand.payee" placeholder="-" class="w-full min-w-[120px] bg-transparent border-b border-dashed border-transparent hover:border-gray-300 focus:border-blue-500 outline-none px-1 py-0.5"></td>
-                                <td><input type="text" v-model="brand.notes" placeholder="-" class="w-full min-w-[180px] bg-transparent border-b border-dashed border-transparent hover:border-gray-300 focus:border-blue-500 outline-none px-1 py-0.5 text-xs"></td>
+                                <td><input type="text" :value="brand.rep" @change="updateBrandField(brand.id, 'rep', $event)" placeholder="-" class="w-full min-w-[120px] bg-transparent border-b border-dashed border-transparent hover:border-gray-300 focus:border-blue-500 outline-none px-1 py-0.5"></td>
+                                <td><input type="email" :value="brand.email" @change="updateBrandField(brand.id, 'email', $event)" placeholder="-" class="w-full min-w-[180px] bg-transparent border-b border-dashed border-transparent hover:border-gray-300 focus:border-blue-500 outline-none px-1 py-0.5 text-blue-600"></td>
+                                <td><input type="text" :value="brand.treesName" @change="updateBrandField(brand.id, 'treesName', $event)" placeholder="-" class="w-full min-w-[160px] bg-transparent border-b border-dashed border-transparent hover:border-gray-300 focus:border-blue-500 outline-none px-1 py-0.5"></td>
+                                <td><input type="text" :value="brand.distributor" @change="updateBrandField(brand.id, 'distributor', $event)" placeholder="-" class="w-full min-w-[140px] bg-transparent border-b border-dashed border-transparent hover:border-gray-300 focus:border-blue-500 outline-none px-1 py-0.5"></td>
+                                <td><input type="text" :value="brand.assetLibrary" @change="updateBrandField(brand.id, 'assetLibrary', $event)" placeholder="-" class="w-full min-w-[180px] bg-transparent border-b border-dashed border-transparent hover:border-gray-300 focus:border-blue-500 outline-none px-1 py-0.5 text-xs text-blue-500"></td>
+                                <td><input type="text" :value="brand.orderFrom" @change="updateBrandField(brand.id, 'orderFrom', $event)" placeholder="-" class="w-full min-w-[120px] bg-transparent border-b border-dashed border-transparent hover:border-gray-300 focus:border-blue-500 outline-none px-1 py-0.5"></td>
+                                <td><input type="text" :value="brand.payee" @change="updateBrandField(brand.id, 'payee', $event)" placeholder="-" class="w-full min-w-[120px] bg-transparent border-b border-dashed border-transparent hover:border-gray-300 focus:border-blue-500 outline-none px-1 py-0.5"></td>
+                                <td><input type="text" :value="brand.notes" @change="updateBrandField(brand.id, 'notes', $event)" placeholder="-" class="w-full min-w-[180px] bg-transparent border-b border-dashed border-transparent hover:border-gray-300 focus:border-blue-500 outline-none px-1 py-0.5 text-xs"></td>
                             </tr>
                         </tbody>
                     </table>
