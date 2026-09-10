@@ -36,18 +36,16 @@ const { createApp, ref, computed, nextTick, onMounted, watch } = window.Vue;
 
 createApp({
     setup() {
+        // --- GLOBAL APP STATE ---
         const isManagerUnlocked = ref(false);
         const loggedInUser = ref('');
         const emailInput = ref('');
         const passwordInput = ref('');
         const authError = ref('');
         const activeSite = ref('Red Bluff');
-        
         const activeTab = ref('Tracker');
         
-        const treesSalesData = ref(JSON.parse(localStorage.getItem('treesSalesData')) || []);
-        watch(treesSalesData, (newVal) => localStorage.setItem('treesSalesData', JSON.stringify(newVal)), { deep: true });
-
+        // --- SYSTEM USERS ---
         const systemUsers = {
             'lenay@rredco.com': { name: 'Lenay A.', access: ['Red Bluff', 'Redding'] },
             'tricia@rredco.com': { name: 'Tricia K.', access: ['Red Bluff', 'Redding'] },
@@ -55,23 +53,48 @@ createApp({
             'nicholas.grace@rredco.com': { name: 'Nicholas G.', access: ['Red Bluff', 'Redding'] } 
         };
 
+        // --- LOCAL STORAGE DATA ---
+        const treesSalesData = ref(JSON.parse(localStorage.getItem('treesSalesData')) || []);
+        watch(treesSalesData, (newVal) => localStorage.setItem('treesSalesData', JSON.stringify(newVal)), { deep: true });
+
+        const defaultBrands = [];
+        const masterBrands = ref(JSON.parse(localStorage.getItem('masterBrands')) || defaultBrands);
+        watch(masterBrands, (newVal) => localStorage.setItem('masterBrands', JSON.stringify(newVal)), { deep: true });
+
+        // --- BRAND BULK DELETE LOGIC ---
+        const selectedBrands = ref([]);
+        const allBrandsSelected = computed(() => {
+            return masterBrands.value.length > 0 && selectedBrands.value.length === masterBrands.value.length;
+        });
+        
+        const toggleAllBrands = () => {
+            if (allBrandsSelected.value) {
+                selectedBrands.value = [];
+            } else {
+                // Map safely in case of corrupted memory
+                selectedBrands.value = masterBrands.value.map(b => b.vendor).filter(Boolean);
+            }
+        };
+
+        const deleteSelectedBrands = () => {
+            if (selectedBrands.value.length === 0) return;
+            if (confirm(`Are you sure you want to permanently delete these ${selectedBrands.value.length} brands from the directory?`)) {
+                masterBrands.value = masterBrands.value.filter(b => !selectedBrands.value.includes(b.vendor));
+                selectedBrands.value = []; // reset checkboxes after delete
+            }
+        };
+
+        // --- PROMO TRACKER STATE ---
         const promoCredits = ref([]);
         const calendarMonths = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
         const activeMonth = ref('August');
         const searchQuery = ref('');
 
-        const defaultBrands = [
-            { vendor: "3 Bros", distributor: "Hash Tag Distribution" },
-            { vendor: "710 LABS", distributor: "Fluids Manufacturing Inc" }
-        ];
-
-        const masterBrands = ref(JSON.parse(localStorage.getItem('masterBrands')) || defaultBrands);
-        watch(masterBrands, (newVal) => localStorage.setItem('masterBrands', JSON.stringify(newVal)), { deep: true });
-
         const showPromoModal = ref(false);
         const showBrandDropdown = ref(false);
         const editingId = ref(null);
         
+        // --- IMPORTER STATE ---
         const showImportModal = ref(false);
         const rawPasteData = ref('');
         const pastedGrid = ref([]);
@@ -95,6 +118,7 @@ createApp({
         const form = ref(getEmptyForm());
         let unsubscribeSnapshot = null;
 
+        // --- AUTHENTICATION & MOUNT ---
         onMounted(() => {
             refreshIcons();
             onAuthStateChanged(auth, (user) => {
@@ -128,10 +152,12 @@ createApp({
 
         const forceLock = () => { signOut(auth).then(() => { isManagerUnlocked.value = false; loggedInUser.value = ''; }); };
 
+        // --- COMPUTED PROPERTIES ---
         const filteredBrands = computed(() => {
             const query = (form.value.vendor || '').toLowerCase();
             if (!query) return masterBrands.value;
-            return masterBrands.value.filter(b => b.vendor.toLowerCase().includes(query));
+            // Safely handle missing vendor data in memory
+            return masterBrands.value.filter(b => (b.vendor || '').toLowerCase().includes(query));
         });
 
         const selectBrand = (brand) => {
@@ -167,14 +193,14 @@ createApp({
             if (searchQuery.value.trim() !== '') {
                 const q = searchQuery.value.toLowerCase();
                 base = base.filter(c => 
-                    (c.vendor && c.vendor.toLowerCase().includes(q)) ||
-                    (c.distributor && c.distributor.toLowerCase().includes(q)) ||
-                    (c.invoice && c.invoice.toLowerCase().includes(q)) ||
-                    (c.creditType && c.creditType.toLowerCase().includes(q))
+                    ((c.vendor || '').toLowerCase().includes(q)) ||
+                    ((c.distributor || '').toLowerCase().includes(q)) ||
+                    ((c.invoice || '').toLowerCase().includes(q)) ||
+                    ((c.creditType || '').toLowerCase().includes(q))
                 );
             }
             return base.map(c => {
-                const isMapped = masterBrands.value.some(b => b.vendor.toLowerCase() === c.vendor.toLowerCase());
+                const isMapped = masterBrands.value.some(b => (b.vendor || '').toLowerCase() === (c.vendor || '').toLowerCase());
                 return { ...c, needsMapping: !isMapped };
             });
         });
@@ -185,11 +211,11 @@ createApp({
             if (searchQuery.value.trim() !== '') {
                 const q = searchQuery.value.toLowerCase();
                 base = base.filter(sale => 
-                    (sale.brand && sale.brand.toLowerCase().includes(q)) ||
-                    (sale.productName && sale.productName.toLowerCase().includes(q)) ||
-                    (sale.discountTitle && sale.discountTitle.toLowerCase().includes(q)) ||
-                    (sale.trackingId && sale.trackingId.toLowerCase().includes(q)) ||
-                    (sale.detectedSite && sale.detectedSite.toLowerCase().includes(q))
+                    ((sale.brand || '').toLowerCase().includes(q)) ||
+                    ((sale.productName || '').toLowerCase().includes(q)) ||
+                    ((sale.discountTitle || '').toLowerCase().includes(q)) ||
+                    ((sale.trackingId || '').toLowerCase().includes(q)) ||
+                    ((sale.detectedSite || '').toLowerCase().includes(q))
                 );
             }
             return base;
@@ -200,6 +226,7 @@ createApp({
         const totalApplied = computed(() => filteredCredits.value.filter(c => c.status === 'Applied').reduce((sum, c) => sum + (parseFloat(c.amount) || 0), 0));
         const unsyncedSalesCount = computed(() => filteredTreesSalesData.value.filter(s => s.status === 'Unsynced').length);
 
+        // --- MODAL & CRUD LOGIC ---
         const openPromoModal = () => { form.value = getEmptyForm(); editingId.value = null; showPromoModal.value = true; refreshIcons(); };
         const closePromoModal = () => { showPromoModal.value = false; showBrandDropdown.value = false; };
 
@@ -230,6 +257,7 @@ createApp({
             }
         };
         
+        // --- PROMO GRID IMPORTER LOGIC ---
         const openImportModal = () => { resetImport(); showImportModal.value = true; refreshIcons(); };
         const closeImportModal = () => { showImportModal.value = false; };
         const resetImport = () => { pastedGrid.value = []; mappedHeaders.value = []; rawPasteData.value = ''; };
@@ -308,7 +336,7 @@ createApp({
                         currentCredit[key] = val;
                         seenHeadersInChunk.add(header);
                         if (key === 'vendor' && val) {
-                            if (!masterBrands.value.find(b => b.vendor.toLowerCase() === val.toLowerCase())) {
+                            if (!masterBrands.value.find(b => (b.vendor || '').toLowerCase() === val.toLowerCase())) {
                                 masterBrands.value.push({ vendor: val, distributor: 'Auto-Imported' });
                             }
                         }
@@ -334,6 +362,7 @@ createApp({
             } catch (err) { alert("Failed to save import to cloud."); }
         };
 
+        // --- TREES POS AGGREGATOR ---
         const handleTreesCsvUpload = (e) => {
             const file = e.target.files[0];
             if (!file) return;
@@ -425,7 +454,7 @@ createApp({
             
             for (const [key, data] of Object.entries(groupedBrands)) {
                 if (data.totalOwed > 0) {
-                    const masterRecord = masterBrands.value.find(b => b.vendor.toLowerCase() === data.brand.toLowerCase());
+                    const masterRecord = masterBrands.value.find(b => (b.vendor || '').toLowerCase() === data.brand.toLowerCase());
                     const payload = {
                         site: data.site, 
                         trackingMonth: data.month, 
@@ -454,6 +483,7 @@ createApp({
             } catch (err) { alert("Failed to sync aggregated credits to the cloud."); }
         };
         
+        // --- BRAND DIRECTORY IMPORTER LOGIC ---
         const processBrandPaste = () => {
             const text = brandPasteData.value;
             if (!text.trim()) return;
@@ -471,7 +501,6 @@ createApp({
                 const cols = row.split('\t').map(c => c.trim());
                 if (cols.length < 2) return; 
 
-                // Map exactly to your spreadsheet columns (A=0, B=1, C=2, etc.)
                 const vendorName = cols[0] || '';
                 const repName = cols[1] || '';
                 const email = cols[2] || '';
@@ -484,10 +513,10 @@ createApp({
 
                 if (!vendorName || vendorName.length === 1) return; 
 
-                const existingBrand = masterBrands.value.find(b => b.vendor.toLowerCase() === vendorName.toLowerCase());
+                // Safe check using fallback string logic
+                const existingBrand = masterBrands.value.find(b => (b.vendor || '').toLowerCase() === vendorName.toLowerCase());
                 
                 if (existingBrand) {
-                    // FORCE OVERWRITE: Even if the spreadsheet cell is blank, overwrite the app data with it.
                     existingBrand.rep = repName;
                     existingBrand.email = email;
                     existingBrand.treesName = treesName;
@@ -513,8 +542,8 @@ createApp({
                 }
             });
 
-            masterBrands.value.sort((a, b) => a.vendor.localeCompare(b.vendor));
-
+            // Safe alphabetical sorting
+            masterBrands.value.sort((a, b) => (a.vendor || '').localeCompare(b.vendor || ''));
             alert(`Success! Added ${newCount} new brands and FORCE UPDATED ${updatedCount} existing entries.`);
             brandPasteData.value = '';
             showBrandImportModal.value = false;
@@ -529,6 +558,7 @@ createApp({
             openPromoModal, closePromoModal, saveCredit, editCredit, deleteCredit, handleFileUpload,
             formatCurrency, totalPending, totalApplied,
             masterBrands, filteredBrands, showBrandDropdown, selectBrand,
+            selectedBrands, allBrandsSelected, toggleAllBrands, deleteSelectedBrands, 
             showImportModal, openImportModal, closeImportModal, resetImport, 
             rawPasteData, pastedGrid, displayGrid, mappedHeaders, availableHeaders, processRawPaste, processImport,
             showBrandImportModal, brandPasteData, processBrandPaste,
