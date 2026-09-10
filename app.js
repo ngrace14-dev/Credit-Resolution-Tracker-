@@ -144,17 +144,47 @@ createApp({
                 return;
             }
 
-            const cleanEmails = report.email.split(/[,;\s]+/).map(e => e.trim()).filter(Boolean).join(',');
-            const senderEmail = 'nicholas.grace@rredco.com';
             const storeName = activeSite.value === 'Redding' ? 'Sundial' : activeSite.value;
             const currentYear = new Date().getFullYear();
             const monthStr = activeMonth.value === 'All' ? 'Current' : activeMonth.value;
             const periodStr = `${monthStr} ${currentYear}`;
 
+            // --- 1. GENERATE & DOWNLOAD CSV ---
+            let csvContent = "data:text/csv;charset=utf-8,";
+            // CSV Headers
+            csvContent += "Tracking Month,Credit Type,Dates,Credit Amount,Status,Invoice / Memo\n";
+            
+            // CSV Rows
+            report.credits.forEach(c => {
+                // Wrap in quotes to prevent commas in the data from breaking the CSV columns
+                const safeMonth = `"${c.trackingMonth || ''}"`;
+                const safeType = `"${(c.creditType || 'Promo').replace(/"/g, '""')}"`;
+                const safeDates = `"${(c.dates || 'N/A').replace(/"/g, '""')}"`;
+                const safeAmount = `"${formatCurrency(c.amount)}"`;
+                const safeStatus = `"${c.status || ''}"`;
+                const safeInvoice = `"${(c.invoice || '').replace(/"/g, '""')}"`;
+                
+                csvContent += `${safeMonth},${safeType},${safeDates},${safeAmount},${safeStatus},${safeInvoice}\n`;
+            });
+
+            // Trigger the download
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            const cleanVendorName = report.vendor.replace(/[^a-zA-Z0-9]/g, '_');
+            link.setAttribute("download", `${cleanVendorName}_${storeName}_Credits_${periodStr.replace(/\s/g, '_')}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+
+            // --- 2. DRAFT THE EMAIL ---
+            const cleanEmails = report.email.split(/[,;\s]+/).map(e => e.trim()).filter(Boolean).join(',');
+            const senderEmail = 'nicholas.grace@rredco.com';
+            
             const subject = `credit report - ${storeName} promotions ${periodStr}`;
 
             let body = `Hello ${report.vendor},\n\n`;
-            body += `Attached are your promo reports from ${storeName} generating vendor credits for the promotions ran listed below:\n\n`;
+            body += `Attached is a CSV breakdown of your promo reports from ${storeName} generating vendor credits for the promotions ran listed below:\n\n`;
             body += `For the period: ${periodStr}.\n`;
             body += `Total: ${formatCurrency(report.total)}.\n\n`;
             body += `------------------------------------------------------------\n`;
@@ -179,6 +209,7 @@ createApp({
             const encodedBody = encodeURIComponent(body);
             const encodedCc = encodeURIComponent(`accounting@rredco.com,${senderEmail}`);
 
+            // Open the mailto link
             window.location.href = `mailto:${cleanEmails}?cc=${encodedCc}&subject=${encodedSubject}&body=${encodedBody}`;
         };
 
