@@ -253,7 +253,6 @@ createApp({
             const distroSums = {};
             activeCredits.forEach(c => {
                 const d = (c.distributor || '').trim();
-                // FIX: Ignore placeholders and unmapped entries so the chart only shows real distributors
                 if (d && d !== 'Trees POS Import' && d !== 'Auto-Imported' && d.toLowerCase() !== 'unmapped' && d !== '-') {
                     distroSums[d] = (distroSums[d] || 0) + (parseFloat(c.amount) || 0);
                 }
@@ -901,7 +900,6 @@ createApp({
             for (const [key, data] of Object.entries(groupedBrands)) {
                 if (data.totalOwed > 0) {
                     const masterRecord = masterBrands.value.find(b => (b.vendor || '').toLowerCase() === data.brand.toLowerCase());
-                    // FIX: Stop assigning "Trees POS Import" as a distributor
                     const payload = {
                         site: data.site, 
                         trackingMonth: data.month, 
