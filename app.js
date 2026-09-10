@@ -51,6 +51,7 @@ createApp({
             'nicholas.grace@rredco.com': { name: 'Nicholas G.', access: ['Red Bluff', 'Redding'] } 
         };
 
+        // Raw POS Data remains in local storage for performance 
         const treesSalesData = ref(JSON.parse(localStorage.getItem('treesSalesData')) || []);
         watch(treesSalesData, (newVal) => localStorage.setItem('treesSalesData', JSON.stringify(newVal)), { deep: true });
 
@@ -84,7 +85,7 @@ createApp({
             }
         };
 
-        // NEW: Inline edit saving function
+        // Inline edit saving function
         const updateBrandField = async (brandId, fieldName, event) => {
             const newValue = event.target.value;
             try {
@@ -149,33 +150,74 @@ createApp({
             const monthStr = activeMonth.value === 'All' ? 'Current' : activeMonth.value;
             const periodStr = `${monthStr} ${currentYear}`;
 
-            // --- 1. GENERATE & DOWNLOAD CSV ---
-            let csvContent = "data:text/csv;charset=utf-8,";
-            // CSV Headers
-            csvContent += "Tracking Month,Credit Type,Dates,Credit Amount,Status,Invoice / Memo\n";
+            // --- 1. GENERATE & DOWNLOAD ITEMIZED CSV ---
+            let csvContent = "";
+            // New Headers for itemized breakdown
+            csvContent += "Date,Location,Brand,Product / Description,Discount Title,Tracking ID / Invoice,Entry Type,Credit Amount\n";
             
-            // CSV Rows
+            let csvTotal = 0;
+
+            // Loop through the pending credits to build the CSV
             report.credits.forEach(c => {
-                // Wrap in quotes to prevent commas in the data from breaking the CSV columns
-                const safeMonth = `"${c.trackingMonth || ''}"`;
-                const safeType = `"${(c.creditType || 'Promo').replace(/"/g, '""')}"`;
-                const safeDates = `"${(c.dates || 'N/A').replace(/"/g, '""')}"`;
-                const safeAmount = `"${formatCurrency(c.amount)}"`;
-                const safeStatus = `"${c.status || ''}"`;
-                const safeInvoice = `"${(c.invoice || '').replace(/"/g, '""')}"`;
+                const isAggregated = c.creditType && String(c.creditType).includes('Aggregated POS Sales');
                 
-                csvContent += `${safeMonth},${safeType},${safeDates},${safeAmount},${safeStatus},${safeInvoice}\n`;
+                // Try to find the raw POS data that made up this aggregated block
+                let matchedRawSales = [];
+                if (isAggregated) {
+                    matchedRawSales = treesSalesData.value.filter(sale => {
+                        return (sale.brand || '').toLowerCase() === (c.vendor || '').toLowerCase() &&
+                               sale.detectedSite === c.site &&
+                               sale.month === c.trackingMonth &&
+                               sale.status === 'Synced';
+                    });
+                }
+
+                if (isAggregated && matchedRawSales.length > 0) {
+                    // Print the itemized breakdown of every POS transaction
+                    matchedRawSales.forEach(sale => {
+                        const safeDate = `"${(sale.dateClosed || '').replace(/"/g, '""')}"`;
+                        const safeLoc = `"${(sale.storeName || '').replace(/"/g, '""')}"`;
+                        const safeBrand = `"${(sale.brand || '').replace(/"/g, '""')}"`;
+                        const safeProd = `"${(sale.productName || '').replace(/"/g, '""')}"`;
+                        const safeDisc = `"${(sale.discountTitle || '').replace(/"/g, '""')}"`;
+                        const safeTrack = `"${(sale.trackingId || '').replace(/"/g, '""')}"`;
+                        const safeType = `"POS Itemized"`;
+                        const safeAmount = `"${formatCurrency(sale.owed)}"`;
+                        
+                        csvContent += `${safeDate},${safeLoc},${safeBrand},${safeProd},${safeDisc},${safeTrack},${safeType},${safeAmount}\n`;
+                        csvTotal += parseFloat(sale.owed) || 0;
+                    });
+                } else {
+                    // Print as a single summary line (Manual Promos OR fallback if raw data is missing)
+                    const safeDate = `"${(c.dates || '').replace(/"/g, '""')}"`;
+                    const safeLoc = `"${(c.site || '').replace(/"/g, '""')}"`;
+                    const safeBrand = `"${(c.vendor || '').replace(/"/g, '""')}"`;
+                    const safeProd = `"${(c.creditType || '').replace(/"/g, '""')}"`; 
+                    const safeDisc = `"-"`;
+                    const safeTrack = `"${(c.invoice || '').replace(/"/g, '""')}"`;
+                    // Fallback flag just in case local storage was cleared
+                    const safeType = isAggregated ? `"Summary (Raw Data Missing)"` : `"Manual Entry"`; 
+                    const safeAmount = `"${formatCurrency(c.amount)}"`;
+                    
+                    csvContent += `${safeDate},${safeLoc},${safeBrand},${safeProd},${safeDisc},${safeTrack},${safeType},${safeAmount}\n`;
+                    csvTotal += parseFloat(c.amount) || 0;
+                }
             });
 
-            // Trigger the download
-            const encodedUri = encodeURI(csvContent);
+            // Add the Total Row at the bottom
+            csvContent += `,,,,,, "TOTAL:", "${formatCurrency(csvTotal)}"\n`;
+
+            // Trigger the download using a Blob
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
             const link = document.createElement("a");
-            link.setAttribute("href", encodedUri);
+            link.setAttribute("href", url);
             const cleanVendorName = report.vendor.replace(/[^a-zA-Z0-9]/g, '_');
             link.setAttribute("download", `${cleanVendorName}_${storeName}_Credits_${periodStr.replace(/\s/g, '_')}.csv`);
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
+            URL.revokeObjectURL(url);
 
             // --- 2. DRAFT THE EMAIL ---
             const cleanEmails = report.email.split(/[,;\s]+/).map(e => e.trim()).filter(Boolean).join(',');
