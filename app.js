@@ -198,10 +198,9 @@ createApp({
 
             const currencyFormatter = (val) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(val);
             
-            // Obsidian Tooltip Design
             const customTooltip = {
-                backgroundColor: '#111827', // Obsidian Gray-900
-                titleColor: '#f59e0b', // Gold Amber-500
+                backgroundColor: '#111827', 
+                titleColor: '#f59e0b', 
                 titleFont: { size: 13, family: 'Calibri, sans-serif' },
                 bodyFont: { size: 14, weight: 'bold', family: 'Calibri, sans-serif' },
                 padding: 12,
@@ -227,7 +226,7 @@ createApp({
                 }
             };
 
-            // 1. Monthly Distributor Credits (Emerald)
+            // 1. Monthly Distributor Credits 
             const monthlySums = {};
             activeCredits.forEach(c => {
                 const m = c.trackingMonth || 'Unknown';
@@ -242,7 +241,7 @@ createApp({
                     labels: sortedMonths, 
                     datasets: [{ 
                         data: sortedMonths.map(m => monthlySums[m]), 
-                        backgroundColor: '#10b981', // Emerald-500
+                        backgroundColor: '#10b981', 
                         borderRadius: 6,
                         barPercentage: 0.65
                     }] 
@@ -250,11 +249,14 @@ createApp({
                 options: standardVerticalOptions
             });
 
-            // 2. Top 10 Distributors (Gold)
+            // 2. Top 10 Distributors 
             const distroSums = {};
             activeCredits.forEach(c => {
-                const d = c.distributor || 'Unmapped';
-                distroSums[d] = (distroSums[d] || 0) + (parseFloat(c.amount) || 0);
+                const d = (c.distributor || '').trim();
+                // FIX: Ignore placeholders and unmapped entries so the chart only shows real distributors
+                if (d && d !== 'Trees POS Import' && d !== 'Auto-Imported' && d.toLowerCase() !== 'unmapped' && d !== '-') {
+                    distroSums[d] = (distroSums[d] || 0) + (parseFloat(c.amount) || 0);
+                }
             });
             const topDistros = Object.entries(distroSums).sort((a, b) => b[1] - a[1]).slice(0, 10);
             
@@ -265,7 +267,7 @@ createApp({
                     labels: topDistros.map(d => d[0]), 
                     datasets: [{ 
                         data: topDistros.map(d => d[1]), 
-                        backgroundColor: '#f59e0b', // Amber-500 (Gold)
+                        backgroundColor: '#f59e0b', 
                         borderRadius: 6,
                         barPercentage: 0.65
                     }] 
@@ -273,11 +275,13 @@ createApp({
                 options: standardHorizontalOptions
             });
 
-            // 3. Top 10 Brands (Obsidian)
+            // 3. Top 10 Brands 
             const brandSums = {};
             activeCredits.forEach(c => {
-                const b = c.vendor || 'Unmapped';
-                brandSums[b] = (brandSums[b] || 0) + (parseFloat(c.amount) || 0);
+                const b = (c.vendor || '').trim();
+                if (b && b.toLowerCase() !== 'unmapped brand') {
+                    brandSums[b] = (brandSums[b] || 0) + (parseFloat(c.amount) || 0);
+                }
             });
             const topBrands = Object.entries(brandSums).sort((a, b) => b[1] - a[1]).slice(0, 10);
             
@@ -288,7 +292,7 @@ createApp({
                     labels: topBrands.map(b => b[0]), 
                     datasets: [{ 
                         data: topBrands.map(b => b[1]), 
-                        backgroundColor: '#111827', // Gray-900 (Obsidian)
+                        backgroundColor: '#111827', 
                         borderRadius: 6,
                         barPercentage: 0.65
                     }] 
@@ -296,7 +300,7 @@ createApp({
                 options: standardHorizontalOptions
             });
 
-            // 4. Credits by Store (Sleek Doughnut)
+            // 4. Credits by Store 
             const storeSums = {};
             activeCredits.forEach(c => {
                 const s = c.site || 'Unknown';
@@ -310,7 +314,7 @@ createApp({
                     labels: Object.keys(storeSums), 
                     datasets: [{ 
                         data: Object.values(storeSums), 
-                        backgroundColor: ['#111827', '#f59e0b', '#10b981', '#64748b'], // Obsidian, Gold, Emerald
+                        backgroundColor: ['#111827', '#f59e0b', '#10b981', '#64748b'], 
                         borderWidth: 0 
                     }] 
                 },
@@ -897,11 +901,12 @@ createApp({
             for (const [key, data] of Object.entries(groupedBrands)) {
                 if (data.totalOwed > 0) {
                     const masterRecord = masterBrands.value.find(b => (b.vendor || '').toLowerCase() === data.brand.toLowerCase());
+                    // FIX: Stop assigning "Trees POS Import" as a distributor
                     const payload = {
                         site: data.site, 
                         trackingMonth: data.month, 
                         vendor: data.brand,
-                        distributor: masterRecord ? masterRecord.distributor : 'Trees POS Import',
+                        distributor: (masterRecord && masterRecord.distributor) ? masterRecord.distributor : '', 
                         creditType: `Aggregated POS Sales (${data.itemCount} items)`,
                         dates: new Date().toLocaleDateString(),
                         amount: data.totalOwed,
