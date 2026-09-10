@@ -20,7 +20,7 @@ const firebaseConfig = {
 const firebaseApp = initializeApp(firebaseConfig);
 
 try {
-    const appCheck = initializeAppCheck(firebaseApp, {
+    initializeAppCheck(firebaseApp, {
         provider: new ReCaptchaEnterpriseProvider("6LfACLQtAAAAAOWiSEhR1WsVPcu4qwhhv1PNqJSd"),
         isTokenAutoRefreshEnabled: true
     });
@@ -84,6 +84,86 @@ createApp({
         const showBrandDropdown = ref(false);
         const editingId = ref(null);
         
+        // --- EMAIL REPORTS LOGIC ---
+        const showReportModal = ref(false);
+
+        const groupedPendingReports = computed(() => {
+            if (!promoCredits.value) return [];
+            
+            // Get all pending credits for current site
+            let pending = promoCredits.value.filter(c => c && c.site === activeSite.value && (c.status || '').toLowerCase() === 'pending');
+            
+            // Apply month filter if specific month is active
+            if (activeMonth.value !== 'All') {
+                pending = pending.filter(c => c.trackingMonth === activeMonth.value);
+            }
+
+            const groups = {};
+            pending.forEach(c => {
+                const vendorName = c.vendor || 'Unmapped Brand';
+                if (!groups[vendorName]) {
+                    const brandInfo = masterBrands.value.find(b => (b.vendor || '').toLowerCase() === vendorName.toLowerCase()) || {};
+                    groups[vendorName] = {
+                        vendor: vendorName,
+                        email: brandInfo.email || '',
+                        rep: brandInfo.rep || '',
+                        credits: [],
+                        total: 0
+                    };
+                }
+                groups[vendorName].credits.push(c);
+                groups[vendorName].total += (parseFloat(c.amount) || 0);
+            });
+            
+            return Object.values(groups).sort((a, b) => a.vendor.localeCompare(b.vendor));
+        });
+
+        const draftEmail = (report) => {
+            if (!report.email) {
+                alert(`No email mapped for ${report.vendor}. Please add one in the Brand Directory first.`);
+                return;
+            }
+
+            // Parse multiple emails (comma, semicolon, or space separated)
+            const cleanEmails = report.email.split(/[,;\s]+/).map(e => e.trim()).filter(Boolean).join(',');
+            const senderEmail = 'nicholas.grace@rredco.com';
+            const storeName = activeSite.value === 'Redding' ? 'Sundial' : activeSite.value;
+            const currentYear = new Date().getFullYear();
+            const monthStr = activeMonth.value === 'All' ? 'Current' : activeMonth.value;
+            const periodStr = `${monthStr} ${currentYear}`;
+
+            const subject = `credit report - ${storeName} promotions ${periodStr}`;
+
+            let body = `Hello ${report.vendor},\n\n`;
+            body += `Attached are your promo reports from ${storeName} generating vendor credits for the promotions ran listed below:\n\n`;
+            body += `For the period: ${periodStr}.\n`;
+            body += `Total: ${formatCurrency(report.total)}.\n\n`;
+            body += `------------------------------------------------------------\n`;
+            body += `DISCOUNT TITLE / TYPE      |   DATES   |   CREDIT AMOUNT\n`;
+            body += `------------------------------------------------------------\n`;
+
+            report.credits.forEach(c => {
+                const title = c.creditType || 'Promo';
+                const dates = c.dates || 'N/A';
+                const amt = formatCurrency(c.amount);
+                body += `${title}   |   ${dates}   |   ${amt}\n`;
+            });
+
+            body += `------------------------------------------------------------\n\n`;
+            body += `Please note that the above credits will be deducted (on our end). Keep an eye out for a credit memo on the payment applied to the next order. Let me know if you have any questions or concerns.\n\n`;
+            body += `Thank you for participating in the deals!!\n\n`;
+            body += `${storeName} Accounting Team\n`;
+            body += `Nicholas Grace (${senderEmail})\n`;
+            body += `(530)560-6624 - Office\n`;
+
+            const encodedSubject = encodeURIComponent(subject);
+            const encodedBody = encodeURIComponent(body);
+            const encodedCc = encodeURIComponent(`accounting@rredco.com,${senderEmail}`);
+
+            window.location.href = `mailto:${cleanEmails}?cc=${encodedCc}&subject=${encodedSubject}&body=${encodedBody}`;
+        };
+
+        // --- IMPORTER STATE ---
         const showImportModal = ref(false);
         const rawPasteData = ref('');
         const pastedGrid = ref([]);
@@ -180,7 +260,7 @@ createApp({
         };
 
         const filteredCredits = computed(() => {
-            let base = promoCredits.value.filter(c => c.site === activeSite.value);
+            let base = promoCredits.value.filter(c => c && c.site === activeSite.value);
             if (activeMonth.value !== 'All') base = base.filter(c => c.trackingMonth === activeMonth.value);
             if (searchQuery.value.trim() !== '') {
                 const q = searchQuery.value.toLowerCase();
@@ -248,7 +328,6 @@ createApp({
             }
         };
         
-        // --- PROMO GRID IMPORTER LOGIC ---
         const openImportModal = () => { resetImport(); showImportModal.value = true; refreshIcons(); };
         const closeImportModal = () => { showImportModal.value = false; };
         const resetImport = () => { pastedGrid.value = []; mappedHeaders.value = []; rawPasteData.value = ''; };
@@ -473,7 +552,6 @@ createApp({
             } catch (err) { alert("Failed to sync aggregated credits to the cloud."); }
         };
         
-        // --- NEW DYNAMIC BRAND VISUAL GRID PARSER ---
         const resetBrandImport = () => {
             brandPastedGrid.value = [];
             brandMappedHeaders.value = [];
@@ -489,7 +567,6 @@ createApp({
             
             brandPastedGrid.value = grid;
             
-            // Auto-detect columns based on the first row you pasted
             const firstRow = grid[0].map(c => c.toLowerCase());
             brandMappedHeaders.value = firstRow.map(cell => {
                 if (cell.includes('brand') || cell.includes('vendor')) return 'Brand';
@@ -509,7 +586,6 @@ createApp({
             let updatedCount = 0;
             let newCount = 0;
             
-            // Detect if the top row of the grid is a header row (so we don't import "Email" as a brand name)
             let startRow = 0;
             if (brandPastedGrid.value.length > 0) {
                 const firstRowStr = brandPastedGrid.value[0].join('').toLowerCase();
@@ -522,7 +598,6 @@ createApp({
                 const row = brandPastedGrid.value[r];
                 let currentBrand = {};
                 
-                // Map the row data to the dropdown headers you selected
                 for (let c = 0; c < row.length; c++) {
                     const header = brandMappedHeaders.value[c];
                     if (header === '-- Ignore Column --') continue;
@@ -576,9 +651,9 @@ createApp({
             formatCurrency, totalPending, totalApplied,
             masterBrands, filteredBrands, showBrandDropdown, selectBrand,
             selectedBrands, allBrandsSelected, toggleAllBrands, deleteSelectedBrands, 
+            showReportModal, groupedPendingReports, draftEmail,
             showImportModal, openImportModal, closeImportModal, resetImport, 
             rawPasteData, pastedGrid, displayGrid, mappedHeaders, availableHeaders, processRawPaste, processImport,
-            // Exposed Dynamic Brand Import variables
             showBrandImportModal, brandPasteData, brandPastedGrid, brandMappedHeaders, brandAvailableHeaders,
             resetBrandImport, processBrandRawPaste, processBrandImport,
             calendarMonths, activeMonth, detectMonthInString, searchQuery
