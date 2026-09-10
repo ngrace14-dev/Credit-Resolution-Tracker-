@@ -51,7 +51,6 @@ createApp({
             'nicholas.grace@rredco.com': { name: 'Nicholas G.', access: ['Red Bluff', 'Redding'] } 
         };
 
-        // Raw POS Data remains in local storage for performance 
         const treesSalesData = ref(JSON.parse(localStorage.getItem('treesSalesData')) || []);
         watch(treesSalesData, (newVal) => localStorage.setItem('treesSalesData', JSON.stringify(newVal)), { deep: true });
 
@@ -85,7 +84,7 @@ createApp({
             }
         };
 
-        // Inline edit saving function
+        // Inline edit saving function for Brands
         const updateBrandField = async (brandId, fieldName, event) => {
             const newValue = event.target.value;
             try {
@@ -113,7 +112,8 @@ createApp({
         const groupedPendingReports = computed(() => {
             if (!promoCredits.value) return [];
             
-            let pending = promoCredits.value.filter(c => c && c.site === activeSite.value && (c.status || '').toLowerCase() === 'pending');
+            // Only grab active pending credits (ignoring archived)
+            let pending = promoCredits.value.filter(c => c && c.site === activeSite.value && (c.status || '').toLowerCase() === 'pending' && c.archived !== true);
             
             if (activeMonth.value !== 'All') {
                 pending = pending.filter(c => c.trackingMonth === activeMonth.value);
@@ -152,16 +152,13 @@ createApp({
 
             // --- 1. GENERATE & DOWNLOAD ITEMIZED CSV ---
             let csvContent = "";
-            // New Headers for itemized breakdown
             csvContent += "Date,Location,Brand,Product / Description,Discount Title,Tracking ID / Invoice,Entry Type,Credit Amount\n";
             
             let csvTotal = 0;
 
-            // Loop through the pending credits to build the CSV
             report.credits.forEach(c => {
                 const isAggregated = c.creditType && String(c.creditType).includes('Aggregated POS Sales');
                 
-                // Try to find the raw POS data that made up this aggregated block
                 let matchedRawSales = [];
                 if (isAggregated) {
                     matchedRawSales = treesSalesData.value.filter(sale => {
@@ -173,7 +170,6 @@ createApp({
                 }
 
                 if (isAggregated && matchedRawSales.length > 0) {
-                    // Print the itemized breakdown of every POS transaction
                     matchedRawSales.forEach(sale => {
                         const safeDate = `"${(sale.dateClosed || '').replace(/"/g, '""')}"`;
                         const safeLoc = `"${(sale.storeName || '').replace(/"/g, '""')}"`;
@@ -188,14 +184,12 @@ createApp({
                         csvTotal += parseFloat(sale.owed) || 0;
                     });
                 } else {
-                    // Print as a single summary line (Manual Promos OR fallback if raw data is missing)
                     const safeDate = `"${(c.dates || '').replace(/"/g, '""')}"`;
                     const safeLoc = `"${(c.site || '').replace(/"/g, '""')}"`;
                     const safeBrand = `"${(c.vendor || '').replace(/"/g, '""')}"`;
                     const safeProd = `"${(c.creditType || '').replace(/"/g, '""')}"`; 
                     const safeDisc = `"-"`;
                     const safeTrack = `"${(c.invoice || '').replace(/"/g, '""')}"`;
-                    // Fallback flag just in case local storage was cleared
                     const safeType = isAggregated ? `"Summary (Raw Data Missing)"` : `"Manual Entry"`; 
                     const safeAmount = `"${formatCurrency(c.amount)}"`;
                     
@@ -204,10 +198,8 @@ createApp({
                 }
             });
 
-            // Add the Total Row at the bottom
             csvContent += `,,,,,, "TOTAL:", "${formatCurrency(csvTotal)}"\n`;
 
-            // Trigger the download using a Blob
             const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
             const url = URL.createObjectURL(blob);
             const link = document.createElement("a");
@@ -251,8 +243,66 @@ createApp({
             const encodedBody = encodeURIComponent(body);
             const encodedCc = encodeURIComponent(`accounting@rredco.com,${senderEmail}`);
 
-            // Open the mailto link
             window.location.href = `mailto:${cleanEmails}?cc=${encodedCc}&subject=${encodedSubject}&body=${encodedBody}`;
+        };
+
+        // --- ARCHIVE & EXPORT LOGIC ---
+        const archiveAndExportAnnualReport = async () => {
+            const creditsToArchive = promoCredits.value.filter(c => 
+                (c.status === 'Applied' || c.status === 'Uncollectable') && c.archived !== true
+            );
+
+            if (creditsToArchive.length === 0) {
+                alert("There are no resolved credits to archive! (Pending credits cannot be archived).");
+                return;
+            }
+
+            if (!confirm(`You are about to export and archive ${creditsToArchive.length} resolved credits. They will be removed from your active tracker. Proceed?`)) {
+                return;
+            }
+
+            let csvContent = "Site,Tracking Month,Vendor,Distributor,Credit Type,Dates,Credit Amount,Date Requested,Date Received,Invoice,Status,Archived Date\n";
+            
+            creditsToArchive.forEach(c => {
+                const safeSite = `"${(c.site || '').replace(/"/g, '""')}"`;
+                const safeMonth = `"${(c.trackingMonth || '').replace(/"/g, '""')}"`;
+                const safeVendor = `"${(c.vendor || '').replace(/"/g, '""')}"`;
+                const safeDist = `"${(c.distributor || '').replace(/"/g, '""')}"`;
+                const safeType = `"${(c.creditType || '').replace(/"/g, '""')}"`;
+                const safeDates = `"${(c.dates || '').replace(/"/g, '""')}"`;
+                const safeAmount = `"${formatCurrency(c.amount)}"`;
+                const safeReq = `"${(c.dateRequested || '').replace(/"/g, '""')}"`;
+                const safeRec = `"${(c.dateReceived || '').replace(/"/g, '""')}"`;
+                const safeInvoice = `"${(c.invoice || '').replace(/"/g, '""')}"`;
+                const safeStatus = `"${(c.status || '').replace(/"/g, '""')}"`;
+                const archiveDate = `"${new Date().toLocaleDateString()}"`;
+                
+                csvContent += `${safeSite},${safeMonth},${safeVendor},${safeDist},${safeType},${safeDates},${safeAmount},${safeReq},${safeRec},${safeInvoice},${safeStatus},${archiveDate}\n`;
+            });
+
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.setAttribute("href", url);
+            const currentYear = new Date().getFullYear();
+            link.setAttribute("download", `Master_Annual_Report_${currentYear}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+
+            try {
+                const batch = writeBatch(db);
+                creditsToArchive.forEach(c => {
+                    const docRef = doc(db, "promoCredits", c.id);
+                    batch.update(docRef, { archived: true, archivedAt: Date.now() });
+                });
+                await batch.commit();
+                alert(`Success! Master spreadsheet downloaded and ${creditsToArchive.length} records safely archived.`);
+            } catch (error) {
+                console.error("Archive Error:", error);
+                alert("Failed to archive records in the cloud.");
+            }
         };
 
         // --- IMPORTER STATE ---
@@ -309,7 +359,6 @@ createApp({
                         const fetchedBrands = [];
                         snapshot.forEach(docSnap => { fetchedBrands.push({ id: docSnap.id, ...docSnap.data() }); });
                         
-                        // LocalStorage Auto-Migration if cloud is empty
                         if (fetchedBrands.length === 0) {
                             const localBrands = JSON.parse(localStorage.getItem('masterBrands') || '[]');
                             if (localBrands.length > 0) {
@@ -382,7 +431,8 @@ createApp({
         };
 
         const filteredCredits = computed(() => {
-            let base = promoCredits.value.filter(c => c && c.site === activeSite.value);
+            // EXCLUDE ARCHIVED CREDITS FROM THE MAIN TRACKER
+            let base = promoCredits.value.filter(c => c && c.site === activeSite.value && c.archived !== true);
             if (activeMonth.value !== 'All') base = base.filter(c => c.trackingMonth === activeMonth.value);
             if (searchQuery.value.trim() !== '') {
                 const q = searchQuery.value.toLowerCase();
@@ -416,8 +466,10 @@ createApp({
         });
 
         const displayTreesSalesData = computed(() => filteredTreesSalesData.value.slice(0, 100));
+        
         const totalPending = computed(() => filteredCredits.value.filter(c => c.status === 'Pending').reduce((sum, c) => sum + (parseFloat(c.amount) || 0), 0));
         const totalApplied = computed(() => filteredCredits.value.filter(c => c.status === 'Applied').reduce((sum, c) => sum + (parseFloat(c.amount) || 0), 0));
+        
         const unsyncedSalesCount = computed(() => filteredTreesSalesData.value.filter(s => s.status === 'Unsynced').length);
 
         const openPromoModal = () => { form.value = getEmptyForm(); editingId.value = null; showPromoModal.value = true; refreshIcons(); };
@@ -779,6 +831,7 @@ createApp({
             masterBrands, filteredBrands, showBrandDropdown, selectBrand,
             selectedBrands, allBrandsSelected, toggleAllBrands, deleteSelectedBrands, 
             showReportModal, groupedPendingReports, draftEmail,
+            archiveAndExportAnnualReport, // <-- NEW FUNCTION EXPORTED HERE
             showImportModal, openImportModal, closeImportModal, resetImport, 
             rawPasteData, pastedGrid, displayGrid, mappedHeaders, availableHeaders, processRawPaste, processImport,
             showBrandImportModal, brandPasteData, brandPastedGrid, brandMappedHeaders, brandAvailableHeaders,
