@@ -487,14 +487,15 @@ createApp({
                 const existingBrand = masterBrands.value.find(b => b.vendor.toLowerCase() === vendorName.toLowerCase());
                 
                 if (existingBrand) {
-                    if (repName) existingBrand.rep = repName;
-                    if (email) existingBrand.email = email;
-                    if (treesName) existingBrand.treesName = treesName;
-                    if (assetLibrary) existingBrand.assetLibrary = assetLibrary;
-                    if (distributor) existingBrand.distributor = distributor;
-                    if (orderFrom) existingBrand.orderFrom = orderFrom;
-                    if (payee) existingBrand.payee = payee;
-                    if (notes) existingBrand.notes = notes;
+                    // FORCE OVERWRITE: Even if the spreadsheet cell is blank, overwrite the app data with it.
+                    existingBrand.rep = repName;
+                    existingBrand.email = email;
+                    existingBrand.treesName = treesName;
+                    existingBrand.assetLibrary = assetLibrary;
+                    existingBrand.distributor = distributor;
+                    existingBrand.orderFrom = orderFrom;
+                    existingBrand.payee = payee;
+                    existingBrand.notes = notes;
                     updatedCount++;
                 } else {
                     masterBrands.value.push({ 
@@ -514,7 +515,7 @@ createApp({
 
             masterBrands.value.sort((a, b) => a.vendor.localeCompare(b.vendor));
 
-            alert(`Success! Added ${newCount} new brands and updated ${updatedCount} existing entries.`);
+            alert(`Success! Added ${newCount} new brands and FORCE UPDATED ${updatedCount} existing entries.`);
             brandPasteData.value = '';
             showBrandImportModal.value = false;
         };
