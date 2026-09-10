@@ -454,7 +454,6 @@ createApp({
             } catch (err) { alert("Failed to sync aggregated credits to the cloud."); }
         };
         
-        // --- NEW: SMART BRAND DIRECTORY PARSER ---
         const processBrandPaste = () => {
             const text = brandPasteData.value;
             if (!text.trim()) return;
@@ -465,84 +464,41 @@ createApp({
             let updatedCount = 0;
             let newCount = 0;
 
-            // Detect headers to automatically map columns regardless of how they copy/paste
+            // Strip the header row if you accidentally copied it
             const firstRowRaw = rows[0].toLowerCase();
-            const hasHeaders = firstRowRaw.includes('email') || firstRowRaw.includes('brand') || firstRowRaw.includes('distro');
-            const dataRows = hasHeaders ? rows.slice(1) : rows;
-
-            // Default column mapping (Matches your image if they copy starting from B)
-            let colMap = { brand: 1, rep: 2, email: 3, treesName: 4, asset: 5, distro: 6, order: 7, payee: 8, notes: 9 };
-
-            if (hasHeaders) {
-                const h = rows[0].split('\t').map(c => c.trim().toLowerCase());
-                const getIdx = (keywords) => {
-                    const found = h.findIndex(col => keywords.some(kw => col.includes(kw)));
-                    return found !== -1 ? found : null;
-                };
-
-                colMap.brand = getIdx(['brand', 'vendor']) ?? 1;
-                colMap.rep = getIdx(['rep', 'contact']) ?? 2;
-                colMap.email = getIdx(['email']) ?? 3;
-                colMap.treesName = getIdx(['trees', 'name as']) ?? 4;
-                colMap.asset = getIdx(['asset', 'library']) ?? 5;
-                colMap.distro = getIdx(['distro', 'distributor']) ?? 6;
-                colMap.order = getIdx(['order from', 'order']) ?? 7;
-                colMap.payee = getIdx(['payee']) ?? 8;
-                colMap.notes = getIdx(['note']) ?? 9;
-            } else {
-                // If they copy just the data starting from the Brand column, shift everything back by 1
-                const testCols = dataRows[0].split('\t');
-                if (testCols.length > 2 && testCols[2].includes('@')) {
-                    colMap = { brand: 0, rep: 1, email: 2, treesName: 3, asset: 4, distro: 5, order: 6, payee: 7, notes: 8 };
-                }
-            }
+            const dataRows = firstRowRaw.includes('brand') ? rows.slice(1) : rows;
 
             dataRows.forEach(row => {
                 const cols = row.split('\t').map(c => c.trim());
                 if (cols.length < 2) return; 
 
-                const vendorName = cols[colMap.brand] || '';
-                // Skip alphabetical group headers like "A", "B", "C" if they accidentally copied the far left column
-                if (!vendorName || vendorName.length === 1) return; 
+                // Map exactly to your spreadsheet columns (A=0, B=1, C=2, etc.)
+                const vendorName = cols[0] || '';
+                const repName = cols[1] || '';
+                const email = cols[2] || '';
+                const distributor = cols[5] || ''; // Column F is the Distro!
 
-                const email = cols[colMap.email] || '';
-                const rep = cols[colMap.rep] || '';
-                const distributor = cols[colMap.distro] || '';
-                const treesName = cols[colMap.treesName] || '';
-                const assetLibrary = cols[colMap.asset] || '';
-                const orderFrom = cols[colMap.order] || '';
-                const payee = cols[colMap.payee] || '';
-                const notes = cols[colMap.notes] || '';
+                // Skip alphabetical group headers (like "A", "B", "Q") from your sheet
+                if (!vendorName || vendorName.length === 1) return; 
 
                 const existingBrand = masterBrands.value.find(b => b.vendor.toLowerCase() === vendorName.toLowerCase());
                 
                 if (existingBrand) {
                     if (email) existingBrand.email = email;
-                    if (rep) existingBrand.rep = rep;
-                    if (distributor && existingBrand.distributor === 'Auto-Imported') existingBrand.distributor = distributor;
-                    else if (distributor) existingBrand.distributor = distributor;
-                    if (treesName) existingBrand.treesName = treesName;
-                    if (assetLibrary) existingBrand.assetLibrary = assetLibrary;
-                    if (orderFrom) existingBrand.orderFrom = orderFrom;
-                    if (payee) existingBrand.payee = payee;
-                    if (notes) existingBrand.notes = notes;
+                    // Overwrite the bad distributor data with the correct one
+                    if (distributor) existingBrand.distributor = distributor;
                     updatedCount++;
                 } else {
                     masterBrands.value.push({ 
                         vendor: vendorName, 
-                        distributor, 
-                        email, 
-                        rep, 
-                        treesName, 
-                        assetLibrary, 
-                        orderFrom, 
-                        payee, 
-                        notes 
+                        distributor: distributor, 
+                        email: email 
                     });
                     newCount++;
                 }
             });
 
+            // Sort alphabetically for a clean UI
             masterBrands.value.sort((a, b) => a.vendor.localeCompare(b.vendor));
 
             alert(`Success! Added ${newCount} new brands and updated ${updatedCount} existing entries.`);
