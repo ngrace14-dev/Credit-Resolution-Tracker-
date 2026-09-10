@@ -19,13 +19,11 @@ const firebaseConfig = {
 
 const firebaseApp = initializeApp(firebaseConfig);
 
-// Initialize App Check safely
 try {
     const appCheck = initializeAppCheck(firebaseApp, {
         provider: new ReCaptchaEnterpriseProvider("6LfACLQtAAAAAOWiSEhR1WsVPcu4qwhhv1PNqJSd"),
         isTokenAutoRefreshEnabled: true
     });
-    console.log("Firebase App Check Initialized");
 } catch (error) {
     console.error("App Check Error:", error);
 }
@@ -58,17 +56,13 @@ createApp({
         };
 
         const promoCredits = ref([]);
-        
         const calendarMonths = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
         const activeMonth = ref('August');
         const searchQuery = ref('');
 
         const defaultBrands = [
             { vendor: "3 Bros", distributor: "Hash Tag Distribution" },
-            { vendor: "710 LABS", distributor: "Fluids Manufacturing Inc" },
-            { vendor: "ABX", distributor: "Groundwork Holdings, Inc." },
-            { vendor: "Alien Labs", distributor: "Connected International LLC" },
-            { vendor: "Bear Labs", distributor: "Cleanline Management LLC" }
+            { vendor: "710 LABS", distributor: "Fluids Manufacturing Inc" }
         ];
 
         const masterBrands = ref(JSON.parse(localStorage.getItem('masterBrands')) || defaultBrands);
@@ -83,7 +77,6 @@ createApp({
         const pastedGrid = ref([]);
         const mappedHeaders = ref([]);
         
-        // Brand Importer Variables
         const showBrandImportModal = ref(false);
         const brandPasteData = ref('');
         
@@ -100,26 +93,21 @@ createApp({
         });
         
         const form = ref(getEmptyForm());
-
         let unsubscribeSnapshot = null;
 
         onMounted(() => {
             refreshIcons();
-            
             onAuthStateChanged(auth, (user) => {
                 if (user) {
                     const userEmail = user.email.toLowerCase();
                     const managerData = systemUsers[userEmail] || { name: 'Manager', access: ['Red Bluff', 'Redding'] };
-                    
                     loggedInUser.value = managerData.name;
                     activeSite.value = managerData.access[0];
                     isManagerUnlocked.value = true;
                     
                     unsubscribeSnapshot = onSnapshot(collection(db, "promoCredits"), (snapshot) => {
                         const fetchedCredits = [];
-                        snapshot.forEach(docSnap => {
-                            fetchedCredits.push({ id: docSnap.id, ...docSnap.data() });
-                        });
+                        snapshot.forEach(docSnap => { fetchedCredits.push({ id: docSnap.id, ...docSnap.data() }); });
                         fetchedCredits.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
                         promoCredits.value = fetchedCredits;
                     });
@@ -134,23 +122,11 @@ createApp({
         const handleLogin = () => {
             authError.value = '';
             signInWithEmailAndPassword(auth, emailInput.value.trim(), passwordInput.value)
-                .then(() => {
-                    emailInput.value = '';
-                    passwordInput.value = '';
-                    refreshIcons();
-                })
-                .catch((error) => {
-                    authError.value = "Invalid email or password.";
-                    console.error("Login Error:", error.message);
-                });
+                .then(() => { emailInput.value = ''; passwordInput.value = ''; refreshIcons(); })
+                .catch((error) => { authError.value = "Invalid email or password."; });
         };
 
-        const forceLock = () => {
-            signOut(auth).then(() => {
-                isManagerUnlocked.value = false;
-                loggedInUser.value = '';
-            });
-        };
+        const forceLock = () => { signOut(auth).then(() => { isManagerUnlocked.value = false; loggedInUser.value = ''; }); };
 
         const filteredBrands = computed(() => {
             const query = (form.value.vendor || '').toLowerCase();
@@ -187,11 +163,7 @@ createApp({
 
         const filteredCredits = computed(() => {
             let base = promoCredits.value.filter(c => c.site === activeSite.value);
-            
-            if (activeMonth.value !== 'All') {
-                base = base.filter(c => c.trackingMonth === activeMonth.value);
-            }
-            
+            if (activeMonth.value !== 'All') base = base.filter(c => c.trackingMonth === activeMonth.value);
             if (searchQuery.value.trim() !== '') {
                 const q = searchQuery.value.toLowerCase();
                 base = base.filter(c => 
@@ -201,7 +173,6 @@ createApp({
                     (c.creditType && c.creditType.toLowerCase().includes(q))
                 );
             }
-            
             return base.map(c => {
                 const isMapped = masterBrands.value.some(b => b.vendor.toLowerCase() === c.vendor.toLowerCase());
                 return { ...c, needsMapping: !isMapped };
@@ -224,10 +195,7 @@ createApp({
             return base;
         });
 
-        const displayTreesSalesData = computed(() => {
-            return filteredTreesSalesData.value.slice(0, 100);
-        });
-
+        const displayTreesSalesData = computed(() => filteredTreesSalesData.value.slice(0, 100));
         const totalPending = computed(() => filteredCredits.value.filter(c => c.status === 'Pending').reduce((sum, c) => sum + (parseFloat(c.amount) || 0), 0));
         const totalApplied = computed(() => filteredCredits.value.filter(c => c.status === 'Applied').reduce((sum, c) => sum + (parseFloat(c.amount) || 0), 0));
         const unsyncedSalesCount = computed(() => filteredTreesSalesData.value.filter(s => s.status === 'Unsynced').length);
@@ -246,36 +214,19 @@ createApp({
         const saveCredit = async () => {
             if (!form.value.vendor) return alert("Vendor (Brand) is required.");
             if (!form.value.trackingMonth) return alert("Tracking Month is required.");
-
-            const payload = {
-                ...form.value,
-                site: activeSite.value,
-                createdAt: Date.now()
-            };
-
+            const payload = { ...form.value, site: activeSite.value, createdAt: Date.now() };
             try {
-                if (editingId.value) {
-                    await updateDoc(doc(db, "promoCredits", editingId.value), payload);
-                } else {
-                    await addDoc(collection(db, "promoCredits"), payload);
-                }
+                if (editingId.value) await updateDoc(doc(db, "promoCredits", editingId.value), payload);
+                else await addDoc(collection(db, "promoCredits"), payload);
                 closePromoModal();
-            } catch (error) {
-                console.error("Firestore Error:", error);
-                alert("Failed to save to Firebase. Check console for details.");
-            }
+            } catch (error) { alert("Failed to save to Firebase."); }
         };
 
         const editCredit = (credit) => { form.value = { ...credit }; editingId.value = credit.id; showPromoModal.value = true; refreshIcons(); };
-
         const deleteCredit = async () => {
             if (confirm("Are you sure you want to permanently delete this credit?")) {
-                try {
-                    await deleteDoc(doc(db, "promoCredits", editingId.value));
-                    closePromoModal();
-                } catch (error) {
-                    console.error("Error deleting from Firebase:", error);
-                }
+                try { await deleteDoc(doc(db, "promoCredits", editingId.value)); closePromoModal(); } 
+                catch (error) { console.error("Error deleting:", error); }
             }
         };
         
@@ -340,7 +291,6 @@ createApp({
                             currentCredit.trackingMonth = currentChunkMonth !== 'Unknown' ? currentChunkMonth : (activeMonth.value === 'All' ? 'August' : activeMonth.value);
                             currentCredit.amount = parseFloat(String(currentCredit.amount).replace(/[^0-9.-]+/g,"")) || 0;
                             currentCredit.createdAt = Date.now();
-                            
                             const newDocRef = doc(collection(db, "promoCredits"));
                             batch.set(newDocRef, currentCredit);
                             importedCount++;
@@ -370,7 +320,6 @@ createApp({
                     currentCredit.trackingMonth = currentChunkMonth !== 'Unknown' ? currentChunkMonth : (activeMonth.value === 'All' ? 'August' : activeMonth.value);
                     currentCredit.amount = parseFloat(String(currentCredit.amount).replace(/[^0-9.-]+/g,"")) || 0;
                     currentCredit.createdAt = Date.now();
-
                     const newDocRef = doc(collection(db, "promoCredits"));
                     batch.set(newDocRef, currentCredit);
                     importedCount++;
@@ -382,16 +331,12 @@ createApp({
                 alert(`Successfully extracted and saved ${importedCount} promo credits to Firebase!`);
                 closeImportModal();
                 refreshIcons();
-            } catch (err) {
-                console.error("Batch Import Error:", err);
-                alert("Failed to save import to cloud.");
-            }
+            } catch (err) { alert("Failed to save import to cloud."); }
         };
 
         const handleTreesCsvUpload = (e) => {
             const file = e.target.files[0];
             if (!file) return;
-            
             const reader = new FileReader();
             reader.onload = (evt) => {
                 try {
@@ -427,7 +372,6 @@ createApp({
                     const newSales = [];
                     for (let i = headerIdx + 1; i < rows.length; i++) {
                         if (!rows[i].trim()) continue;
-                        
                         const cols = parseCSVRow(rows[i]);
                         const rowObj = {};
                         headers.forEach((h, idx) => { rowObj[h] = cols[idx] ? cols[idx].replace(/["']/g, '') : ''; });
@@ -457,10 +401,7 @@ createApp({
                     treesSalesData.value = newSales.concat(treesSalesData.value);
                     e.target.value = ''; 
                     refreshIcons();
-
-                } catch (error) {
-                    alert("Error parsing CSV. Ensure it is a valid comma-separated file.");
-                }
+                } catch (error) { alert("Error parsing CSV. Ensure it is a valid comma-separated file."); }
             };
             reader.readAsText(file); 
         };
@@ -471,7 +412,6 @@ createApp({
             
             recordsToSync.forEach(sale => {
                 const uniqueKey = `${sale.detectedSite}___${sale.brand}___${sale.month}`;
-                
                 if (!groupedBrands[uniqueKey]) {
                     groupedBrands[uniqueKey] = { site: sale.detectedSite, brand: sale.brand, month: sale.month, totalOwed: 0, itemCount: 0, ids: [] };
                 }
@@ -486,7 +426,6 @@ createApp({
             for (const [key, data] of Object.entries(groupedBrands)) {
                 if (data.totalOwed > 0) {
                     const masterRecord = masterBrands.value.find(b => b.vendor.toLowerCase() === data.brand.toLowerCase());
-                    
                     const payload = {
                         site: data.site, 
                         trackingMonth: data.month, 
@@ -501,7 +440,6 @@ createApp({
                         status: 'Pending',
                         createdAt: Date.now()
                     };
-
                     const newDocRef = doc(collection(db, "promoCredits"));
                     batch.set(newDocRef, payload);
                     creditsCreated++;
@@ -513,43 +451,101 @@ createApp({
                 treesSalesData.value = treesSalesData.value.map(s => s.status === 'Unsynced' ? { ...s, status: 'Synced' } : s);
                 alert(`Success! Aggregated ${creditsCreated} vendor credits and pushed them to Firebase.`);
                 activeTab.value = 'Tracker'; 
-            } catch (err) {
-                console.error("Aggregation Firebase Error:", err);
-                alert("Failed to sync aggregated credits to the cloud.");
-            }
+            } catch (err) { alert("Failed to sync aggregated credits to the cloud."); }
         };
         
+        // --- NEW: SMART BRAND DIRECTORY PARSER ---
         const processBrandPaste = () => {
             const text = brandPasteData.value;
             if (!text.trim()) return;
             
-            const rows = text.split('\n').filter(r => r.trim() !== '');
+            const rows = text.split(/\r?\n/).filter(r => r.trim() !== '');
+            if (rows.length === 0) return;
+
             let updatedCount = 0;
             let newCount = 0;
 
-            rows.forEach(row => {
-                const cols = row.split('\t').map(c => c.trim());
-                if (cols.length >= 1) {
-                    const vendorName = cols[0];
-                    const distributor = cols[1] || '';
-                    const email = cols[2] || '';
+            // Detect headers to automatically map columns regardless of how they copy/paste
+            const firstRowRaw = rows[0].toLowerCase();
+            const hasHeaders = firstRowRaw.includes('email') || firstRowRaw.includes('brand') || firstRowRaw.includes('distro');
+            const dataRows = hasHeaders ? rows.slice(1) : rows;
 
-                    const existingBrand = masterBrands.value.find(b => b.vendor.toLowerCase() === vendorName.toLowerCase());
-                    
-                    if (existingBrand) {
-                        if (email) existingBrand.email = email;
-                        if (distributor && existingBrand.distributor === 'Auto-Imported') existingBrand.distributor = distributor;
-                        updatedCount++;
-                    } else {
-                        masterBrands.value.push({ vendor: vendorName, distributor: distributor, email: email });
-                        newCount++;
-                    }
+            // Default column mapping (Matches your image if they copy starting from B)
+            let colMap = { brand: 1, rep: 2, email: 3, treesName: 4, asset: 5, distro: 6, order: 7, payee: 8, notes: 9 };
+
+            if (hasHeaders) {
+                const h = rows[0].split('\t').map(c => c.trim().toLowerCase());
+                const getIdx = (keywords) => {
+                    const found = h.findIndex(col => keywords.some(kw => col.includes(kw)));
+                    return found !== -1 ? found : null;
+                };
+
+                colMap.brand = getIdx(['brand', 'vendor']) ?? 1;
+                colMap.rep = getIdx(['rep', 'contact']) ?? 2;
+                colMap.email = getIdx(['email']) ?? 3;
+                colMap.treesName = getIdx(['trees', 'name as']) ?? 4;
+                colMap.asset = getIdx(['asset', 'library']) ?? 5;
+                colMap.distro = getIdx(['distro', 'distributor']) ?? 6;
+                colMap.order = getIdx(['order from', 'order']) ?? 7;
+                colMap.payee = getIdx(['payee']) ?? 8;
+                colMap.notes = getIdx(['note']) ?? 9;
+            } else {
+                // If they copy just the data starting from the Brand column, shift everything back by 1
+                const testCols = dataRows[0].split('\t');
+                if (testCols.length > 2 && testCols[2].includes('@')) {
+                    colMap = { brand: 0, rep: 1, email: 2, treesName: 3, asset: 4, distro: 5, order: 6, payee: 7, notes: 8 };
+                }
+            }
+
+            dataRows.forEach(row => {
+                const cols = row.split('\t').map(c => c.trim());
+                if (cols.length < 2) return; 
+
+                const vendorName = cols[colMap.brand] || '';
+                // Skip alphabetical group headers like "A", "B", "C" if they accidentally copied the far left column
+                if (!vendorName || vendorName.length === 1) return; 
+
+                const email = cols[colMap.email] || '';
+                const rep = cols[colMap.rep] || '';
+                const distributor = cols[colMap.distro] || '';
+                const treesName = cols[colMap.treesName] || '';
+                const assetLibrary = cols[colMap.asset] || '';
+                const orderFrom = cols[colMap.order] || '';
+                const payee = cols[colMap.payee] || '';
+                const notes = cols[colMap.notes] || '';
+
+                const existingBrand = masterBrands.value.find(b => b.vendor.toLowerCase() === vendorName.toLowerCase());
+                
+                if (existingBrand) {
+                    if (email) existingBrand.email = email;
+                    if (rep) existingBrand.rep = rep;
+                    if (distributor && existingBrand.distributor === 'Auto-Imported') existingBrand.distributor = distributor;
+                    else if (distributor) existingBrand.distributor = distributor;
+                    if (treesName) existingBrand.treesName = treesName;
+                    if (assetLibrary) existingBrand.assetLibrary = assetLibrary;
+                    if (orderFrom) existingBrand.orderFrom = orderFrom;
+                    if (payee) existingBrand.payee = payee;
+                    if (notes) existingBrand.notes = notes;
+                    updatedCount++;
+                } else {
+                    masterBrands.value.push({ 
+                        vendor: vendorName, 
+                        distributor, 
+                        email, 
+                        rep, 
+                        treesName, 
+                        assetLibrary, 
+                        orderFrom, 
+                        payee, 
+                        notes 
+                    });
+                    newCount++;
                 }
             });
 
             masterBrands.value.sort((a, b) => a.vendor.localeCompare(b.vendor));
 
-            alert(`Success! Added ${newCount} new brands and updated ${updatedCount} existing emails.`);
+            alert(`Success! Added ${newCount} new brands and updated ${updatedCount} existing entries.`);
             brandPasteData.value = '';
             showBrandImportModal.value = false;
         };
