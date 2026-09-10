@@ -2,16 +2,8 @@
 
 // 1. FIREBASE IMPORTS
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-app.js";
-import {
-    getFirestore,
-    collection,
-    addDoc,
-    doc,
-    updateDoc,
-    deleteDoc,
-    writeBatch,
-    onSnapshot
-} from "https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js";
+import { getFirestore, collection, addDoc, doc, updateDoc, deleteDoc, writeBatch, onSnapshot } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js";
+import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js";
 
 // 2. FIREBASE CONFIGURATION
 const firebaseConfig = {
@@ -26,7 +18,7 @@ const firebaseConfig = {
 
 const firebaseApp = initializeApp(firebaseConfig);
 const db = getFirestore(firebaseApp);
-console.log("Firebase Connected", db);
+const auth = getAuth(firebaseApp); 
 
 // 3. VUE APP INIT
 const { createApp, ref, computed, nextTick, onMounted, watch } = window.Vue;
@@ -35,7 +27,9 @@ createApp({
     setup() {
         const isManagerUnlocked = ref(false);
         const loggedInUser = ref('');
-        const pinInput = ref('');
+        const emailInput = ref('');
+        const passwordInput = ref('');
+        const authError = ref('');
         const activeSite = ref('Red Bluff');
         
         const activeTab = ref('Tracker');
@@ -44,11 +38,12 @@ createApp({
         const treesSalesData = ref(JSON.parse(localStorage.getItem('treesSalesData')) || []);
         watch(treesSalesData, (newVal) => localStorage.setItem('treesSalesData', JSON.stringify(newVal)), { deep: true });
 
+        // Map emails to manager names and permissions
         const systemUsers = {
-            '4095': { name: 'Lenay A.', access: ['Red Bluff', 'Redding'] },
-            '7444': { name: 'Tricia K.', access: ['Red Bluff', 'Redding'] },
-            '2437': { name: 'Whitney M.', access: ['Red Bluff', 'Redding'] },
-            '0500': { name: 'Nicholas G.', access: ['Red Bluff', 'Redding'] }
+            'lenay@rredco.com': { name: 'Lenay A.', access: ['Red Bluff', 'Redding'] },
+            'tricia@rredco.com': { name: 'Tricia K.', access: ['Red Bluff', 'Redding'] },
+            'whitney@rredco.com': { name: 'Whitney M.', access: ['Red Bluff', 'Redding'] },
+            'nicholas.grace@rredco.com': { name: 'Nicholas G.', access: ['Red Bluff', 'Redding'] } 
         };
 
         const promoCredits = ref([]);
@@ -87,17 +82,8 @@ createApp({
         const mappedHeaders = ref([]);
         
         const availableHeaders = ref([
-            '-- Ignore Column --',
-            'Tracking Month',
-            'Vendor',
-            'Distributor',
-            'Credit Type',
-            'Dates',
-            'Credit amount $$$',
-            'Date requested',
-            'Date received',
-            'Invoice / Credit Memo',
-            'Status'
+            '-- Ignore Column --', 'Tracking Month', 'Vendor', 'Distributor', 'Credit Type',
+            'Dates', 'Credit amount $$$', 'Date requested', 'Date received', 'Invoice / Credit Memo', 'Status'
         ]);
         
         const getEmptyForm = () => ({ 
@@ -109,40 +95,59 @@ createApp({
         
         const form = ref(getEmptyForm());
 
-        // --- REAL-TIME FIREBASE SYNC ON LOAD ---
+        let unsubscribeSnapshot = null;
+
+        // --- AUTHENTICATION STATE LISTENER ---
         onMounted(() => {
             refreshIcons();
             
-            // Listen to the cloud and populate the table automatically
-            onSnapshot(collection(db, "promoCredits"), (snapshot) => {
-                const fetchedCredits = [];
-                snapshot.forEach(docSnap => {
-                    fetchedCredits.push({ id: docSnap.id, ...docSnap.data() });
-                });
-                
-                // Sort newest items first
-                fetchedCredits.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
-                promoCredits.value = fetchedCredits;
+            // Firebase automatically checks if the user is already logged in
+            onAuthStateChanged(auth, (user) => {
+                if (user) {
+                    const userEmail = user.email.toLowerCase();
+                    const managerData = systemUsers[userEmail] || { name: 'Manager', access: ['Red Bluff', 'Redding'] };
+                    
+                    loggedInUser.value = managerData.name;
+                    activeSite.value = managerData.access[0];
+                    isManagerUnlocked.value = true;
+                    
+                    // Only fetch data if the user is authenticated!
+                    unsubscribeSnapshot = onSnapshot(collection(db, "promoCredits"), (snapshot) => {
+                        const fetchedCredits = [];
+                        snapshot.forEach(docSnap => {
+                            fetchedCredits.push({ id: docSnap.id, ...docSnap.data() });
+                        });
+                        fetchedCredits.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+                        promoCredits.value = fetchedCredits;
+                    });
+                } else {
+                    // Lock app and clear data if logged out
+                    isManagerUnlocked.value = false;
+                    promoCredits.value = [];
+                    if (unsubscribeSnapshot) unsubscribeSnapshot();
+                }
             });
         });
 
         const handleLogin = () => {
-            const pin = pinInput.value.trim();
-            if (systemUsers[pin]) {
-                loggedInUser.value = systemUsers[pin].name;
-                activeSite.value = systemUsers[pin].access[0];
-                isManagerUnlocked.value = true;
-                pinInput.value = '';
-                refreshIcons();
-            } else {
-                alert("Invalid PIN. Access Denied.");
-                pinInput.value = '';
-            }
+            authError.value = '';
+            signInWithEmailAndPassword(auth, emailInput.value.trim(), passwordInput.value)
+                .then(() => {
+                    emailInput.value = '';
+                    passwordInput.value = '';
+                    refreshIcons();
+                })
+                .catch((error) => {
+                    authError.value = "Invalid email or password.";
+                    console.error("Login Error:", error.message);
+                });
         };
 
         const forceLock = () => {
-            isManagerUnlocked.value = false;
-            loggedInUser.value = '';
+            signOut(auth).then(() => {
+                isManagerUnlocked.value = false;
+                loggedInUser.value = '';
+            });
         };
 
         const filteredBrands = computed(() => {
@@ -231,29 +236,16 @@ createApp({
 
         const unsyncedSalesCount = computed(() => filteredTreesSalesData.value.filter(s => s.status === 'Unsynced').length);
 
-        const openPromoModal = () => {
-            form.value = getEmptyForm();
-            editingId.value = null;
-            showPromoModal.value = true;
-            refreshIcons();
-        };
-
-        const closePromoModal = () => {
-            showPromoModal.value = false;
-            showBrandDropdown.value = false;
-        };
+        const openPromoModal = () => { form.value = getEmptyForm(); editingId.value = null; showPromoModal.value = true; refreshIcons(); };
+        const closePromoModal = () => { showPromoModal.value = false; showBrandDropdown.value = false; };
 
         const handleFileUpload = (event) => {
             const file = event.target.files[0];
             if (!file) return;
-            if (file.size > 800000) {
-                return alert("File is too large. Please keep attachments under 800KB.");
-            }
+            if (file.size > 800000) return alert("File is too large. Please keep attachments under 800KB.");
             form.value.attachmentName = file.name;
             form.value.attachmentData = "mock_file_data"; 
         };
-
-        // --- FIREBASE CRUD LOGIC ---
 
         const saveCredit = async () => {
             if (!form.value.vendor) return alert("Vendor (Brand) is required.");
@@ -271,23 +263,14 @@ createApp({
                 } else {
                     await addDoc(collection(db, "promoCredits"), payload);
                 }
-
-                alert("Credit saved successfully!");
                 closePromoModal();
-                refreshIcons();
-
             } catch (error) {
                 console.error("Firestore Error:", error);
                 alert("Failed to save to Firebase. Check console for details.");
             }
         };
 
-        const editCredit = (credit) => {
-            form.value = { ...credit };
-            editingId.value = credit.id;
-            showPromoModal.value = true;
-            refreshIcons();
-        };
+        const editCredit = (credit) => { form.value = { ...credit }; editingId.value = credit.id; showPromoModal.value = true; refreshIcons(); };
 
         const deleteCredit = async () => {
             if (confirm("Are you sure you want to permanently delete this credit?")) {
@@ -296,20 +279,14 @@ createApp({
                     closePromoModal();
                 } catch (error) {
                     console.error("Error deleting from Firebase:", error);
-                    alert("Failed to delete record from cloud.");
                 }
             }
         };
         
-        // --- HORIZONTAL EXCEL IMPORT ENGINE ---
         const openImportModal = () => { resetImport(); showImportModal.value = true; refreshIcons(); };
         const closeImportModal = () => { showImportModal.value = false; };
         
-        const resetImport = () => {
-            pastedGrid.value = [];
-            mappedHeaders.value = [];
-            rawPasteData.value = '';
-        };
+        const resetImport = () => { pastedGrid.value = []; mappedHeaders.value = []; rawPasteData.value = ''; };
 
         const displayGrid = computed(() => {
             if (pastedGrid.value.length === 0) return [];
@@ -419,7 +396,6 @@ createApp({
             }
         };
 
-        // --- TREES POS AGGREGATOR ---
         const handleTreesCsvUpload = (e) => {
             const file = e.target.files[0];
             if (!file) return;
@@ -437,14 +413,9 @@ createApp({
                         let inQuotes = false;
                         for (let i = 0; i < str.length; i++) {
                             const char = str[i];
-                            if (char === '"') {
-                                inQuotes = !inQuotes;
-                            } else if (char === ',' && !inQuotes) {
-                                result.push(cell.trim());
-                                cell = '';
-                            } else {
-                                cell += char;
-                            }
+                            if (char === '"') { inQuotes = !inQuotes; } 
+                            else if (char === ',' && !inQuotes) { result.push(cell.trim()); cell = ''; } 
+                            else { cell += char; }
                         }
                         result.push(cell.trim());
                         return result;
@@ -467,9 +438,7 @@ createApp({
                         
                         const cols = parseCSVRow(rows[i]);
                         const rowObj = {};
-                        headers.forEach((h, idx) => {
-                            rowObj[h] = cols[idx] ? cols[idx].replace(/["']/g, '') : '';
-                        });
+                        headers.forEach((h, idx) => { rowObj[h] = cols[idx] ? cols[idx].replace(/["']/g, '') : ''; });
 
                         if (!rowObj['Product Brand'] && !rowObj['State Tracking Id']) continue;
 
@@ -499,7 +468,6 @@ createApp({
 
                 } catch (error) {
                     alert("Error parsing CSV. Ensure it is a valid comma-separated file.");
-                    console.error(error);
                 }
             };
             reader.readAsText(file); 
@@ -559,12 +527,10 @@ createApp({
             }
         };
 
-        const refreshIcons = () => {
-            nextTick(() => { if(window.lucide) window.lucide.createIcons(); });
-        };
+        const refreshIcons = () => { nextTick(() => { if(window.lucide) window.lucide.createIcons(); }); };
 
         return {
-            isManagerUnlocked, loggedInUser, pinInput, handleLogin, forceLock, activeSite, 
+            isManagerUnlocked, loggedInUser, emailInput, passwordInput, authError, handleLogin, forceLock, activeSite, 
             activeTab, treesSalesData, filteredTreesSalesData, displayTreesSalesData, unsyncedSalesCount, handleTreesCsvUpload, pushToMainTracker,
             promoCredits, filteredCredits, showPromoModal, form, editingId, 
             openPromoModal, closePromoModal, saveCredit, editCredit, deleteCredit, handleFileUpload,
