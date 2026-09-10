@@ -19,7 +19,7 @@ const firebaseConfig = {
 
 const firebaseApp = initializeApp(firebaseConfig);
 
-// Initialize App Check safely so it doesn't crash the UI if the key is wrong
+// Initialize App Check safely
 try {
     const appCheck = initializeAppCheck(firebaseApp, {
         provider: new ReCaptchaEnterpriseProvider("6LfACLQtAAAAAOWiSEhR1WsVPcu4qwhhv1PNqJSd"),
@@ -47,11 +47,9 @@ createApp({
         
         const activeTab = ref('Tracker');
         
-        // Save Trees POS data to local storage so you don't burn Firebase limits on raw data
         const treesSalesData = ref(JSON.parse(localStorage.getItem('treesSalesData')) || []);
         watch(treesSalesData, (newVal) => localStorage.setItem('treesSalesData', JSON.stringify(newVal)), { deep: true });
 
-        // Map emails to manager names and permissions
         const systemUsers = {
             'lenay@rredco.com': { name: 'Lenay A.', access: ['Red Bluff', 'Redding'] },
             'tricia@rredco.com': { name: 'Tricia K.', access: ['Red Bluff', 'Redding'] },
@@ -70,16 +68,7 @@ createApp({
             { vendor: "710 LABS", distributor: "Fluids Manufacturing Inc" },
             { vendor: "ABX", distributor: "Groundwork Holdings, Inc." },
             { vendor: "Alien Labs", distributor: "Connected International LLC" },
-            { vendor: "Bear Labs", distributor: "Cleanline Management LLC" },
-            { vendor: "BIG PETE'S", distributor: "Big Petes" },
-            { vendor: "CAM", distributor: "California Artisanal Medicine" },
-            { vendor: "Connected", distributor: "Connected International LLC" },
-            { vendor: "DIME BAG", distributor: "StateHouse" },
-            { vendor: "KANHA", distributor: "Sunderstorm Bay LLC" },
-            { vendor: "KIVA", distributor: "Kiva Sales & Services" },
-            { vendor: "RAW GARDEN", distributor: "Raw Garden" },
-            { vendor: "STIIIZY", distributor: "Ironworks Collective Inc" },
-            { vendor: "WYLD", distributor: "Northwest Confections California LLC" }
+            { vendor: "Bear Labs", distributor: "Cleanline Management LLC" }
         ];
 
         const masterBrands = ref(JSON.parse(localStorage.getItem('masterBrands')) || defaultBrands);
@@ -93,6 +82,10 @@ createApp({
         const rawPasteData = ref('');
         const pastedGrid = ref([]);
         const mappedHeaders = ref([]);
+        
+        // Brand Importer Variables
+        const showBrandImportModal = ref(false);
+        const brandPasteData = ref('');
         
         const availableHeaders = ref([
             '-- Ignore Column --', 'Tracking Month', 'Vendor', 'Distributor', 'Credit Type',
@@ -110,7 +103,6 @@ createApp({
 
         let unsubscribeSnapshot = null;
 
-        // --- AUTHENTICATION STATE LISTENER ---
         onMounted(() => {
             refreshIcons();
             
@@ -218,11 +210,7 @@ createApp({
 
         const filteredTreesSalesData = computed(() => {
             let base = treesSalesData.value; 
-            
-            if (activeMonth.value !== 'All') {
-                base = base.filter(sale => sale.month === activeMonth.value);
-            }
-            
+            if (activeMonth.value !== 'All') base = base.filter(sale => sale.month === activeMonth.value);
             if (searchQuery.value.trim() !== '') {
                 const q = searchQuery.value.toLowerCase();
                 base = base.filter(sale => 
@@ -233,7 +221,6 @@ createApp({
                     (sale.detectedSite && sale.detectedSite.toLowerCase().includes(q))
                 );
             }
-            
             return base;
         });
 
@@ -243,7 +230,6 @@ createApp({
 
         const totalPending = computed(() => filteredCredits.value.filter(c => c.status === 'Pending').reduce((sum, c) => sum + (parseFloat(c.amount) || 0), 0));
         const totalApplied = computed(() => filteredCredits.value.filter(c => c.status === 'Applied').reduce((sum, c) => sum + (parseFloat(c.amount) || 0), 0));
-
         const unsyncedSalesCount = computed(() => filteredTreesSalesData.value.filter(s => s.status === 'Unsynced').length);
 
         const openPromoModal = () => { form.value = getEmptyForm(); editingId.value = null; showPromoModal.value = true; refreshIcons(); };
@@ -295,7 +281,6 @@ createApp({
         
         const openImportModal = () => { resetImport(); showImportModal.value = true; refreshIcons(); };
         const closeImportModal = () => { showImportModal.value = false; };
-        
         const resetImport = () => { pastedGrid.value = []; mappedHeaders.value = []; rawPasteData.value = ''; };
 
         const displayGrid = computed(() => {
@@ -312,13 +297,10 @@ createApp({
         const processRawPaste = () => {
             const text = rawPasteData.value;
             if (!text.trim()) return;
-            
             const rows = text.split('\n').filter(r => r.trim() !== '');
             const grid = rows.map(r => r.split('\t').map(c => c.trim()));
             if (grid.length < 3) return; 
-            
             pastedGrid.value = grid;
-            
             mappedHeaders.value = grid[1].map(cell => {
                 const lowerCell = cell.toLowerCase();
                 const match = availableHeaders.value.find(h => h !== '-- Ignore Column --' && lowerCell.includes(h.toLowerCase()));
@@ -536,6 +518,41 @@ createApp({
                 alert("Failed to sync aggregated credits to the cloud.");
             }
         };
+        
+        const processBrandPaste = () => {
+            const text = brandPasteData.value;
+            if (!text.trim()) return;
+            
+            const rows = text.split('\n').filter(r => r.trim() !== '');
+            let updatedCount = 0;
+            let newCount = 0;
+
+            rows.forEach(row => {
+                const cols = row.split('\t').map(c => c.trim());
+                if (cols.length >= 1) {
+                    const vendorName = cols[0];
+                    const distributor = cols[1] || '';
+                    const email = cols[2] || '';
+
+                    const existingBrand = masterBrands.value.find(b => b.vendor.toLowerCase() === vendorName.toLowerCase());
+                    
+                    if (existingBrand) {
+                        if (email) existingBrand.email = email;
+                        if (distributor && existingBrand.distributor === 'Auto-Imported') existingBrand.distributor = distributor;
+                        updatedCount++;
+                    } else {
+                        masterBrands.value.push({ vendor: vendorName, distributor: distributor, email: email });
+                        newCount++;
+                    }
+                }
+            });
+
+            masterBrands.value.sort((a, b) => a.vendor.localeCompare(b.vendor));
+
+            alert(`Success! Added ${newCount} new brands and updated ${updatedCount} existing emails.`);
+            brandPasteData.value = '';
+            showBrandImportModal.value = false;
+        };
 
         const refreshIcons = () => { nextTick(() => { if(window.lucide) window.lucide.createIcons(); }); };
 
@@ -548,6 +565,7 @@ createApp({
             masterBrands, filteredBrands, showBrandDropdown, selectBrand,
             showImportModal, openImportModal, closeImportModal, resetImport, 
             rawPasteData, pastedGrid, displayGrid, mappedHeaders, availableHeaders, processRawPaste, processImport,
+            showBrandImportModal, brandPasteData, processBrandPaste,
             calendarMonths, activeMonth, detectMonthInString, searchQuery
         };
     }
