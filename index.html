@@ -7,53 +7,76 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Calibri:wght@400;700&display=swap" rel="stylesheet">
     <style>
-        body { font-family: 'Calibri', sans-serif; background-color: #f3f4f6; margin: 0; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
-        .excel-table { border-collapse: collapse; font-size: 13px; background-color: white; width: 100%; text-align: left; }
-        .excel-table th, .excel-table td { border: 1px solid #d1d5db; padding: 8px 12px; white-space: nowrap; }
-        .excel-table th { font-weight: 700; background-color: #f8f9fa; color: #374151; }
+        /* Mobile viewport height fix */
+        body { font-family: 'Calibri', sans-serif; background-color: #f3f4f6; margin: 0; height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
+        
+        .excel-table { border-collapse: separate; border-spacing: 0; font-size: 13px; background-color: white; width: 100%; text-align: left; }
+        .excel-table th, .excel-table td { border-bottom: 1px solid #d1d5db; border-right: 1px solid #d1d5db; padding: 8px 12px; white-space: nowrap; }
+        .excel-table th { font-weight: 700; background-color: #f8f9fa; color: #374151; border-top: 1px solid #d1d5db; }
+        .excel-table th:first-child, .excel-table td:first-child { border-left: 1px solid #d1d5db; }
         [v-cloak] { display: none; }
         
-        ::-webkit-scrollbar { height: 10px; width: 10px; }
+        ::-webkit-scrollbar { height: 8px; width: 8px; }
         ::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 4px; }
         ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
         ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+        /* Only make actions column sticky on Desktop to save mobile screen space */
+        @media (min-width: 768px) {
+            .sticky-col { position: sticky; right: 0; background-color: white; box-shadow: -3px 0 5px rgba(0,0,0,0.05); z-index: 10; }
+            .sticky-head { position: sticky; right: 0; background-color: #f8f9fa; box-shadow: -3px 0 5px rgba(0,0,0,0.05); z-index: 15; }
+        }
     </style>
 </head>
 <body>
     <div id="app" class="h-full flex flex-col" v-cloak>
         
-        <!-- HEADER -->
-        <header class="bg-blue-800 text-white px-5 py-3 flex justify-between items-center shrink-0 shadow-md z-20">
-            <div class="flex items-center gap-3">
-                <i data-lucide="badge-dollar-sign" class="w-7 h-7"></i>
-                <div>
-                    <h1 class="font-bold tracking-wide text-lg leading-tight">Promo Credit Tracker</h1>
-                    <div class="text-[10px] uppercase font-bold tracking-widest flex items-center gap-2 text-blue-200">
-                        <span><i data-lucide="cloud" class="w-3 h-3 inline mb-0.5"></i> Cloud Sync Active</span>
+        <!-- HEADER (Mobile Responsive) -->
+        <header class="bg-blue-800 text-white px-4 md:px-5 py-3 flex flex-col md:flex-row justify-between items-center shrink-0 shadow-md z-20 gap-3 md:gap-0">
+            <div class="flex items-center gap-3 w-full md:w-auto justify-between md:justify-start">
+                <div class="flex items-center gap-3">
+                    <i data-lucide="badge-dollar-sign" class="w-7 h-7"></i>
+                    <div>
+                        <h1 class="font-bold tracking-wide text-lg leading-tight">Promo Credit Tracker</h1>
+                        <div class="text-[10px] uppercase font-bold tracking-widest flex items-center gap-2 text-blue-200">
+                            <span><i data-lucide="cloud" class="w-3 h-3 inline mb-0.5"></i> Cloud Sync Active</span>
+                        </div>
                     </div>
                 </div>
+                <!-- Mobile Lock Button (Visible only on small screens) -->
+                <button v-if="isManagerUnlocked" @click="forceLock" class="md:hidden bg-red-500 hover:bg-red-600 text-white p-2 rounded shadow transition-colors"><i data-lucide="lock" class="w-4 h-4"></i></button>
             </div>
 
-            <div class="flex items-center bg-black/20 p-1 rounded-lg shadow-inner" v-if="isManagerUnlocked">
-                <button @click="activeSite = 'Red Bluff'" :class="activeSite === 'Red Bluff' ? 'bg-white text-blue-800 shadow-sm font-bold' : 'text-white/80 hover:text-white'" class="px-5 py-1.5 rounded text-sm transition-all">Red Bluff</button>
-                <button @click="activeSite = 'Redding'" :class="activeSite === 'Redding' ? 'bg-white text-blue-800 shadow-sm font-bold' : 'text-white/80 hover:text-white'" class="px-5 py-1.5 rounded text-sm transition-all">Redding</button>
+            <div class="flex items-center bg-black/20 p-1 rounded-lg shadow-inner w-full sm:w-auto overflow-hidden" v-if="isManagerUnlocked">
+                <button @click="activeSite = 'Red Bluff'" :class="activeSite === 'Red Bluff' ? 'bg-white text-blue-800 shadow-sm font-bold' : 'text-white/80 hover:text-white'" class="px-5 py-1.5 rounded text-sm transition-all flex-1 sm:flex-none">Red Bluff</button>
+                <button @click="activeSite = 'Redding'" :class="activeSite === 'Redding' ? 'bg-white text-blue-800 shadow-sm font-bold' : 'text-white/80 hover:text-white'" class="px-5 py-1.5 rounded text-sm transition-all flex-1 sm:flex-none">Redding</button>
             </div>
 
-            <div class="flex items-center gap-2" v-if="isManagerUnlocked">
+            <div class="hidden md:flex items-center gap-2" v-if="isManagerUnlocked">
                 <div class="flex items-center gap-2 mr-2 bg-white/10 px-3 py-1.5 rounded shadow-inner border border-white/10">
                     <i data-lucide="user" class="w-4 h-4"></i> <span class="text-sm font-bold">{{ loggedInUser }}</span>
                 </div>
                 <button @click="forceLock" class="bg-red-500 hover:bg-red-600 text-white px-3 py-1.5 rounded flex items-center gap-1.5 text-sm font-bold shadow transition-colors"><i data-lucide="lock" class="w-4 h-4"></i> Lock</button>
-                <button @click="openImportModal" class="bg-indigo-500 hover:bg-indigo-600 text-white px-3 py-1.5 rounded flex items-center gap-1.5 text-sm font-bold shadow transition-colors"><i data-lucide="grid" class="w-4 h-4"></i> Bulk Import</button>
+                <button @click="openImportModal" class="bg-indigo-500 hover:bg-indigo-600 text-white px-3 py-1.5 rounded flex items-center gap-1.5 text-sm font-bold shadow transition-colors"><i data-lucide="grid" class="w-4 h-4"></i> Paste Excel</button>
                 <button @click="openPromoModal()" class="bg-green-500 hover:bg-green-600 text-white px-3 py-1.5 rounded flex items-center gap-1.5 text-sm font-bold shadow transition-colors"><i data-lucide="plus" class="w-4 h-4"></i> New Promo</button>
+            </div>
+            
+            <!-- Mobile Action Buttons -->
+            <div class="md:hidden flex w-full gap-2" v-if="isManagerUnlocked">
+                <button @click="openImportModal" class="flex-1 bg-indigo-500 text-white px-3 py-2 rounded flex justify-center items-center gap-1.5 text-sm font-bold shadow"><i data-lucide="grid" class="w-4 h-4"></i> Excel</button>
+                <button @click="openPromoModal()" class="flex-1 bg-green-500 text-white px-3 py-2 rounded flex justify-center items-center gap-1.5 text-sm font-bold shadow"><i data-lucide="plus" class="w-4 h-4"></i> Promo</button>
             </div>
         </header>
 
         <!-- LOGIN SCREEN -->
-        <main v-if="!isManagerUnlocked" class="flex-1 flex flex-col items-center justify-center bg-gray-100">
-             <div class="bg-white rounded-2xl shadow-xl p-10 max-w-md w-full mx-4 text-center border border-gray-200">
+        <main v-if="!isManagerUnlocked" class="flex-1 flex flex-col items-center justify-center bg-gray-100 p-4">
+             <div class="bg-white rounded-2xl shadow-xl p-8 md:p-10 max-w-md w-full text-center border border-gray-200">
                  <div class="bg-blue-50 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6">
                     <i data-lucide="shield-check" class="w-10 h-10 text-blue-800"></i>
                  </div>
@@ -64,55 +87,61 @@
              </div>
         </main>
 
-        <!-- MAIN DASHBOARD -->
-        <main v-else class="flex-1 flex flex-col p-6 bg-gray-100 overflow-hidden">
-            
-            <!-- TOP BAR: MONTH NAVIGATOR & SEARCH -->
-            <div class="flex justify-between items-center mb-6 shrink-0 gap-4">
-                <!-- MONTH NAVIGATOR -->
-                <div class="bg-white rounded-xl shadow-sm border border-gray-300 p-2 flex overflow-x-auto gap-1 flex-1">
-                    <button @click="activeMonth = 'All'" :class="activeMonth === 'All' ? 'bg-gray-800 text-white font-bold' : 'text-gray-600 hover:bg-gray-100 font-medium'" class="px-4 py-2 rounded-lg text-sm transition-colors whitespace-nowrap">All Year</button>
-                    <div class="w-px bg-gray-300 mx-1"></div>
-                    <button v-for="month in calendarMonths" :key="month" @click="activeMonth = month" 
-                            :class="activeMonth === month ? 'bg-blue-600 text-white font-bold' : 'text-gray-600 hover:bg-blue-50 hover:text-blue-700 font-medium'" 
-                            class="px-4 py-2 rounded-lg text-sm transition-colors whitespace-nowrap flex-1 text-center">
-                        {{ month }}
-                    </button>
-                </div>
+        <!-- APP TABS NAV -->
+        <div v-if="isManagerUnlocked" class="bg-blue-900 px-4 md:px-6 pt-2 flex gap-2 shrink-0 z-10 shadow-sm overflow-x-auto no-scrollbar">
+            <button @click="activeTab = 'Tracker'" :class="activeTab === 'Tracker' ? 'bg-gray-100 text-blue-900 font-bold' : 'bg-blue-800/50 text-blue-200 hover:bg-blue-800 hover:text-white'" class="px-6 py-2 rounded-t-xl text-sm transition-colors tracking-wide whitespace-nowrap">Main Tracker</button>
+            <button @click="activeTab = 'Sales'" :class="activeTab === 'Sales' ? 'bg-gray-100 text-blue-900 font-bold' : 'bg-blue-800/50 text-blue-200 hover:bg-blue-800 hover:text-white'" class="px-6 py-2 rounded-t-xl text-sm transition-colors tracking-wide flex items-center gap-2 whitespace-nowrap">Trees Sales CSV <span v-if="filteredTreesSalesData.length > 0 && activeTab !== 'Sales'" class="bg-blue-500 text-white text-[10px] px-1.5 py-0.5 rounded-full">{{ filteredTreesSalesData.length }}</span></button>
+        </div>
 
-                <!-- GLOBAL SEARCH BAR -->
-                <div class="relative w-80 shrink-0">
-                    <i data-lucide="search" class="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
-                    <input type="text" v-model="searchQuery" placeholder="Search brand, invoice, type..." class="w-full bg-white border border-gray-300 rounded-xl py-2.5 pl-10 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 shadow-sm transition-shadow">
-                    <button v-if="searchQuery" @click="searchQuery = ''" class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
-                        <i data-lucide="x-circle" class="w-4 h-4"></i>
-                    </button>
-                </div>
+        <!-- SHARED GLOBAL FILTERS -->
+        <div v-if="isManagerUnlocked" class="bg-gray-100 px-4 md:px-6 pt-4 pb-2 flex flex-col lg:flex-row justify-between items-center shrink-0 gap-3 z-10 border-b border-gray-200">
+            <!-- MONTH NAVIGATOR -->
+            <div class="bg-white rounded-xl shadow-sm border border-gray-300 p-1.5 flex overflow-x-auto gap-1 w-full lg:flex-1 no-scrollbar">
+                <button @click="activeMonth = 'All'" :class="activeMonth === 'All' ? 'bg-gray-800 text-white font-bold shadow' : 'text-gray-600 hover:bg-gray-100 font-medium'" class="px-4 py-1.5 rounded-lg text-sm transition-all whitespace-nowrap">All Year</button>
+                <div class="w-px bg-gray-300 mx-1 shrink-0"></div>
+                <button v-for="month in calendarMonths" :key="month" @click="activeMonth = month" 
+                        :class="activeMonth === month ? 'bg-blue-600 text-white font-bold shadow' : 'text-gray-600 hover:bg-blue-50 hover:text-blue-700 font-medium'" 
+                        class="px-4 py-1.5 rounded-lg text-sm transition-all whitespace-nowrap lg:flex-1 text-center">
+                    {{ month }}
+                </button>
             </div>
 
+            <!-- GLOBAL SEARCH BAR -->
+            <div class="relative w-full lg:w-80 shrink-0">
+                <i data-lucide="search" class="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
+                <input type="text" v-model="searchQuery" placeholder="Search brands, types, records..." class="w-full bg-white border border-gray-300 rounded-xl py-2 pl-10 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 shadow-sm transition-shadow">
+                <button v-if="searchQuery" @click="searchQuery = ''" class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                    <i data-lucide="x-circle" class="w-4 h-4"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- MAIN DASHBOARD TAB -->
+        <main v-if="isManagerUnlocked && activeTab === 'Tracker'" class="flex-1 flex flex-col p-4 md:p-6 pt-4 bg-gray-100 overflow-hidden">
+            
             <!-- KPIs -->
-            <div class="flex gap-6 mb-6 shrink-0">
-                <div class="bg-white border-l-4 border-blue-600 rounded-xl p-5 flex-1 shadow-sm flex items-center justify-between">
+            <div class="flex flex-col sm:flex-row gap-4 md:gap-6 mb-4 md:mb-6 shrink-0">
+                <div class="bg-white border-l-4 border-blue-600 rounded-xl p-4 md:p-5 flex-1 shadow-sm flex items-center justify-between">
                     <div>
-                        <div class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Total Pending Float <span v-if="activeMonth !== 'All'">({{ activeMonth }})</span></div>
-                        <div class="text-3xl font-extrabold text-blue-900">{{ formatCurrency(totalPending) }}</div>
+                        <div class="text-[10px] md:text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Total Pending <span v-if="activeMonth !== 'All'">({{ activeMonth }})</span></div>
+                        <div class="text-2xl md:text-3xl font-extrabold text-blue-900">{{ formatCurrency(totalPending) }}</div>
                     </div>
-                    <i data-lucide="clock" class="w-10 h-10 text-blue-100"></i>
+                    <i data-lucide="clock" class="w-8 h-8 md:w-10 md:h-10 text-blue-100"></i>
                 </div>
-                <div class="bg-white border-l-4 border-green-500 rounded-xl p-5 flex-1 shadow-sm flex items-center justify-between">
+                <div class="bg-white border-l-4 border-green-500 rounded-xl p-4 md:p-5 flex-1 shadow-sm flex items-center justify-between">
                     <div>
-                        <div class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Total Applied / Resolved <span v-if="activeMonth !== 'All'">({{ activeMonth }})</span></div>
-                        <div class="text-3xl font-extrabold text-green-700">{{ formatCurrency(totalApplied) }}</div>
+                        <div class="text-[10px] md:text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Applied / Resolved <span v-if="activeMonth !== 'All'">({{ activeMonth }})</span></div>
+                        <div class="text-2xl md:text-3xl font-extrabold text-green-700">{{ formatCurrency(totalApplied) }}</div>
                     </div>
-                    <i data-lucide="check-circle" class="w-10 h-10 text-green-100"></i>
+                    <i data-lucide="check-circle" class="w-8 h-8 md:w-10 md:h-10 text-green-100"></i>
                 </div>
             </div>
 
             <!-- DATA TABLE -->
             <div class="bg-white rounded-xl border border-gray-300 shadow-sm flex-1 flex flex-col min-h-0 overflow-hidden">
-                <div class="overflow-auto flex-1">
-                    <table class="excel-table relative">
-                        <thead class="sticky top-0 z-10 shadow-sm">
+                <div class="overflow-auto flex-1 relative">
+                    <table class="excel-table min-w-max">
+                        <thead class="sticky top-0 z-20 shadow-sm bg-gray-50">
                             <tr>
                                 <th v-if="activeMonth === 'All'">Tracking Month</th>
                                 <th>Vendor (Brand)</th>
@@ -125,7 +154,7 @@
                                 <th>Invoice / Credit Memo</th>
                                 <th>Proof</th>
                                 <th class="text-center">Status</th>
-                                <th class="text-right">Actions</th>
+                                <th class="text-center sticky-head">Actions</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -144,24 +173,34 @@
                                 <td class="text-gray-600">{{ credit.distributor }}</td>
                                 <td>{{ credit.creditType }}</td>
                                 <td>{{ credit.dates }}</td>
-                                <td class="font-bold" :class="credit.status === 'Applied' ? 'text-green-600' : 'text-blue-600'">{{ formatCurrency(credit.amount) }}</td>
+                                <td class="font-bold" :class="{
+                                    'text-green-600': credit.status === 'Applied',
+                                    'text-red-500 line-through': credit.status === 'Uncollectable',
+                                    'text-blue-600': credit.status === 'Pending'
+                                }">{{ formatCurrency(credit.amount) }}</td>
                                 <td>{{ credit.dateRequested }}</td>
                                 <td>{{ credit.dateReceived }}</td>
                                 <td class="font-mono text-xs text-gray-600">{{ credit.invoice }}</td>
                                 <td class="text-center">
-                                    <button v-if="credit.attachmentName" class="text-blue-500 hover:text-blue-700 bg-blue-50 p-1 rounded" title="View Attachment">
+                                    <button v-if="credit.attachmentName" class="text-blue-500 hover:text-blue-700 bg-blue-50 p-1 rounded border border-blue-200" title="View Attachment">
                                         <i data-lucide="paperclip" class="w-4 h-4"></i>
                                     </button>
                                     <span v-else class="text-gray-300">-</span>
                                 </td>
                                 <td class="text-center">
                                     <span class="px-2.5 py-1 rounded shadow-sm text-[11px] font-bold uppercase tracking-wider" 
-                                          :class="credit.status === 'Applied' ? 'bg-green-100 text-green-800 border border-green-200' : 'bg-amber-100 text-amber-800 border border-amber-200'">
+                                          :class="{
+                                              'bg-green-100 text-green-800 border border-green-200': credit.status === 'Applied',
+                                              'bg-amber-100 text-amber-800 border border-amber-200': credit.status === 'Pending',
+                                              'bg-red-100 text-red-800 border border-red-200': credit.status === 'Uncollectable'
+                                          }">
                                         {{ credit.status }}
                                     </span>
                                 </td>
-                                <td class="text-right">
-                                    <button @click="editCredit(credit)" class="text-blue-600 hover:text-white hover:bg-blue-600 px-2 py-1 rounded text-xs font-bold transition-colors">Edit</button>
+                                <td class="text-center sticky-col">
+                                    <button @click="editCredit(credit)" class="text-blue-600 hover:text-white hover:bg-blue-600 px-3 py-1.5 rounded shadow-sm border border-blue-200 hover:border-blue-600 text-xs font-bold transition-all bg-white flex items-center gap-1 mx-auto">
+                                        <i data-lucide="pencil" class="w-3 h-3"></i> Edit
+                                    </button>
                                 </td>
                             </tr>
                         </tbody>
@@ -170,30 +209,106 @@
             </div>
         </main>
 
-        <!-- ADD/EDIT MODAL -->
-        <div v-if="showPromoModal" class="fixed inset-0 bg-black/60 flex items-center justify-center z-50 backdrop-blur-sm" @click.self="closePromoModal">
-            <div class="bg-white rounded-2xl shadow-2xl w-[700px] flex flex-col overflow-hidden">
-                <div class="px-6 py-4 border-b bg-gray-50 flex justify-between items-center shrink-0">
-                    <h2 class="font-bold text-xl text-gray-800 flex items-center gap-2">
+        <!-- TREES SALES REPORTS TAB -->
+        <main v-if="isManagerUnlocked && activeTab === 'Sales'" class="flex-1 flex flex-col p-4 md:p-6 pt-4 bg-gray-100 overflow-hidden">
+            <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 shrink-0 gap-4">
+                <div>
+                    <h2 class="text-xl font-bold text-gray-800 leading-tight">Trees POS Sales (Global)</h2>
+                    <p class="text-sm text-gray-500 mt-1">Showing ALL uploaded data. The aggregator automatically routes credits to Red Bluff or Redding.</p>
+                </div>
+                
+                <div class="flex flex-col sm:flex-row w-full md:w-auto gap-3">
+                    <div class="relative overflow-hidden inline-block w-full sm:w-auto">
+                        <button class="w-full px-4 py-2 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 rounded-lg font-bold shadow-sm transition-colors flex items-center justify-center gap-2 text-sm">
+                            <i data-lucide="file-up" class="w-4 h-4 text-blue-600"></i> Upload CSV
+                        </button>
+                        <input type="file" @change="handleTreesCsvUpload" accept=".csv" class="absolute left-0 top-0 w-full h-full opacity-0 cursor-pointer">
+                    </div>
+                    
+                    <button v-if="unsyncedSalesCount > 0" @click="pushToMainTracker" class="w-full sm:w-auto px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-bold shadow-md transition-colors flex items-center justify-center gap-2 text-sm">
+                        <i data-lucide="git-merge" class="w-4 h-4"></i> Auto-Sort & Sync
+                    </button>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-xl border border-gray-300 shadow-sm flex-1 flex flex-col min-h-0 overflow-hidden">
+                <div class="overflow-auto flex-1">
+                    <table class="excel-table relative min-w-max">
+                        <thead class="sticky top-0 z-10 shadow-sm bg-gray-50">
+                            <tr>
+                                <th>Sync Status</th>
+                                <th>Assigned Location</th>
+                                <th v-if="activeMonth === 'All'">Tracking Month</th>
+                                <th>Product Brand</th>
+                                <th>Store Name (Raw)</th>
+                                <th>Product Name</th>
+                                <th>Discount Title</th>
+                                <th>Tracking ID</th>
+                                <th>Vendor Credit Owed</th>
+                                <th>Date Closed</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr v-if="filteredTreesSalesData.length === 0">
+                                <td :colspan="activeMonth === 'All' ? 10 : 9" class="text-center py-16 text-gray-500 bg-gray-50">
+                                    <i data-lucide="file-spreadsheet" class="w-12 h-12 mx-auto text-gray-300 mb-3"></i>
+                                    <div class="font-bold text-gray-700">No Sales Data Found</div>
+                                    <div class="text-sm mt-1">Upload a Trees CSV to view raw sales and generate aggregate promo credits.</div>
+                                </td>
+                            </tr>
+                            
+                            <tr v-for="sale in displayTreesSalesData" :key="sale.id" class="hover:bg-gray-50" :class="{'opacity-60 bg-gray-50': sale.status === 'Synced'}">
+                                <td class="text-center">
+                                    <span v-if="sale.status === 'Synced'" class="text-xs font-bold text-green-600 bg-green-100 px-2 py-1 rounded border border-green-200">SYNCED</span>
+                                    <span v-else class="text-xs font-bold text-amber-600 bg-amber-100 px-2 py-1 rounded border border-amber-200">PENDING</span>
+                                </td>
+                                <td class="font-bold text-indigo-600 bg-indigo-50 border-r border-indigo-100">{{ sale.detectedSite }}</td>
+                                <td v-if="activeMonth === 'All'" class="font-bold text-gray-500">{{ sale.month }}</td>
+                                <td class="font-bold text-gray-800">{{ sale.brand }}</td>
+                                <td class="text-gray-600 text-xs">{{ sale.storeName }}</td>
+                                <td class="text-gray-800 text-xs">{{ sale.productName }}</td>
+                                <td class="text-gray-600 text-xs">{{ sale.discountTitle }}</td>
+                                <td class="font-mono text-xs text-gray-500">{{ sale.trackingId }}</td>
+                                <td class="font-bold text-blue-600">{{ formatCurrency(sale.owed) }}</td>
+                                <td class="text-gray-600 text-xs">{{ sale.dateClosed }}</td>
+                            </tr>
+                            
+                            <tr v-if="filteredTreesSalesData.length > 100">
+                                <td :colspan="activeMonth === 'All' ? 10 : 9" class="text-center py-4 text-gray-500 text-xs font-bold bg-gray-50 border-t-2 border-dashed border-gray-300">
+                                    ... plus {{ filteredTreesSalesData.length - 100 }} more rows hidden for performance. 
+                                    <span class="text-indigo-600">(All hidden rows will still aggregate correctly!)</span>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+
+        <!-- ADD/EDIT MODAL (Mobile Optimized) -->
+        <div v-if="showPromoModal" class="fixed inset-0 bg-black/60 flex items-center justify-center z-50 backdrop-blur-sm p-2" @click.self="closePromoModal">
+            <div class="bg-white rounded-2xl shadow-2xl w-full md:w-[700px] max-w-[95vw] flex flex-col overflow-hidden max-h-[95vh] md:max-h-[80vh]">
+                <div class="px-4 md:px-6 py-4 border-b bg-gray-50 flex justify-between items-center shrink-0">
+                    <h2 class="font-bold text-lg md:text-xl text-gray-800 flex items-center gap-2">
                         <i data-lucide="file-edit" class="w-5 h-5 text-blue-600"></i> 
-                        {{ editingId ? 'Edit Promo Credit' : 'Log New Promo Credit' }}
+                        {{ editingId ? 'Edit Promo Credit' : 'Log New Credit' }}
                     </h2>
                     <button @click="closePromoModal" class="text-gray-500 hover:text-red-600 transition-colors p-1 hover:bg-gray-200 rounded"><i data-lucide="x" class="w-5 h-5"></i></button>
                 </div>
                 
-                <div class="p-6 grid grid-cols-2 gap-x-6 gap-y-4 overflow-y-auto max-h-[70vh]">
+                <div class="p-4 md:p-6 grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4 overflow-y-auto">
                     
-                    <div class="col-span-2">
+                    <div class="col-span-1 md:col-span-2">
                         <label class="text-[11px] font-bold text-gray-500 uppercase tracking-wide">Tracking Month</label>
                         <select v-model="form.trackingMonth" class="border border-gray-300 p-2.5 w-full rounded-lg mt-1 font-bold focus:ring-2 focus:ring-blue-500 outline-none">
                             <option v-for="m in calendarMonths" :key="m" :value="m">{{ m }}</option>
                         </select>
                     </div>
 
-                    <div class="col-span-2 border-t pt-2"></div>
+                    <div class="col-span-1 md:col-span-2 border-t pt-2"></div>
 
                     <!-- Brand Autocomplete -->
-                    <div class="col-span-2 relative">
+                    <div class="col-span-1 md:col-span-2 relative">
                         <label class="text-[11px] font-bold text-gray-500 uppercase tracking-wide">Vendor (Brand)</label>
                         <input type="text" v-model="form.vendor" @focus="showBrandDropdown = true" @input="showBrandDropdown = true" class="border border-gray-300 p-2.5 w-full rounded-lg mt-1 font-bold focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Search Brand Name...">
                         
@@ -225,15 +340,15 @@
                         </div>
                     </div>
                     
-                    <div class="col-span-2 border-t pt-4 mt-2"></div>
+                    <div class="col-span-1 md:col-span-2 border-t pt-2"></div>
 
                     <div>
                         <label class="text-[11px] font-bold text-gray-500 uppercase tracking-wide">Date Requested</label>
-                        <input type="text" v-model="form.dateRequested" class="border border-gray-300 p-2.5 w-full rounded-lg mt-1 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                        <input type="date" v-model="form.dateRequested" class="border border-gray-300 p-2.5 w-full rounded-lg mt-1 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
                     </div>
                     <div>
                         <label class="text-[11px] font-bold text-gray-500 uppercase tracking-wide">Date Received</label>
-                        <input type="text" v-model="form.dateReceived" class="border border-gray-300 p-2.5 w-full rounded-lg mt-1 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                        <input type="date" v-model="form.dateReceived" class="border border-gray-300 p-2.5 w-full rounded-lg mt-1 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
                     </div>
                     
                     <div>
@@ -242,30 +357,36 @@
                     </div>
                     <div>
                         <label class="text-[11px] font-bold text-gray-500 uppercase tracking-wide">Status</label>
-                        <select v-model="form.status" class="border border-gray-300 p-2.5 w-full rounded-lg mt-1 font-bold cursor-pointer focus:ring-2 focus:ring-blue-500 outline-none" :class="form.status === 'Applied' ? 'bg-green-50 text-green-800' : 'bg-amber-50 text-amber-800'">
+                        <select v-model="form.status" class="border border-gray-300 p-2.5 w-full rounded-lg mt-1 font-bold cursor-pointer focus:ring-2 focus:ring-blue-500 outline-none" 
+                                :class="{
+                                    'bg-green-50 text-green-800': form.status === 'Applied',
+                                    'bg-amber-50 text-amber-800': form.status === 'Pending',
+                                    'bg-red-50 text-red-800': form.status === 'Uncollectable'
+                                }">
                             <option value="Pending">Pending</option>
                             <option value="Applied">Applied</option>
+                            <option value="Uncollectable">Uncollectable</option>
                         </select>
                     </div>
 
                     <!-- Attachment Block -->
-                    <div class="col-span-2 mt-2">
-                        <label class="text-[11px] font-bold text-gray-500 uppercase tracking-wide mb-1 block">Vendor Outcome Proof (Attachment)</label>
+                    <div class="col-span-1 md:col-span-2 mt-2">
+                        <label class="text-[11px] font-bold text-gray-500 uppercase tracking-wide mb-1 block">Vendor Outcome Proof (PDF or Image)</label>
                         <div class="border-2 border-dashed border-gray-300 rounded-xl p-4 text-center bg-gray-50 hover:bg-gray-100 cursor-pointer transition-colors relative">
                             <input type="file" @change="handleFileUpload" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" accept="application/pdf,image/*">
                             <i data-lucide="paperclip" class="w-6 h-6 text-gray-400 mx-auto mb-2"></i>
-                            <span v-if="!form.attachmentName" class="text-sm font-medium text-gray-500">Click or drag PDF/Image here</span>
+                            <span v-if="!form.attachmentName" class="text-sm font-medium text-gray-500">Tap to upload email PDF/Image</span>
                             <span v-else class="text-sm font-bold text-blue-600">{{ form.attachmentName }}</span>
                         </div>
                     </div>
                 </div>
 
-                <div class="px-6 py-4 border-t bg-gray-50 flex justify-between items-center shrink-0">
-                    <button v-if="editingId" @click="deleteCredit" class="text-red-500 hover:text-red-700 text-sm font-bold flex items-center gap-1"><i data-lucide="trash-2" class="w-4 h-4"></i> Delete</button>
-                    <div v-else></div>
-                    <div class="flex gap-3">
-                        <button @click="closePromoModal" class="px-5 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded-lg font-bold transition-colors">Cancel</button>
-                        <button @click="saveCredit" class="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold shadow-md transition-colors flex items-center gap-2">
+                <div class="px-4 md:px-6 py-4 border-t bg-gray-50 flex flex-col md:flex-row justify-between items-center shrink-0 gap-3">
+                    <button v-if="editingId" @click="deleteCredit" class="text-red-500 hover:text-red-700 text-sm font-bold flex items-center justify-center gap-1 w-full md:w-auto py-2"><i data-lucide="trash-2" class="w-4 h-4"></i> Delete Credit</button>
+                    <div v-else class="hidden md:block"></div>
+                    <div class="flex gap-3 w-full md:w-auto">
+                        <button @click="closePromoModal" class="flex-1 md:px-5 py-2.5 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded-lg font-bold transition-colors">Cancel</button>
+                        <button @click="saveCredit" class="flex-1 md:px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold shadow-md transition-colors flex items-center justify-center gap-2">
                             <i data-lucide="save" class="w-4 h-4"></i> Save
                         </button>
                     </div>
@@ -273,43 +394,39 @@
             </div>
         </div>
 
-        <!-- DYNAMIC GRID IMPORT MODAL -->
-        <div v-if="showImportModal" class="fixed inset-0 bg-black/60 flex items-center justify-center z-50 backdrop-blur-sm" @click.self="closeImportModal">
-            <div class="bg-white rounded-2xl shadow-2xl w-[95vw] max-w-7xl flex flex-col overflow-hidden max-h-[90vh]">
-                <div class="px-6 py-4 border-b bg-gray-50 flex justify-between items-center shrink-0">
-                    <h2 class="font-bold text-xl text-gray-800 flex items-center gap-2">
-                        <i data-lucide="grid" class="w-5 h-5 text-indigo-600"></i> Spreadsheet Import & 12-Month Auto-Parser
+        <!-- DYNAMIC GRID IMPORT MODAL (MAIN TRACKER) -->
+        <div v-if="showImportModal" class="fixed inset-0 bg-black/60 flex items-center justify-center z-50 backdrop-blur-sm p-2" @click.self="closeImportModal">
+            <div class="bg-white rounded-2xl shadow-2xl w-full md:w-[95vw] max-w-7xl flex flex-col overflow-hidden max-h-[95vh] md:max-h-[90vh]">
+                <div class="px-4 md:px-6 py-4 border-b bg-gray-50 flex justify-between items-center shrink-0">
+                    <h2 class="font-bold text-lg md:text-xl text-gray-800 flex items-center gap-2">
+                        <i data-lucide="grid" class="w-5 h-5 text-indigo-600"></i> Excel Import Hub
                     </h2>
                     <button @click="closeImportModal" class="text-gray-500 hover:text-red-600 transition-colors p-1 hover:bg-gray-200 rounded"><i data-lucide="x" class="w-5 h-5"></i></button>
                 </div>
                 
-                <div class="p-6 flex-1 overflow-hidden flex flex-col">
-                    <!-- Visible Text Area for Easy Pasting -->
+                <div class="p-4 md:p-6 flex-1 overflow-hidden flex flex-col">
                     <div v-if="pastedGrid.length === 0" class="flex-1 flex flex-col">
                         <div class="bg-indigo-50 border border-indigo-200 p-4 rounded-xl text-sm text-indigo-900 mb-4 shadow-sm">
                             <strong>Excel Import:</strong> Paste your entire horizontal Excel sheet below. <br>
-                            <em>Ensure you include the top "Super Header" row (the row that says August, July, June) so the parser can automatically organize the chunks into the correct tracking months!</em>
+                            <span class="hidden md:inline"><em>Ensure you include the top "Super Header" row (the row that says August, July, June) so the parser can automatically organize the chunks!</em></span>
                         </div>
                         <textarea 
                             v-model="rawPasteData" 
                             @input="processRawPaste" 
-                            class="flex-1 w-full border-2 border-dashed border-indigo-300 rounded-xl p-6 text-sm font-mono bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 outline-none resize-none shadow-inner transition-all" 
-                            placeholder="Click here and press Ctrl+V to paste your Excel data..."></textarea>
+                            class="flex-1 w-full border-2 border-dashed border-indigo-300 rounded-xl p-4 md:p-6 text-sm font-mono bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 outline-none resize-none shadow-inner transition-all" 
+                            placeholder="Tap here and press Paste..."></textarea>
                     </div>
 
-                    <!-- Mappable Grid Preview -->
                     <div v-else class="flex-1 overflow-auto rounded-xl border border-gray-300 bg-white">
                         <table class="excel-table w-full">
-                            <thead class="sticky top-0 z-20 shadow-md">
-                                <!-- Super Header Display (Row 0 from Excel) -->
+                            <thead class="sticky top-0 z-20 shadow-md bg-gray-50">
                                 <tr>
                                     <th v-for="(col, cIndex) in pastedGrid[0]" :key="'super-'+cIndex" class="bg-gray-800 text-white p-2 border-gray-700 text-center text-xs">
                                         {{ detectMonthInString(col) || '-' }}
                                     </th>
                                 </tr>
-                                <!-- Column Mapping Headers -->
                                 <tr>
-                                    <th v-for="(col, cIndex) in pastedGrid[0]" :key="'head-'+cIndex" class="bg-indigo-100 border-indigo-200 p-2 min-w-[150px]">
+                                    <th v-for="(col, cIndex) in pastedGrid[0]" :key="'head-'+cIndex" class="bg-indigo-100 border-indigo-200 p-2 min-w-[120px]">
                                         <select v-model="mappedHeaders[cIndex]" class="w-full text-xs font-bold text-indigo-900 bg-white border border-indigo-300 rounded p-1 cursor-pointer outline-none">
                                             <option v-for="opt in availableHeaders" :key="opt" :value="opt">{{ opt }}</option>
                                         </select>
@@ -318,13 +435,8 @@
                             </thead>
                             <tbody>
                                 <tr v-for="(row, rIndex) in displayGrid" :key="'row-'+rIndex">
-                                    <td v-for="(cell, cIndex) in row" :key="'cell-'+cIndex" class="text-xs truncate max-w-[200px]" :title="cell">
+                                    <td v-for="(cell, cIndex) in row" :key="'cell-'+cIndex" class="text-xs truncate max-w-[150px]" :title="cell">
                                         {{ cell }}
-                                    </td>
-                                </tr>
-                                <tr v-if="pastedGrid.length > 21">
-                                    <td :colspan="pastedGrid[0].length" class="text-center text-gray-500 text-xs py-3 font-medium bg-gray-50">
-                                        ... previewing 20 of {{ pastedGrid.length - 2 }} rows ...
                                     </td>
                                 </tr>
                             </tbody>
@@ -332,18 +444,18 @@
                     </div>
                 </div>
 
-                <div class="px-6 py-4 border-t bg-gray-50 flex justify-between items-center shrink-0">
-                    <div>
-                        <span v-if="pastedGrid.length > 0" class="text-xs font-bold text-indigo-600 uppercase tracking-wide bg-indigo-50 px-3 py-1.5 rounded-md border border-indigo-100">
-                            <i data-lucide="git-merge" class="w-3 h-3 inline mb-0.5"></i> Chunks will be tagged by month automatically!
+                <div class="px-4 md:px-6 py-4 border-t bg-gray-50 flex flex-col md:flex-row justify-between items-center shrink-0 gap-3">
+                    <div class="w-full md:w-auto text-center md:text-left">
+                        <span v-if="pastedGrid.length > 0" class="text-xs font-bold text-indigo-600 uppercase tracking-wide bg-indigo-50 px-3 py-1.5 rounded-md border border-indigo-100 inline-block">
+                            <i data-lucide="git-merge" class="w-3 h-3 inline mb-0.5"></i> Auto-chunking active
                         </span>
                     </div>
-                    <div class="flex gap-3">
-                        <button v-if="pastedGrid.length > 0" @click="resetImport" class="px-5 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded-lg font-bold transition-colors">Clear Grid</button>
-                        <button v-else @click="closeImportModal" class="px-5 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded-lg font-bold transition-colors">Close</button>
+                    <div class="flex gap-3 w-full md:w-auto">
+                        <button v-if="pastedGrid.length > 0" @click="resetImport" class="flex-1 md:flex-none px-5 py-2.5 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded-lg font-bold transition-colors">Clear</button>
+                        <button v-else @click="closeImportModal" class="flex-1 md:flex-none px-5 py-2.5 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded-lg font-bold transition-colors">Close</button>
                         
-                        <button v-if="pastedGrid.length > 0" @click="processImport" class="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-bold shadow-md transition-colors flex items-center gap-2">
-                            <i data-lucide="zap" class="w-4 h-4"></i> Extract & Import Data
+                        <button v-if="pastedGrid.length > 0" @click="processImport" class="flex-1 md:flex-none px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-bold shadow-md transition-colors flex items-center justify-center gap-2">
+                            <i data-lucide="zap" class="w-4 h-4"></i> Import
                         </button>
                     </div>
                 </div>
@@ -362,6 +474,9 @@
                 const pinInput = ref('');
                 const activeSite = ref('Red Bluff');
                 
+                const activeTab = ref('Tracker');
+                const treesSalesData = ref([]);
+
                 const systemUsers = {
                     '4095': { name: 'Lenay A.', access: ['Red Bluff', 'Redding'] },
                     '7444': { name: 'Tricia K.', access: ['Red Bluff', 'Redding'] },
@@ -392,18 +507,18 @@
                     { vendor: "WYLD", distributor: "Northwest Confections California LLC" }
                 ]);
 
-                // Modals & Forms
                 const showPromoModal = ref(false);
                 const showBrandDropdown = ref(false);
                 const editingId = ref(null);
                 
-                // Import Grid State
                 const showImportModal = ref(false);
                 const rawPasteData = ref('');
                 const pastedGrid = ref([]);
                 const mappedHeaders = ref([]);
+                
                 const availableHeaders = ref([
                     '-- Ignore Column --',
+                    'Tracking Month',
                     'Vendor',
                     'Distributor',
                     'Credit Type',
@@ -460,7 +575,24 @@
                     if (isNaN(num)) return '$0.00';
                     return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(num);
                 };
+                
+                const detectMonthFromDate = (dateString) => {
+                    if (!dateString) return 'Unknown';
+                    const d = new Date(dateString);
+                    if (isNaN(d.getTime())) return 'Unknown';
+                    return calendarMonths[d.getMonth()];
+                };
 
+                const detectSiteFromName = (storeNameStr) => {
+                    if (!storeNameStr) return activeSite.value; 
+                    const s = storeNameStr.toLowerCase();
+                    if (s.includes('red bluff') || s.includes('redbluff')) return 'Red Bluff';
+                    if (s.includes('redding')) return 'Redding';
+                    return activeSite.value; 
+                };
+
+                // ---- FILTERED VIEWS ----
+                
                 const filteredCredits = computed(() => {
                     let base = promoCredits.value.filter(c => c.site === activeSite.value);
                     
@@ -484,8 +616,35 @@
                     });
                 });
 
-                const totalPending = computed(() => filteredCredits.value.filter(c => c.status !== 'Applied').reduce((sum, c) => sum + (parseFloat(c.amount) || 0), 0));
+                const filteredTreesSalesData = computed(() => {
+                    let base = treesSalesData.value; 
+                    
+                    if (activeMonth.value !== 'All') {
+                        base = base.filter(sale => sale.month === activeMonth.value);
+                    }
+                    
+                    if (searchQuery.value.trim() !== '') {
+                        const q = searchQuery.value.toLowerCase();
+                        base = base.filter(sale => 
+                            (sale.brand && sale.brand.toLowerCase().includes(q)) ||
+                            (sale.productName && sale.productName.toLowerCase().includes(q)) ||
+                            (sale.discountTitle && sale.discountTitle.toLowerCase().includes(q)) ||
+                            (sale.trackingId && sale.trackingId.toLowerCase().includes(q)) ||
+                            (sale.detectedSite && sale.detectedSite.toLowerCase().includes(q))
+                        );
+                    }
+                    
+                    return base;
+                });
+
+                const displayTreesSalesData = computed(() => {
+                    return filteredTreesSalesData.value.slice(0, 100);
+                });
+
+                const totalPending = computed(() => filteredCredits.value.filter(c => c.status === 'Pending').reduce((sum, c) => sum + (parseFloat(c.amount) || 0), 0));
                 const totalApplied = computed(() => filteredCredits.value.filter(c => c.status === 'Applied').reduce((sum, c) => sum + (parseFloat(c.amount) || 0), 0));
+
+                const unsyncedSalesCount = computed(() => filteredTreesSalesData.value.filter(s => s.status === 'Unsynced').length);
 
                 const openPromoModal = () => {
                     form.value = getEmptyForm();
@@ -586,6 +745,7 @@
                 };
 
                 const headerToFormKey = {
+                    'Tracking Month': 'trackingMonth',
                     'Vendor': 'vendor',
                     'Distributor': 'distributor',
                     'Credit Type': 'creditType',
@@ -599,7 +759,6 @@
 
                 const processImport = () => {
                     let importedCount = 0;
-                    
                     const superHeaders = pastedGrid.value[0];
                     
                     for (let r = 2; r < pastedGrid.value.length; r++) {
@@ -623,7 +782,7 @@
                                 if (hasData && currentCredit.vendor) {
                                     currentCredit.id = Date.now().toString() + Math.random().toString(36).substr(2,5);
                                     currentCredit.site = activeSite.value;
-                                    currentCredit.trackingMonth = currentChunkMonth !== 'Unknown' ? currentChunkMonth : 'August';
+                                    currentCredit.trackingMonth = currentChunkMonth !== 'Unknown' ? currentChunkMonth : (activeMonth.value === 'All' ? 'August' : activeMonth.value);
                                     currentCredit.amount = parseFloat(String(currentCredit.amount).replace(/[^0-9.-]+/g,"")) || 0;
                                     promoCredits.value.unshift(currentCredit);
                                     importedCount++;
@@ -653,16 +812,147 @@
                         if (hasData && currentCredit.vendor) {
                             currentCredit.id = Date.now().toString() + Math.random().toString(36).substr(2,5);
                             currentCredit.site = activeSite.value;
-                            currentCredit.trackingMonth = currentChunkMonth !== 'Unknown' ? currentChunkMonth : 'August';
+                            currentCredit.trackingMonth = currentChunkMonth !== 'Unknown' ? currentChunkMonth : (activeMonth.value === 'All' ? 'August' : activeMonth.value);
                             currentCredit.amount = parseFloat(String(currentCredit.amount).replace(/[^0-9.-]+/g,"")) || 0;
                             promoCredits.value.unshift(currentCredit);
                             importedCount++;
                         }
                     }
                     
-                    alert(`Successfully extracted and imported ${importedCount} individual promo credits to ${activeSite.value}! They are now organized by month.`);
+                    alert(`Successfully extracted and imported ${importedCount} individual promo credits to ${activeSite.value}!`);
                     closeImportModal();
                     refreshIcons();
+                };
+
+                // ---- NATIVE TEXT CSV PARSER ----
+                const handleTreesCsvUpload = (e) => {
+                    const file = e.target.files[0];
+                    if (!file) return;
+                    
+                    const reader = new FileReader();
+                    reader.onload = (evt) => {
+                        try {
+                            const text = evt.target.result;
+                            const rows = text.split(/\r?\n/);
+                            if (rows.length < 2) return alert("File is empty or invalid.");
+
+                            const parseCSVRow = (str) => {
+                                const result = [];
+                                let cell = '';
+                                let inQuotes = false;
+                                for (let i = 0; i < str.length; i++) {
+                                    const char = str[i];
+                                    if (char === '"') {
+                                        inQuotes = !inQuotes;
+                                    } else if (char === ',' && !inQuotes) {
+                                        result.push(cell.trim());
+                                        cell = '';
+                                    } else {
+                                        cell += char;
+                                    }
+                                }
+                                result.push(cell.trim());
+                                return result;
+                            };
+
+                            let headerIdx = 0;
+                            let headers = [];
+                            for (let i = 0; i < rows.length; i++) {
+                                const cols = parseCSVRow(rows[i]);
+                                if (cols.some(c => c.toLowerCase().includes('product brand') || c.toLowerCase().includes('vendor credit owed'))) {
+                                    headerIdx = i;
+                                    headers = cols.map(h => h.replace(/["']/g, '').trim());
+                                    break;
+                                }
+                            }
+
+                            const newSales = [];
+                            for (let i = headerIdx + 1; i < rows.length; i++) {
+                                if (!rows[i].trim()) continue;
+                                
+                                const cols = parseCSVRow(rows[i]);
+                                const rowObj = {};
+                                headers.forEach((h, idx) => {
+                                    rowObj[h] = cols[idx] ? cols[idx].replace(/["']/g, '') : '';
+                                });
+
+                                if (!rowObj['Product Brand'] && !rowObj['State Tracking Id']) continue;
+
+                                const dateStr = rowObj['Date Closed'] || '';
+                                const parsedMonth = detectMonthFromDate(dateStr) !== 'Unknown' ? detectMonthFromDate(dateStr) : 'August';
+                                const storeString = rowObj['Store Name'] || '';
+                                const detectedSite = detectSiteFromName(storeString);
+
+                                newSales.push({
+                                    id: Date.now() + Math.random().toString(36).substr(2, 5),
+                                    month: parsedMonth, 
+                                    brand: rowObj['Product Brand'] || 'Unknown Brand',
+                                    discountTitle: rowObj['Discount Title'] || '',
+                                    dateClosed: dateStr.split(' ')[0], 
+                                    storeName: storeString,
+                                    detectedSite: detectedSite,
+                                    productName: rowObj['Product Name'] || '',
+                                    owed: parseFloat(String(rowObj['Vendor Credit Owed']).replace(/[^0-9.-]+/g,"")) || 0,
+                                    trackingId: rowObj['State Tracking Id'] || '',
+                                    status: 'Unsynced'
+                                });
+                            }
+
+                            treesSalesData.value = newSales.concat(treesSalesData.value);
+                            e.target.value = ''; 
+                            refreshIcons();
+
+                        } catch (error) {
+                            alert("Error parsing CSV. Ensure it is a valid comma-separated file.");
+                            console.error(error);
+                        }
+                    };
+                    reader.readAsText(file); 
+                };
+
+                const pushToMainTracker = () => {
+                    const groupedBrands = {};
+                    const recordsToSync = treesSalesData.value.filter(s => s.status === 'Unsynced');
+                    
+                    recordsToSync.forEach(sale => {
+                        const uniqueKey = `${sale.detectedSite}___${sale.brand}___${sale.month}`;
+                        
+                        if (!groupedBrands[uniqueKey]) {
+                            groupedBrands[uniqueKey] = { site: sale.detectedSite, brand: sale.brand, month: sale.month, totalOwed: 0, itemCount: 0, ids: [] };
+                        }
+                        groupedBrands[uniqueKey].totalOwed += sale.owed;
+                        groupedBrands[uniqueKey].itemCount += 1;
+                        groupedBrands[uniqueKey].ids.push(sale.trackingId);
+                    });
+
+                    let creditsCreated = 0;
+                    
+                    for (const [key, data] of Object.entries(groupedBrands)) {
+                        if (data.totalOwed > 0) {
+                            const masterRecord = masterBrands.value.find(b => b.vendor.toLowerCase() === data.brand.toLowerCase());
+                            
+                            promoCredits.value.unshift({
+                                id: Date.now() + Math.random().toString(36).substr(2, 5),
+                                site: data.site, 
+                                trackingMonth: data.month, 
+                                vendor: data.brand,
+                                distributor: masterRecord ? masterRecord.distributor : 'Trees POS Import',
+                                creditType: `Aggregated POS Sales (${data.itemCount} items)`,
+                                dates: new Date().toLocaleDateString(),
+                                amount: data.totalOwed,
+                                dateRequested: new Date().toLocaleDateString(),
+                                dateReceived: '',
+                                invoice: 'CSV-AUTO-SYNC',
+                                status: 'Pending'
+                            });
+                            creditsCreated++;
+                        }
+                    }
+                    
+                    treesSalesData.value = treesSalesData.value.map(s => s.status === 'Unsynced' ? { ...s, status: 'Synced' } : s);
+                    
+                    alert(`Success! Aggregated ${creditsCreated} vendor credits across all locations and pushed them to the Main Tracker.`);
+                    activeTab.value = 'Tracker'; 
                 };
 
                 const refreshIcons = () => {
@@ -673,6 +963,7 @@
 
                 return {
                     isManagerUnlocked, loggedInUser, pinInput, handleLogin, forceLock, activeSite, 
+                    activeTab, treesSalesData, filteredTreesSalesData, displayTreesSalesData, unsyncedSalesCount, handleTreesCsvUpload, pushToMainTracker,
                     promoCredits, filteredCredits, showPromoModal, form, editingId, 
                     openPromoModal, closePromoModal, saveCredit, editCredit, deleteCredit, handleFileUpload,
                     formatCurrency, totalPending, totalApplied,
