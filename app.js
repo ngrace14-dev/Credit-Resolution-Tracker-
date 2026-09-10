@@ -108,11 +108,8 @@ createApp({
         // --- MONTHLY BRAND REPORTS LOGIC ---
         const monthlyReportSummaries = computed(() => {
             const groups = {};
-            
-            // Gather credits for the active site
             let baseCredits = promoCredits.value.filter(c => c && c.site === activeSite.value);
             
-            // Apply Month Filter if specific month selected in global bar
             if (activeMonth.value !== 'All') {
                 baseCredits = baseCredits.filter(c => c.trackingMonth === activeMonth.value);
             }
@@ -190,7 +187,7 @@ createApp({
             URL.revokeObjectURL(url);
         };
 
-        // --- DASHBOARD CHARTS LOGIC ---
+        // --- DASHBOARD CHARTS LOGIC (GOLD, EMERALD & OBSIDIAN THEME) ---
         let chartMonthlyInstance = null;
         let chartDistrosInstance = null;
         let chartBrandsInstance = null;
@@ -200,11 +197,37 @@ createApp({
             const activeCredits = promoCredits.value.filter(c => !c.archived);
 
             const currencyFormatter = (val) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(val);
-            const standardOptions = {
-                responsive: true, maintainAspectRatio: false,
-                plugins: { legend: { display: false }, tooltip: { callbacks: { label: (ctx) => currencyFormatter(ctx.raw) } } }
+            
+            // Obsidian Tooltip Design
+            const customTooltip = {
+                backgroundColor: '#111827', // Obsidian Gray-900
+                titleColor: '#f59e0b', // Gold Amber-500
+                titleFont: { size: 13, family: 'Calibri, sans-serif' },
+                bodyFont: { size: 14, weight: 'bold', family: 'Calibri, sans-serif' },
+                padding: 12,
+                cornerRadius: 8,
+                callbacks: { label: (ctx) => ` ${currencyFormatter(ctx.raw)}` }
             };
 
+            const standardVerticalOptions = {
+                responsive: true, maintainAspectRatio: false,
+                plugins: { legend: { display: false }, tooltip: customTooltip },
+                scales: {
+                    x: { grid: { display: false }, border: { display: false }, ticks: { font: { family: 'Calibri, sans-serif' }, color: '#64748b' } },
+                    y: { grid: { color: '#e2e8f0', borderDash: [4, 4] }, border: { display: false }, ticks: { callback: currencyFormatter, font: { family: 'Calibri, sans-serif' }, color: '#64748b' } }
+                }
+            };
+
+            const standardHorizontalOptions = {
+                responsive: true, maintainAspectRatio: false, indexAxis: 'y',
+                plugins: { legend: { display: false }, tooltip: customTooltip },
+                scales: {
+                    x: { grid: { color: '#e2e8f0', borderDash: [4, 4] }, border: { display: false }, ticks: { callback: currencyFormatter, font: { family: 'Calibri, sans-serif' }, color: '#64748b' } },
+                    y: { grid: { display: false }, border: { display: false }, ticks: { font: { family: 'Calibri, sans-serif' }, color: '#64748b' } }
+                }
+            };
+
+            // 1. Monthly Distributor Credits (Emerald)
             const monthlySums = {};
             activeCredits.forEach(c => {
                 const m = c.trackingMonth || 'Unknown';
@@ -215,10 +238,19 @@ createApp({
             if(chartMonthlyInstance) chartMonthlyInstance.destroy();
             chartMonthlyInstance = new Chart(document.getElementById('chartMonthly'), {
                 type: 'bar',
-                data: { labels: sortedMonths, datasets: [{ data: sortedMonths.map(m => monthlySums[m]), backgroundColor: '#4f46e5' }] },
-                options: { ...standardOptions, scales: { y: { ticks: { callback: currencyFormatter } } } }
+                data: { 
+                    labels: sortedMonths, 
+                    datasets: [{ 
+                        data: sortedMonths.map(m => monthlySums[m]), 
+                        backgroundColor: '#10b981', // Emerald-500
+                        borderRadius: 6,
+                        barPercentage: 0.65
+                    }] 
+                },
+                options: standardVerticalOptions
             });
 
+            // 2. Top 10 Distributors (Gold)
             const distroSums = {};
             activeCredits.forEach(c => {
                 const d = c.distributor || 'Unmapped';
@@ -229,10 +261,19 @@ createApp({
             if(chartDistrosInstance) chartDistrosInstance.destroy();
             chartDistrosInstance = new Chart(document.getElementById('chartDistros'), {
                 type: 'bar',
-                data: { labels: topDistros.map(d => d[0]), datasets: [{ data: topDistros.map(d => d[1]), backgroundColor: '#4f46e5' }] },
-                options: { ...standardOptions, indexAxis: 'y', scales: { x: { ticks: { callback: currencyFormatter } } } }
+                data: { 
+                    labels: topDistros.map(d => d[0]), 
+                    datasets: [{ 
+                        data: topDistros.map(d => d[1]), 
+                        backgroundColor: '#f59e0b', // Amber-500 (Gold)
+                        borderRadius: 6,
+                        barPercentage: 0.65
+                    }] 
+                },
+                options: standardHorizontalOptions
             });
 
+            // 3. Top 10 Brands (Obsidian)
             const brandSums = {};
             activeCredits.forEach(c => {
                 const b = c.vendor || 'Unmapped';
@@ -243,10 +284,19 @@ createApp({
             if(chartBrandsInstance) chartBrandsInstance.destroy();
             chartBrandsInstance = new Chart(document.getElementById('chartBrands'), {
                 type: 'bar',
-                data: { labels: topBrands.map(b => b[0]), datasets: [{ data: topBrands.map(b => b[1]), backgroundColor: '#14b8a6' }] },
-                options: { ...standardOptions, indexAxis: 'y', scales: { x: { ticks: { callback: currencyFormatter } } } }
+                data: { 
+                    labels: topBrands.map(b => b[0]), 
+                    datasets: [{ 
+                        data: topBrands.map(b => b[1]), 
+                        backgroundColor: '#111827', // Gray-900 (Obsidian)
+                        borderRadius: 6,
+                        barPercentage: 0.65
+                    }] 
+                },
+                options: standardHorizontalOptions
             });
 
+            // 4. Credits by Store (Sleek Doughnut)
             const storeSums = {};
             activeCredits.forEach(c => {
                 const s = c.site || 'Unknown';
@@ -256,10 +306,20 @@ createApp({
             if(chartStoresInstance) chartStoresInstance.destroy();
             chartStoresInstance = new Chart(document.getElementById('chartStores'), {
                 type: 'doughnut',
-                data: { labels: Object.keys(storeSums), datasets: [{ data: Object.values(storeSums), backgroundColor: ['#4f46e5', '#38bdf8', '#14b8a6'] }] },
+                data: { 
+                    labels: Object.keys(storeSums), 
+                    datasets: [{ 
+                        data: Object.values(storeSums), 
+                        backgroundColor: ['#111827', '#f59e0b', '#10b981', '#64748b'], // Obsidian, Gold, Emerald
+                        borderWidth: 0 
+                    }] 
+                },
                 options: {
-                    responsive: true, maintainAspectRatio: false, cutout: '70%',
-                    plugins: { tooltip: { callbacks: { label: (ctx) => ` ${ctx.label}: ${currencyFormatter(ctx.raw)}` } }, legend: { position: 'bottom' } }
+                    responsive: true, maintainAspectRatio: false, cutout: '75%',
+                    plugins: { 
+                        tooltip: customTooltip, 
+                        legend: { position: 'bottom', labels: { font: { family: 'Calibri, sans-serif' }, color: '#475569', padding: 20 } } 
+                    }
                 }
             });
         };
