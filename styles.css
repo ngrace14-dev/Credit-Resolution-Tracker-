@@ -1,0 +1,23 @@
+/* styles.css */
+/* Mobile viewport height fix */
+body { font-family: 'Calibri', sans-serif; background-color: #f3f4f6; margin: 0; height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
+
+.excel-table { border-collapse: separate; border-spacing: 0; font-size: 13px; background-color: white; width: 100%; text-align: left; }
+.excel-table th, .excel-table td { border-bottom: 1px solid #d1d5db; border-right: 1px solid #d1d5db; padding: 8px 12px; white-space: nowrap; }
+.excel-table th { font-weight: 700; background-color: #f8f9fa; color: #374151; border-top: 1px solid #d1d5db; }
+.excel-table th:first-child, .excel-table td:first-child { border-left: 1px solid #d1d5db; }
+[v-cloak] { display: none; }
+
+::-webkit-scrollbar { height: 8px; width: 8px; }
+::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 4px; }
+::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+/* Only make actions column sticky on Desktop to save mobile screen space */
+@media (min-width: 768px) {
+    .sticky-col { position: sticky; right: 0; background-color: white; box-shadow: -3px 0 5px rgba(0,0,0,0.05); z-index: 10; }
+    .sticky-head { position: sticky; right: 0; background-color: #f8f9fa; box-shadow: -3px 0 5px rgba(0,0,0,0.05); z-index: 15; }
+}
