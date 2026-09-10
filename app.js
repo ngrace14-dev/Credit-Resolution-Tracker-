@@ -2,7 +2,7 @@
 
 // 1. FIREBASE IMPORTS
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-app.js";
-import { getFirestore, collection, addDoc, doc, updateDoc, deleteDoc, writeBatch, onSnapshot } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js";
+import { getFirestore, collection, addDoc, doc, updateDoc, deleteDoc, writeBatch, onSnapshot, setDoc } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js";
 import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js";
 import { initializeAppCheck, ReCaptchaEnterpriseProvider } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-app-check.js";
 
@@ -54,8 +54,8 @@ createApp({
         const treesSalesData = ref(JSON.parse(localStorage.getItem('treesSalesData')) || []);
         watch(treesSalesData, (newVal) => localStorage.setItem('treesSalesData', JSON.stringify(newVal)), { deep: true });
 
-        const masterBrands = ref(JSON.parse(localStorage.getItem('masterBrands')) || []);
-        watch(masterBrands, (newVal) => localStorage.setItem('masterBrands', JSON.stringify(newVal)), { deep: true });
+        // Cloud Synced Brands (No longer using localStorage watch)
+        const masterBrands = ref([]);
 
         const selectedBrands = ref([]);
         const allBrandsSelected = computed(() => {
@@ -64,14 +64,36 @@ createApp({
         
         const toggleAllBrands = () => {
             if (allBrandsSelected.value) selectedBrands.value = [];
-            else selectedBrands.value = masterBrands.value.map(b => b.vendor).filter(Boolean);
+            else selectedBrands.value = masterBrands.value.map(b => b.id).filter(Boolean);
         };
 
-        const deleteSelectedBrands = () => {
+        const deleteSelectedBrands = async () => {
             if (selectedBrands.value.length === 0) return;
-            if (confirm(`Are you sure you want to permanently delete these ${selectedBrands.value.length} brands from the directory?`)) {
-                masterBrands.value = masterBrands.value.filter(b => !selectedBrands.value.includes(b.vendor));
-                selectedBrands.value = []; 
+            if (confirm(`Are you sure you want to permanently delete these ${selectedBrands.value.length} brands from the cloud directory?`)) {
+                try {
+                    const batch = writeBatch(db);
+                    selectedBrands.value.forEach(brandId => {
+                        batch.delete(doc(db, "brands", brandId));
+                    });
+                    await batch.commit();
+                    selectedBrands.value = []; 
+                } catch (error) {
+                    console.error("Error deleting brands:", error);
+                    alert("Failed to delete brands from the cloud.");
+                }
+            }
+        };
+
+        // NEW: Inline edit saving function
+        const updateBrandField = async (brandId, fieldName, event) => {
+            const newValue = event.target.value;
+            try {
+                await updateDoc(doc(db, "brands", brandId), {
+                    [fieldName]: newValue
+                });
+            } catch (error) {
+                console.error("Error updating brand:", error);
+                alert("Failed to save changes to the cloud.");
             }
         };
 
@@ -90,10 +112,8 @@ createApp({
         const groupedPendingReports = computed(() => {
             if (!promoCredits.value) return [];
             
-            // Get all pending credits for current site
             let pending = promoCredits.value.filter(c => c && c.site === activeSite.value && (c.status || '').toLowerCase() === 'pending');
             
-            // Apply month filter if specific month is active
             if (activeMonth.value !== 'All') {
                 pending = pending.filter(c => c.trackingMonth === activeMonth.value);
             }
@@ -124,7 +144,6 @@ createApp({
                 return;
             }
 
-            // Parse multiple emails (comma, semicolon, or space separated)
             const cleanEmails = report.email.split(/[,;\s]+/).map(e => e.trim()).filter(Boolean).join(',');
             const senderEmail = 'nicholas.grace@rredco.com';
             const storeName = activeSite.value === 'Redding' ? 'Sundial' : activeSite.value;
@@ -192,6 +211,7 @@ createApp({
         
         const form = ref(getEmptyForm());
         let unsubscribeSnapshot = null;
+        let unsubscribeBrands = null;
 
         onMounted(() => {
             refreshIcons();
@@ -203,16 +223,45 @@ createApp({
                     activeSite.value = managerData.access[0];
                     isManagerUnlocked.value = true;
                     
+                    // Promo Credits Listener
                     unsubscribeSnapshot = onSnapshot(collection(db, "promoCredits"), (snapshot) => {
                         const fetchedCredits = [];
                         snapshot.forEach(docSnap => { fetchedCredits.push({ id: docSnap.id, ...docSnap.data() }); });
                         fetchedCredits.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
                         promoCredits.value = fetchedCredits;
                     });
+
+                    // Brands Listener
+                    unsubscribeBrands = onSnapshot(collection(db, "brands"), (snapshot) => {
+                        const fetchedBrands = [];
+                        snapshot.forEach(docSnap => { fetchedBrands.push({ id: docSnap.id, ...docSnap.data() }); });
+                        
+                        // LocalStorage Auto-Migration if cloud is empty
+                        if (fetchedBrands.length === 0) {
+                            const localBrands = JSON.parse(localStorage.getItem('masterBrands') || '[]');
+                            if (localBrands.length > 0) {
+                                console.log("Migrating local brands to Firestore...");
+                                const batch = writeBatch(db);
+                                localBrands.forEach(b => {
+                                    const newDocRef = doc(collection(db, "brands"));
+                                    batch.set(newDocRef, b);
+                                });
+                                batch.commit().then(() => {
+                                    console.log("Migration complete!");
+                                    localStorage.removeItem('masterBrands');
+                                });
+                            }
+                        }
+
+                        fetchedBrands.sort((a, b) => (a.vendor || '').localeCompare(b.vendor || ''));
+                        masterBrands.value = fetchedBrands;
+                    });
                 } else {
                     isManagerUnlocked.value = false;
                     promoCredits.value = [];
+                    masterBrands.value = [];
                     if (unsubscribeSnapshot) unsubscribeSnapshot();
+                    if (unsubscribeBrands) unsubscribeBrands();
                 }
             });
         });
@@ -407,7 +456,8 @@ createApp({
                         seenHeadersInChunk.add(header);
                         if (key === 'vendor' && val) {
                             if (!masterBrands.value.find(b => (b.vendor || '').toLowerCase() === val.toLowerCase())) {
-                                masterBrands.value.push({ vendor: val, distributor: 'Auto-Imported' });
+                                const newBrandRef = doc(collection(db, "brands"));
+                                batch.set(newBrandRef, { vendor: val, distributor: 'Auto-Imported' });
                             }
                         }
                     }
@@ -582,7 +632,7 @@ createApp({
             });
         };
 
-        const processBrandImport = () => {
+        const processBrandImport = async () => {
             let updatedCount = 0;
             let newCount = 0;
             
@@ -594,6 +644,8 @@ createApp({
                 }
             }
             
+            const batch = writeBatch(db);
+
             for (let r = startRow; r < brandPastedGrid.value.length; r++) {
                 const row = brandPastedGrid.value[r];
                 let currentBrand = {};
@@ -609,36 +661,38 @@ createApp({
                 
                 const existingBrand = masterBrands.value.find(b => (b.vendor || '').toLowerCase() === vendorName.toLowerCase());
                 
+                const payload = {};
+                if (currentBrand['Rep'] !== undefined) payload.rep = currentBrand['Rep'];
+                if (currentBrand['Email'] !== undefined) payload.email = currentBrand['Email'];
+                if (currentBrand['Name as appears in TREES'] !== undefined) payload.treesName = currentBrand['Name as appears in TREES'];
+                if (currentBrand['Distro'] !== undefined) payload.distributor = currentBrand['Distro'];
+                if (currentBrand['Asset Library'] !== undefined) payload.assetLibrary = currentBrand['Asset Library'];
+                if (currentBrand['Order From'] !== undefined) payload.orderFrom = currentBrand['Order From'];
+                if (currentBrand['Payee'] !== undefined) payload.payee = currentBrand['Payee'];
+                if (currentBrand['Notes'] !== undefined) payload.notes = currentBrand['Notes'];
+
                 if (existingBrand) {
-                    if (currentBrand['Rep'] !== undefined) existingBrand.rep = currentBrand['Rep'];
-                    if (currentBrand['Email'] !== undefined) existingBrand.email = currentBrand['Email'];
-                    if (currentBrand['Name as appears in TREES'] !== undefined) existingBrand.treesName = currentBrand['Name as appears in TREES'];
-                    if (currentBrand['Distro'] !== undefined) existingBrand.distributor = currentBrand['Distro'];
-                    if (currentBrand['Asset Library'] !== undefined) existingBrand.assetLibrary = currentBrand['Asset Library'];
-                    if (currentBrand['Order From'] !== undefined) existingBrand.orderFrom = currentBrand['Order From'];
-                    if (currentBrand['Payee'] !== undefined) existingBrand.payee = currentBrand['Payee'];
-                    if (currentBrand['Notes'] !== undefined) existingBrand.notes = currentBrand['Notes'];
-                    updatedCount++;
+                    if (Object.keys(payload).length > 0) {
+                        batch.update(doc(db, "brands", existingBrand.id), payload);
+                        updatedCount++;
+                    }
                 } else {
-                    masterBrands.value.push({
-                        vendor: vendorName,
-                        rep: currentBrand['Rep'] || '',
-                        email: currentBrand['Email'] || '',
-                        treesName: currentBrand['Name as appears in TREES'] || '',
-                        distributor: currentBrand['Distro'] || '',
-                        assetLibrary: currentBrand['Asset Library'] || '',
-                        orderFrom: currentBrand['Order From'] || '',
-                        payee: currentBrand['Payee'] || '',
-                        notes: currentBrand['Notes'] || ''
-                    });
+                    payload.vendor = vendorName;
+                    const newDocRef = doc(collection(db, "brands"));
+                    batch.set(newDocRef, payload);
                     newCount++;
                 }
             }
             
-            masterBrands.value.sort((a, b) => (a.vendor || '').localeCompare(b.vendor || ''));
-            alert(`Success! Added ${newCount} new brands and FORCE UPDATED ${updatedCount} existing entries.`);
-            resetBrandImport();
-            showBrandImportModal.value = false;
+            try {
+                await batch.commit();
+                alert(`Success! Added ${newCount} new brands and updated ${updatedCount} existing entries in the cloud.`);
+                resetBrandImport();
+                showBrandImportModal.value = false;
+            } catch (error) {
+                console.error("Import error:", error);
+                alert("Failed to save imported brands to the cloud.");
+            }
         };
 
         const refreshIcons = () => { nextTick(() => { if(window.lucide) window.lucide.createIcons(); }); };
@@ -655,7 +709,7 @@ createApp({
             showImportModal, openImportModal, closeImportModal, resetImport, 
             rawPasteData, pastedGrid, displayGrid, mappedHeaders, availableHeaders, processRawPaste, processImport,
             showBrandImportModal, brandPasteData, brandPastedGrid, brandMappedHeaders, brandAvailableHeaders,
-            resetBrandImport, processBrandRawPaste, processBrandImport,
+            resetBrandImport, processBrandRawPaste, processBrandImport, updateBrandField,
             calendarMonths, activeMonth, detectMonthInString, searchQuery
         };
     }
