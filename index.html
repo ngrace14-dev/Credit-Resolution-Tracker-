@@ -30,7 +30,7 @@
                         </div>
                     </div>
                 </div>
-                <!-- Mobile Lock Button (Visible only on small screens) -->
+                <!-- Mobile Lock Button -->
                 <button v-if="isManagerUnlocked" @click="forceLock" class="md:hidden bg-red-500 hover:bg-red-600 text-white p-2 rounded shadow transition-colors"><i data-lucide="lock" class="w-4 h-4"></i></button>
             </div>
 
@@ -55,15 +55,22 @@
             </div>
         </header>
 
-        <!-- LOGIN SCREEN -->
+        <!-- SECURE FIREBASE LOGIN SCREEN -->
         <main v-if="!isManagerUnlocked" class="flex-1 flex flex-col items-center justify-center bg-gray-100 p-4">
              <div class="bg-white rounded-2xl shadow-xl p-8 md:p-10 max-w-md w-full text-center border border-gray-200">
                  <div class="bg-blue-50 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6">
                     <i data-lucide="shield-check" class="w-10 h-10 text-blue-800"></i>
                  </div>
-                 <h2 class="text-2xl font-bold text-gray-800 mb-2">System Login</h2>
-                 <p class="text-gray-500 mb-6 font-medium">Enter your 4-digit manager PIN.</p>
-                 <input type="password" v-model="pinInput" @keyup.enter="handleLogin" class="border-2 border-gray-300 p-4 w-full rounded-xl focus:border-blue-600 focus:ring-4 focus:ring-blue-600/10 outline-none text-center text-4xl tracking-[0.5em] mb-6 font-mono font-bold text-gray-800 transition-all" placeholder="••••">
+                 <h2 class="text-2xl font-bold text-gray-800 mb-2">Secure Login</h2>
+                 <p class="text-gray-500 mb-6 font-medium">Enter your authorized email and password.</p>
+                 
+                 <div class="flex flex-col gap-4 mb-6">
+                     <input type="email" v-model="emailInput" class="border-2 border-gray-300 p-3 w-full rounded-xl focus:border-blue-600 focus:ring-4 focus:ring-blue-600/10 outline-none text-center font-bold text-gray-800 transition-all" placeholder="Email Address">
+                     <input type="password" v-model="passwordInput" @keyup.enter="handleLogin" class="border-2 border-gray-300 p-3 w-full rounded-xl focus:border-blue-600 focus:ring-4 focus:ring-blue-600/10 outline-none text-center font-bold text-gray-800 transition-all" placeholder="Password">
+                 </div>
+                 
+                 <p v-if="authError" class="text-red-500 text-sm font-bold mb-4">{{ authError }}</p>
+                 
                  <button @click="handleLogin" class="w-full py-3.5 bg-blue-800 hover:bg-blue-900 text-white rounded-xl font-bold text-lg shadow-md transition-colors">Access Tracker</button>
              </div>
         </main>
@@ -76,7 +83,6 @@
 
         <!-- SHARED GLOBAL FILTERS -->
         <div v-if="isManagerUnlocked" class="bg-gray-100 px-4 md:px-6 pt-4 pb-2 flex flex-col lg:flex-row justify-between items-center shrink-0 gap-3 z-10 border-b border-gray-200">
-            <!-- MONTH NAVIGATOR -->
             <div class="bg-white rounded-xl shadow-sm border border-gray-300 p-1.5 flex overflow-x-auto gap-1 w-full lg:flex-1 no-scrollbar">
                 <button @click="activeMonth = 'All'" :class="activeMonth === 'All' ? 'bg-gray-800 text-white font-bold shadow' : 'text-gray-600 hover:bg-gray-100 font-medium'" class="px-4 py-1.5 rounded-lg text-sm transition-all whitespace-nowrap">All Year</button>
                 <div class="w-px bg-gray-300 mx-1 shrink-0"></div>
@@ -86,8 +92,6 @@
                     {{ month }}
                 </button>
             </div>
-
-            <!-- GLOBAL SEARCH BAR -->
             <div class="relative w-full lg:w-80 shrink-0">
                 <i data-lucide="search" class="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
                 <input type="text" v-model="searchQuery" placeholder="Search brands, types, records..." class="w-full bg-white border border-gray-300 rounded-xl py-2 pl-10 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 shadow-sm transition-shadow">
@@ -99,8 +103,6 @@
 
         <!-- MAIN DASHBOARD TAB -->
         <main v-if="isManagerUnlocked && activeTab === 'Tracker'" class="flex-1 flex flex-col p-4 md:p-6 pt-4 bg-gray-100 overflow-hidden">
-            
-            <!-- KPIs -->
             <div class="flex flex-col sm:flex-row gap-4 md:gap-6 mb-4 md:mb-6 shrink-0">
                 <div class="bg-white border-l-4 border-blue-600 rounded-xl p-4 md:p-5 flex-1 shadow-sm flex items-center justify-between">
                     <div>
@@ -118,7 +120,6 @@
                 </div>
             </div>
 
-            <!-- DATA TABLE -->
             <div class="bg-white rounded-xl border border-gray-300 shadow-sm flex-1 flex flex-col min-h-0 overflow-hidden">
                 <div class="overflow-auto flex-1 relative">
                     <table class="excel-table min-w-max">
@@ -197,7 +198,6 @@
                     <h2 class="text-xl font-bold text-gray-800 leading-tight">Trees POS Sales (Global)</h2>
                     <p class="text-sm text-gray-500 mt-1">Showing ALL uploaded data. The aggregator automatically routes credits to Red Bluff or Redding.</p>
                 </div>
-                
                 <div class="flex flex-col sm:flex-row w-full md:w-auto gap-3">
                     <div class="relative overflow-hidden inline-block w-full sm:w-auto">
                         <button class="w-full px-4 py-2 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 rounded-lg font-bold shadow-sm transition-colors flex items-center justify-center gap-2 text-sm">
@@ -205,7 +205,6 @@
                         </button>
                         <input type="file" @change="handleTreesCsvUpload" accept=".csv" class="absolute left-0 top-0 w-full h-full opacity-0 cursor-pointer">
                     </div>
-                    
                     <button v-if="unsyncedSalesCount > 0" @click="pushToMainTracker" class="w-full sm:w-auto px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-bold shadow-md transition-colors flex items-center justify-center gap-2 text-sm">
                         <i data-lucide="git-merge" class="w-4 h-4"></i> Auto-Sort & Sync
                     </button>
@@ -237,7 +236,6 @@
                                     <div class="text-sm mt-1">Upload a Trees CSV to view raw sales and generate aggregate promo credits.</div>
                                 </td>
                             </tr>
-                            
                             <tr v-for="sale in displayTreesSalesData" :key="sale.id" class="hover:bg-gray-50" :class="{'opacity-60 bg-gray-50': sale.status === 'Synced'}">
                                 <td class="text-center">
                                     <span v-if="sale.status === 'Synced'" class="text-xs font-bold text-green-600 bg-green-100 px-2 py-1 rounded border border-green-200">SYNCED</span>
@@ -252,13 +250,6 @@
                                 <td class="font-mono text-xs text-gray-500">{{ sale.trackingId }}</td>
                                 <td class="font-bold text-blue-600">{{ formatCurrency(sale.owed) }}</td>
                                 <td class="text-gray-600 text-xs">{{ sale.dateClosed }}</td>
-                            </tr>
-                            
-                            <tr v-if="filteredTreesSalesData.length > 100">
-                                <td :colspan="activeMonth === 'All' ? 10 : 9" class="text-center py-4 text-gray-500 text-xs font-bold bg-gray-50 border-t-2 border-dashed border-gray-300">
-                                    ... plus {{ filteredTreesSalesData.length - 100 }} more rows hidden for performance. 
-                                    <span class="text-indigo-600">(All hidden rows will still aggregate correctly!)</span>
-                                </td>
                             </tr>
                         </tbody>
                     </table>
@@ -278,7 +269,6 @@
                 </div>
                 
                 <div class="p-4 md:p-6 grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4 overflow-y-auto">
-                    
                     <div class="col-span-1 md:col-span-2">
                         <label class="text-[11px] font-bold text-gray-500 uppercase tracking-wide">Tracking Month</label>
                         <select v-model="form.trackingMonth" class="border border-gray-300 p-2.5 w-full rounded-lg mt-1 font-bold focus:ring-2 focus:ring-blue-500 outline-none">
@@ -288,7 +278,6 @@
 
                     <div class="col-span-1 md:col-span-2 border-t pt-2"></div>
 
-                    <!-- Brand Autocomplete -->
                     <div class="col-span-1 md:col-span-2 relative">
                         <label class="text-[11px] font-bold text-gray-500 uppercase tracking-wide">Vendor (Brand)</label>
                         <input type="text" v-model="form.vendor" @focus="showBrandDropdown = true" @input="showBrandDropdown = true" class="border border-gray-300 p-2.5 w-full rounded-lg mt-1 font-bold focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Search Brand Name...">
@@ -350,7 +339,6 @@
                         </select>
                     </div>
 
-                    <!-- Attachment Block -->
                     <div class="col-span-1 md:col-span-2 mt-2">
                         <label class="text-[11px] font-bold text-gray-500 uppercase tracking-wide mb-1 block">Vendor Outcome Proof (PDF or Image)</label>
                         <div class="border-2 border-dashed border-gray-300 rounded-xl p-4 text-center bg-gray-50 hover:bg-gray-100 cursor-pointer transition-colors relative">
@@ -434,7 +422,6 @@
                     <div class="flex gap-3 w-full md:w-auto">
                         <button v-if="pastedGrid.length > 0" @click="resetImport" class="flex-1 md:flex-none px-5 py-2.5 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded-lg font-bold transition-colors">Clear</button>
                         <button v-else @click="closeImportModal" class="flex-1 md:flex-none px-5 py-2.5 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded-lg font-bold transition-colors">Close</button>
-                        
                         <button v-if="pastedGrid.length > 0" @click="processImport" class="flex-1 md:flex-none px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-bold shadow-md transition-colors flex items-center justify-center gap-2">
                             <i data-lucide="zap" class="w-4 h-4"></i> Import
                         </button>
@@ -442,10 +429,9 @@
                 </div>
             </div>
         </div>
-
     </div>
 
-    <!-- Scripts externalized -->
+    <!-- Scripts externalized as a Module so Firebase can import properly -->
     <script type="module" src="app.js"></script>
 </body>
 </html>
