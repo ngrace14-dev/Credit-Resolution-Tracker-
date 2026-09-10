@@ -71,7 +71,6 @@ createApp({
             if (allBrandsSelected.value) {
                 selectedBrands.value = [];
             } else {
-                // Map safely in case of corrupted memory
                 selectedBrands.value = masterBrands.value.map(b => b.vendor).filter(Boolean);
             }
         };
@@ -80,7 +79,7 @@ createApp({
             if (selectedBrands.value.length === 0) return;
             if (confirm(`Are you sure you want to permanently delete these ${selectedBrands.value.length} brands from the directory?`)) {
                 masterBrands.value = masterBrands.value.filter(b => !selectedBrands.value.includes(b.vendor));
-                selectedBrands.value = []; // reset checkboxes after delete
+                selectedBrands.value = []; 
             }
         };
 
@@ -156,7 +155,6 @@ createApp({
         const filteredBrands = computed(() => {
             const query = (form.value.vendor || '').toLowerCase();
             if (!query) return masterBrands.value;
-            // Safely handle missing vendor data in memory
             return masterBrands.value.filter(b => (b.vendor || '').toLowerCase().includes(query));
         });
 
@@ -497,23 +495,34 @@ createApp({
             const firstRowRaw = rows[0].toLowerCase();
             const dataRows = firstRowRaw.includes('brand') ? rows.slice(1) : rows;
 
+            // Detect if they copied Column A ("BRANDS" grouping column) vs starting at Column B
+            let offset = 0;
+            const testCols = rows[0].split('\t').map(c => c.toLowerCase().trim());
+            if (testCols[1] === 'brand' || testCols[2] === 'rep' || testCols.length >= 10) {
+                offset = 1; // Shift everything over by 1 column
+            }
+
             dataRows.forEach(row => {
                 const cols = row.split('\t').map(c => c.trim());
-                if (cols.length < 2) return; 
+                
+                // Secondary check: if row data shifted but header didn't catch it
+                let currentOffset = offset;
+                if (offset === 0 && cols.length > 3 && cols[0].length <= 1 && cols[1].length > 1) {
+                    currentOffset = 1;
+                }
 
-                const vendorName = cols[0] || '';
-                const repName = cols[1] || '';
-                const email = cols[2] || '';
-                const treesName = cols[3] || '';
-                const assetLibrary = cols[4] || '';
-                const distributor = cols[5] || ''; 
-                const orderFrom = cols[6] || '';
-                const payee = cols[7] || '';
-                const notes = cols[8] || '';
+                const vendorName = cols[currentOffset + 0] || '';
+                const repName = cols[currentOffset + 1] || '';
+                const email = cols[currentOffset + 2] || '';
+                const treesName = cols[currentOffset + 3] || '';
+                const assetLibrary = cols[currentOffset + 4] || '';
+                const distributor = cols[currentOffset + 5] || ''; 
+                const orderFrom = cols[currentOffset + 6] || '';
+                const payee = cols[currentOffset + 7] || '';
+                const notes = cols[currentOffset + 8] || '';
 
                 if (!vendorName || vendorName.length === 1) return; 
 
-                // Safe check using fallback string logic
                 const existingBrand = masterBrands.value.find(b => (b.vendor || '').toLowerCase() === vendorName.toLowerCase());
                 
                 if (existingBrand) {
@@ -542,7 +551,6 @@ createApp({
                 }
             });
 
-            // Safe alphabetical sorting
             masterBrands.value.sort((a, b) => (a.vendor || '').localeCompare(b.vendor || ''));
             alert(`Success! Added ${newCount} new brands and FORCE UPDATED ${updatedCount} existing entries.`);
             brandPasteData.value = '';
