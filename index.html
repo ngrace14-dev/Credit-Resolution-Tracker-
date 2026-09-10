@@ -30,7 +30,6 @@
                         </div>
                     </div>
                 </div>
-                <!-- Mobile Lock Button -->
                 <button v-if="isManagerUnlocked" @click="forceLock" class="md:hidden bg-red-500 hover:bg-red-600 text-white p-2 rounded shadow transition-colors"><i data-lucide="lock" class="w-4 h-4"></i></button>
             </div>
 
@@ -48,7 +47,6 @@
                 <button @click="openPromoModal()" class="bg-green-500 hover:bg-green-600 text-white px-3 py-1.5 rounded flex items-center gap-1.5 text-sm font-bold shadow transition-colors"><i data-lucide="plus" class="w-4 h-4"></i> New Promo</button>
             </div>
             
-            <!-- Mobile Action Buttons -->
             <div class="md:hidden flex w-full gap-2" v-if="isManagerUnlocked">
                 <button @click="openImportModal" class="flex-1 bg-indigo-500 text-white px-3 py-2 rounded flex justify-center items-center gap-1.5 text-sm font-bold shadow"><i data-lucide="grid" class="w-4 h-4"></i> Excel</button>
                 <button @click="openPromoModal()" class="flex-1 bg-green-500 text-white px-3 py-2 rounded flex justify-center items-center gap-1.5 text-sm font-bold shadow"><i data-lucide="plus" class="w-4 h-4"></i> Promo</button>
@@ -70,7 +68,6 @@
                  </div>
                  
                  <p v-if="authError" class="text-red-500 text-sm font-bold mb-4">{{ authError }}</p>
-                 
                  <button @click="handleLogin" class="w-full py-3.5 bg-blue-800 hover:bg-blue-900 text-white rounded-xl font-bold text-lg shadow-md transition-colors">Access Tracker</button>
              </div>
         </main>
@@ -104,6 +101,7 @@
 
         <!-- MAIN DASHBOARD TAB -->
         <main v-if="isManagerUnlocked && activeTab === 'Tracker'" class="flex-1 flex flex-col p-4 md:p-6 pt-4 bg-gray-100 overflow-hidden">
+            <!-- (Tracker content remains unchanged from your previous version) -->
             <div class="flex flex-col sm:flex-row gap-4 md:gap-6 mb-4 md:mb-6 shrink-0">
                 <div class="bg-white border-l-4 border-blue-600 rounded-xl p-4 md:p-5 flex-1 shadow-sm flex items-center justify-between">
                     <div>
@@ -194,6 +192,7 @@
 
         <!-- TREES SALES REPORTS TAB -->
         <main v-if="isManagerUnlocked && activeTab === 'Sales'" class="flex-1 flex flex-col p-4 md:p-6 pt-4 bg-gray-100 overflow-hidden">
+            <!-- (Sales content remains unchanged) -->
             <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 shrink-0 gap-4">
                 <div>
                     <h2 class="text-xl font-bold text-gray-800 leading-tight">Trees POS Sales (Global)</h2>
@@ -260,33 +259,44 @@
 
         <!-- BRAND DIRECTORY & EMAIL IMPORTER TAB -->
         <main v-if="isManagerUnlocked && activeTab === 'Brands'" class="flex-1 flex flex-col p-4 md:p-6 pt-4 bg-gray-100 overflow-hidden">
-            <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 shrink-0 gap-4">
+            <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 shrink-0 gap-4">
                 <div>
                     <h2 class="text-xl font-bold text-gray-800 leading-tight">Brand Directory & Contacts</h2>
-                    <p class="text-sm text-gray-500 mt-1">Map vendor emails here to enable automated location-based credit reports.</p>
+                    <p class="text-sm text-gray-500 mt-1">Map vendor details here to enable automated location-based credit reports.</p>
                 </div>
-                <button @click="showBrandImportModal = true" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-bold shadow-md transition-colors flex items-center gap-2 text-sm">
-                    <i data-lucide="clipboard-paste" class="w-4 h-4"></i> Paste Email Spreadsheet
+                <button @click="showBrandImportModal = true" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-bold shadow-md transition-colors flex items-center gap-2 text-sm whitespace-nowrap">
+                    <i data-lucide="clipboard-paste" class="w-4 h-4"></i> Paste Contact Roster
                 </button>
             </div>
 
             <div class="bg-white rounded-xl border border-gray-300 shadow-sm flex-1 flex flex-col min-h-0 overflow-hidden">
-                <div class="overflow-auto flex-1">
-                    <table class="excel-table w-full relative">
-                        <thead class="sticky top-0 z-10 shadow-sm bg-gray-50">
+                <div class="overflow-auto flex-1 relative">
+                    <!-- Updated Table to match the screenshot -->
+                    <table class="excel-table min-w-max">
+                        <thead class="sticky top-0 z-10 shadow-sm bg-gray-50 whitespace-nowrap">
                             <tr>
-                                <th>Vendor (Brand)</th>
-                                <th>Distributor</th>
-                                <th>Rep Email Address</th>
+                                <th>Brand</th>
+                                <th>Rep</th>
+                                <th>Email</th>
+                                <th>Name as appears in TREES</th>
+                                <th>Distro</th>
+                                <th>Asset Library</th>
+                                <th>Order From</th>
+                                <th>Payee</th>
+                                <th>Notes</th>
                             </tr>
                         </thead>
                         <tbody>
                             <tr v-for="(brand, index) in masterBrands" :key="index" class="hover:bg-blue-50/50">
-                                <td class="font-bold text-gray-900">{{ brand.vendor }}</td>
-                                <td class="text-gray-600">{{ brand.distributor }}</td>
-                                <td>
-                                    <input type="email" v-model="brand.email" placeholder="Add email..." class="w-full bg-transparent border-b border-dashed border-gray-300 focus:border-blue-500 outline-none px-1 py-0.5 text-blue-600">
-                                </td>
+                                <td class="font-bold text-gray-900 sticky left-0 bg-white shadow-[1px_0_0_#e5e7eb] z-10">{{ brand.vendor }}</td>
+                                <td><input type="text" v-model="brand.rep" placeholder="-" class="w-full min-w-[120px] bg-transparent border-b border-dashed border-transparent hover:border-gray-300 focus:border-blue-500 outline-none px-1 py-0.5"></td>
+                                <td><input type="email" v-model="brand.email" placeholder="-" class="w-full min-w-[180px] bg-transparent border-b border-dashed border-transparent hover:border-gray-300 focus:border-blue-500 outline-none px-1 py-0.5 text-blue-600"></td>
+                                <td><input type="text" v-model="brand.treesName" placeholder="-" class="w-full min-w-[160px] bg-transparent border-b border-dashed border-transparent hover:border-gray-300 focus:border-blue-500 outline-none px-1 py-0.5"></td>
+                                <td><input type="text" v-model="brand.distributor" placeholder="-" class="w-full min-w-[140px] bg-transparent border-b border-dashed border-transparent hover:border-gray-300 focus:border-blue-500 outline-none px-1 py-0.5"></td>
+                                <td><input type="text" v-model="brand.assetLibrary" placeholder="-" class="w-full min-w-[180px] bg-transparent border-b border-dashed border-transparent hover:border-gray-300 focus:border-blue-500 outline-none px-1 py-0.5 text-xs text-blue-500"></td>
+                                <td><input type="text" v-model="brand.orderFrom" placeholder="-" class="w-full min-w-[120px] bg-transparent border-b border-dashed border-transparent hover:border-gray-300 focus:border-blue-500 outline-none px-1 py-0.5"></td>
+                                <td><input type="text" v-model="brand.payee" placeholder="-" class="w-full min-w-[120px] bg-transparent border-b border-dashed border-transparent hover:border-gray-300 focus:border-blue-500 outline-none px-1 py-0.5"></td>
+                                <td><input type="text" v-model="brand.notes" placeholder="-" class="w-full min-w-[180px] bg-transparent border-b border-dashed border-transparent hover:border-gray-300 focus:border-blue-500 outline-none px-1 py-0.5 text-xs"></td>
                             </tr>
                         </tbody>
                     </table>
@@ -294,14 +304,12 @@
             </div>
         </main>
 
-        <!-- ADD/EDIT MODAL -->
+        <!-- ADD/EDIT PROMO MODAL -->
         <div v-if="showPromoModal" class="fixed inset-0 bg-black/60 flex items-center justify-center z-50 backdrop-blur-sm p-2" @click.self="closePromoModal">
+            <!-- (Modal content remains unchanged) -->
             <div class="bg-white rounded-2xl shadow-2xl w-full md:w-[700px] max-w-[95vw] flex flex-col overflow-hidden max-h-[95vh] md:max-h-[80vh]">
                 <div class="px-4 md:px-6 py-4 border-b bg-gray-50 flex justify-between items-center shrink-0">
-                    <h2 class="font-bold text-lg md:text-xl text-gray-800 flex items-center gap-2">
-                        <i data-lucide="file-edit" class="w-5 h-5 text-blue-600"></i> 
-                        {{ editingId ? 'Edit Promo Credit' : 'Log New Credit' }}
-                    </h2>
+                    <h2 class="font-bold text-lg md:text-xl text-gray-800 flex items-center gap-2"><i data-lucide="file-edit" class="w-5 h-5 text-blue-600"></i> {{ editingId ? 'Edit Promo Credit' : 'Log New Credit' }}</h2>
                     <button @click="closePromoModal" class="text-gray-500 hover:text-red-600 transition-colors p-1 hover:bg-gray-200 rounded"><i data-lucide="x" class="w-5 h-5"></i></button>
                 </div>
                 
@@ -312,13 +320,10 @@
                             <option v-for="m in calendarMonths" :key="m" :value="m">{{ m }}</option>
                         </select>
                     </div>
-
                     <div class="col-span-1 md:col-span-2 border-t pt-2"></div>
-
                     <div class="col-span-1 md:col-span-2 relative">
                         <label class="text-[11px] font-bold text-gray-500 uppercase tracking-wide">Vendor (Brand)</label>
                         <input type="text" v-model="form.vendor" @focus="showBrandDropdown = true" @input="showBrandDropdown = true" class="border border-gray-300 p-2.5 w-full rounded-lg mt-1 font-bold focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Search Brand Name...">
-                        
                         <div v-if="showBrandDropdown && filteredBrands.length > 0" class="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 shadow-xl rounded-lg max-h-48 overflow-y-auto z-50">
                             <div v-for="brand in filteredBrands" :key="brand.vendor" @click="selectBrand(brand)" class="px-4 py-2 hover:bg-blue-50 cursor-pointer border-b last:border-0 flex justify-between items-center">
                                 <span class="font-bold text-gray-800">{{ brand.vendor }}</span>
@@ -326,56 +331,23 @@
                             </div>
                         </div>
                     </div>
-
-                    <div>
-                        <label class="text-[11px] font-bold text-gray-500 uppercase tracking-wide">Distributor</label>
-                        <input type="text" v-model="form.distributor" class="border border-gray-300 bg-gray-50 p-2.5 w-full rounded-lg mt-1 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
-                    </div>
-                    <div>
-                        <label class="text-[11px] font-bold text-gray-500 uppercase tracking-wide">Credit Type</label>
-                        <input type="text" v-model="form.creditType" class="border border-gray-300 p-2.5 w-full rounded-lg mt-1 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
-                    </div>
-                    <div>
-                        <label class="text-[11px] font-bold text-gray-500 uppercase tracking-wide">Dates</label>
-                        <input type="text" v-model="form.dates" class="border border-gray-300 p-2.5 w-full rounded-lg mt-1 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
-                    </div>
+                    <div><label class="text-[11px] font-bold text-gray-500 uppercase tracking-wide">Distributor</label><input type="text" v-model="form.distributor" class="border border-gray-300 bg-gray-50 p-2.5 w-full rounded-lg mt-1 text-sm focus:ring-2 focus:ring-blue-500 outline-none"></div>
+                    <div><label class="text-[11px] font-bold text-gray-500 uppercase tracking-wide">Credit Type</label><input type="text" v-model="form.creditType" class="border border-gray-300 p-2.5 w-full rounded-lg mt-1 text-sm focus:ring-2 focus:ring-blue-500 outline-none"></div>
+                    <div><label class="text-[11px] font-bold text-gray-500 uppercase tracking-wide">Dates</label><input type="text" v-model="form.dates" class="border border-gray-300 p-2.5 w-full rounded-lg mt-1 text-sm focus:ring-2 focus:ring-blue-500 outline-none"></div>
                     <div>
                         <label class="text-[11px] font-bold text-gray-500 uppercase tracking-wide">Credit Amount $$$</label>
-                        <div class="relative">
-                            <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 font-bold">$</span>
-                            <input type="number" v-model.number="form.amount" class="border border-gray-300 pl-7 p-2.5 w-full rounded-lg mt-1 font-bold text-blue-900 focus:ring-2 focus:ring-blue-500 outline-none" step="0.01">
-                        </div>
+                        <div class="relative"><span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 font-bold">$</span><input type="number" v-model.number="form.amount" class="border border-gray-300 pl-7 p-2.5 w-full rounded-lg mt-1 font-bold text-blue-900 focus:ring-2 focus:ring-blue-500 outline-none" step="0.01"></div>
                     </div>
-                    
                     <div class="col-span-1 md:col-span-2 border-t pt-2"></div>
-
-                    <div>
-                        <label class="text-[11px] font-bold text-gray-500 uppercase tracking-wide">Date Requested</label>
-                        <input type="date" v-model="form.dateRequested" class="border border-gray-300 p-2.5 w-full rounded-lg mt-1 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
-                    </div>
-                    <div>
-                        <label class="text-[11px] font-bold text-gray-500 uppercase tracking-wide">Date Received</label>
-                        <input type="date" v-model="form.dateReceived" class="border border-gray-300 p-2.5 w-full rounded-lg mt-1 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
-                    </div>
-                    
-                    <div>
-                        <label class="text-[11px] font-bold text-gray-500 uppercase tracking-wide">Invoice / Credit Memo #</label>
-                        <input type="text" v-model="form.invoice" class="border border-gray-300 p-2.5 w-full rounded-lg mt-1 font-mono text-sm focus:ring-2 focus:ring-blue-500 outline-none">
-                    </div>
+                    <div><label class="text-[11px] font-bold text-gray-500 uppercase tracking-wide">Date Requested</label><input type="date" v-model="form.dateRequested" class="border border-gray-300 p-2.5 w-full rounded-lg mt-1 text-sm focus:ring-2 focus:ring-blue-500 outline-none"></div>
+                    <div><label class="text-[11px] font-bold text-gray-500 uppercase tracking-wide">Date Received</label><input type="date" v-model="form.dateReceived" class="border border-gray-300 p-2.5 w-full rounded-lg mt-1 text-sm focus:ring-2 focus:ring-blue-500 outline-none"></div>
+                    <div><label class="text-[11px] font-bold text-gray-500 uppercase tracking-wide">Invoice / Credit Memo #</label><input type="text" v-model="form.invoice" class="border border-gray-300 p-2.5 w-full rounded-lg mt-1 font-mono text-sm focus:ring-2 focus:ring-blue-500 outline-none"></div>
                     <div>
                         <label class="text-[11px] font-bold text-gray-500 uppercase tracking-wide">Status</label>
-                        <select v-model="form.status" class="border border-gray-300 p-2.5 w-full rounded-lg mt-1 font-bold cursor-pointer focus:ring-2 focus:ring-blue-500 outline-none" 
-                                :class="{
-                                    'bg-green-50 text-green-800': form.status === 'Applied',
-                                    'bg-amber-50 text-amber-800': form.status === 'Pending',
-                                    'bg-red-50 text-red-800': form.status === 'Uncollectable'
-                                }">
-                            <option value="Pending">Pending</option>
-                            <option value="Applied">Applied</option>
-                            <option value="Uncollectable">Uncollectable</option>
+                        <select v-model="form.status" class="border border-gray-300 p-2.5 w-full rounded-lg mt-1 font-bold cursor-pointer focus:ring-2 focus:ring-blue-500 outline-none" :class="{'bg-green-50 text-green-800': form.status === 'Applied', 'bg-amber-50 text-amber-800': form.status === 'Pending', 'bg-red-50 text-red-800': form.status === 'Uncollectable'}">
+                            <option value="Pending">Pending</option><option value="Applied">Applied</option><option value="Uncollectable">Uncollectable</option>
                         </select>
                     </div>
-
                     <div class="col-span-1 md:col-span-2 mt-2">
                         <label class="text-[11px] font-bold text-gray-500 uppercase tracking-wide mb-1 block">Vendor Outcome Proof (PDF or Image)</label>
                         <div class="border-2 border-dashed border-gray-300 rounded-xl p-4 text-center bg-gray-50 hover:bg-gray-100 cursor-pointer transition-colors relative">
@@ -386,15 +358,12 @@
                         </div>
                     </div>
                 </div>
-
                 <div class="px-4 md:px-6 py-4 border-t bg-gray-50 flex flex-col md:flex-row justify-between items-center shrink-0 gap-3">
                     <button v-if="editingId" @click="deleteCredit" class="text-red-500 hover:text-red-700 text-sm font-bold flex items-center justify-center gap-1 w-full md:w-auto py-2"><i data-lucide="trash-2" class="w-4 h-4"></i> Delete Credit</button>
                     <div v-else class="hidden md:block"></div>
                     <div class="flex gap-3 w-full md:w-auto">
                         <button @click="closePromoModal" class="flex-1 md:px-5 py-2.5 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded-lg font-bold transition-colors">Cancel</button>
-                        <button @click="saveCredit" class="flex-1 md:px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold shadow-md transition-colors flex items-center justify-center gap-2">
-                            <i data-lucide="save" class="w-4 h-4"></i> Save
-                        </button>
+                        <button @click="saveCredit" class="flex-1 md:px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold shadow-md transition-colors flex items-center justify-center gap-2"><i data-lucide="save" class="w-4 h-4"></i> Save</button>
                     </div>
                 </div>
             </div>
@@ -402,55 +371,46 @@
 
         <!-- BRAND IMPORT MODAL -->
         <div v-if="showBrandImportModal" class="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-2" @click.self="showBrandImportModal = false">
-            <div class="bg-white rounded-2xl shadow-2xl w-full max-w-3xl flex flex-col overflow-hidden">
+            <div class="bg-white rounded-2xl shadow-2xl w-full max-w-4xl flex flex-col overflow-hidden">
                 <div class="px-6 py-4 border-b bg-gray-50 flex justify-between items-center">
-                    <h2 class="font-bold text-lg text-gray-800">Paste Brand Emails</h2>
+                    <h2 class="font-bold text-lg text-gray-800 flex items-center gap-2"><i data-lucide="contact" class="w-5 h-5 text-indigo-600"></i> Import Brand Directory</h2>
                     <button @click="showBrandImportModal = false" class="text-gray-500 hover:text-red-600"><i data-lucide="x" class="w-5 h-5"></i></button>
                 </div>
                 <div class="p-6">
-                    <p class="text-sm text-gray-600 mb-4">Paste directly from Excel. Ensure your columns are in this exact order:<br><strong>Brand Name | Distributor | Email Address</strong></p>
-                    <textarea v-model="brandPasteData" class="w-full h-48 border-2 border-dashed border-gray-300 rounded-xl p-4 font-mono text-sm outline-none focus:border-indigo-500" placeholder="Paste 3 columns here..."></textarea>
+                    <div class="bg-indigo-50 border border-indigo-200 p-4 rounded-xl text-sm text-indigo-900 mb-4 shadow-sm">
+                        <strong>Important:</strong> Please highlight and copy your spreadsheet <strong>including the blue header row</strong> (Brand, Rep, Email, etc.). Our smart parser will automatically find the right columns based on your headers!
+                    </div>
+                    <textarea v-model="brandPasteData" class="w-full h-48 border-2 border-dashed border-gray-300 rounded-xl p-4 font-mono text-sm outline-none focus:border-indigo-500" placeholder="Paste your Excel data here..."></textarea>
                 </div>
                 <div class="px-6 py-4 border-t bg-gray-50 flex justify-end gap-3">
                     <button @click="showBrandImportModal = false" class="px-5 py-2.5 bg-gray-200 text-gray-800 rounded-lg font-bold">Cancel</button>
                     <button @click="processBrandPaste" class="px-6 py-2.5 bg-indigo-600 text-white rounded-lg font-bold shadow-md flex items-center gap-2">
-                        <i data-lucide="zap" class="w-4 h-4"></i> Import & Merge
+                        <i data-lucide="zap" class="w-4 h-4"></i> Map & Import Data
                     </button>
                 </div>
             </div>
         </div>
 
-        <!-- DYNAMIC GRID IMPORT MODAL -->
+        <!-- DYNAMIC GRID IMPORT MODAL (Promo Credits) -->
         <div v-if="showImportModal" class="fixed inset-0 bg-black/60 flex items-center justify-center z-50 backdrop-blur-sm p-2" @click.self="closeImportModal">
+            <!-- (Import modal remains unchanged) -->
             <div class="bg-white rounded-2xl shadow-2xl w-full md:w-[95vw] max-w-7xl flex flex-col overflow-hidden max-h-[95vh] md:max-h-[90vh]">
                 <div class="px-4 md:px-6 py-4 border-b bg-gray-50 flex justify-between items-center shrink-0">
-                    <h2 class="font-bold text-lg md:text-xl text-gray-800 flex items-center gap-2">
-                        <i data-lucide="grid" class="w-5 h-5 text-indigo-600"></i> Excel Import Hub
-                    </h2>
+                    <h2 class="font-bold text-lg md:text-xl text-gray-800 flex items-center gap-2"><i data-lucide="grid" class="w-5 h-5 text-indigo-600"></i> Excel Import Hub</h2>
                     <button @click="closeImportModal" class="text-gray-500 hover:text-red-600 transition-colors p-1 hover:bg-gray-200 rounded"><i data-lucide="x" class="w-5 h-5"></i></button>
                 </div>
-                
                 <div class="p-4 md:p-6 flex-1 overflow-hidden flex flex-col">
                     <div v-if="pastedGrid.length === 0" class="flex-1 flex flex-col">
                         <div class="bg-indigo-50 border border-indigo-200 p-4 rounded-xl text-sm text-indigo-900 mb-4 shadow-sm">
                             <strong>Excel Import:</strong> Paste your entire horizontal Excel sheet below. <br>
                             <span class="hidden md:inline"><em>Ensure you include the top "Super Header" row (the row that says August, July, June) so the parser can automatically organize the chunks!</em></span>
                         </div>
-                        <textarea 
-                            v-model="rawPasteData" 
-                            @input="processRawPaste" 
-                            class="flex-1 w-full border-2 border-dashed border-indigo-300 rounded-xl p-4 md:p-6 text-sm font-mono bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 outline-none resize-none shadow-inner transition-all" 
-                            placeholder="Tap here and press Paste..."></textarea>
+                        <textarea v-model="rawPasteData" @input="processRawPaste" class="flex-1 w-full border-2 border-dashed border-indigo-300 rounded-xl p-4 md:p-6 text-sm font-mono bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 outline-none resize-none shadow-inner transition-all" placeholder="Tap here and press Paste..."></textarea>
                     </div>
-
                     <div v-else class="flex-1 overflow-auto rounded-xl border border-gray-300 bg-white">
                         <table class="excel-table w-full">
                             <thead class="sticky top-0 z-20 shadow-md bg-gray-50">
-                                <tr>
-                                    <th v-for="(col, cIndex) in pastedGrid[0]" :key="'super-'+cIndex" class="bg-gray-800 text-white p-2 border-gray-700 text-center text-xs">
-                                        {{ detectMonthInString(col) || '-' }}
-                                    </th>
-                                </tr>
+                                <tr><th v-for="(col, cIndex) in pastedGrid[0]" :key="'super-'+cIndex" class="bg-gray-800 text-white p-2 border-gray-700 text-center text-xs">{{ detectMonthInString(col) || '-' }}</th></tr>
                                 <tr>
                                     <th v-for="(col, cIndex) in pastedGrid[0]" :key="'head-'+cIndex" class="bg-indigo-100 border-indigo-200 p-2 min-w-[120px]">
                                         <select v-model="mappedHeaders[cIndex]" class="w-full text-xs font-bold text-indigo-900 bg-white border border-indigo-300 rounded p-1 cursor-pointer outline-none">
@@ -461,34 +421,26 @@
                             </thead>
                             <tbody>
                                 <tr v-for="(row, rIndex) in displayGrid" :key="'row-'+rIndex">
-                                    <td v-for="(cell, cIndex) in row" :key="'cell-'+cIndex" class="text-xs truncate max-w-[150px]" :title="cell">
-                                        {{ cell }}
-                                    </td>
+                                    <td v-for="(cell, cIndex) in row" :key="'cell-'+cIndex" class="text-xs truncate max-w-[150px]" :title="cell">{{ cell }}</td>
                                 </tr>
                             </tbody>
                         </table>
                     </div>
                 </div>
-
                 <div class="px-4 md:px-6 py-4 border-t bg-gray-50 flex flex-col md:flex-row justify-between items-center shrink-0 gap-3">
                     <div class="w-full md:w-auto text-center md:text-left">
-                        <span v-if="pastedGrid.length > 0" class="text-xs font-bold text-indigo-600 uppercase tracking-wide bg-indigo-50 px-3 py-1.5 rounded-md border border-indigo-100 inline-block">
-                            <i data-lucide="git-merge" class="w-3 h-3 inline mb-0.5"></i> Auto-chunking active
-                        </span>
+                        <span v-if="pastedGrid.length > 0" class="text-xs font-bold text-indigo-600 uppercase tracking-wide bg-indigo-50 px-3 py-1.5 rounded-md border border-indigo-100 inline-block"><i data-lucide="git-merge" class="w-3 h-3 inline mb-0.5"></i> Auto-chunking active</span>
                     </div>
                     <div class="flex gap-3 w-full md:w-auto">
                         <button v-if="pastedGrid.length > 0" @click="resetImport" class="flex-1 md:flex-none px-5 py-2.5 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded-lg font-bold transition-colors">Clear</button>
                         <button v-else @click="closeImportModal" class="flex-1 md:flex-none px-5 py-2.5 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded-lg font-bold transition-colors">Close</button>
-                        <button v-if="pastedGrid.length > 0" @click="processImport" class="flex-1 md:flex-none px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-bold shadow-md transition-colors flex items-center justify-center gap-2">
-                            <i data-lucide="zap" class="w-4 h-4"></i> Import
-                        </button>
+                        <button v-if="pastedGrid.length > 0" @click="processImport" class="flex-1 md:flex-none px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-bold shadow-md transition-colors flex items-center justify-center gap-2"><i data-lucide="zap" class="w-4 h-4"></i> Import</button>
                     </div>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Scripts externalized as a Module so Firebase can import properly -->
     <script type="module" src="app.js"></script>
 </body>
 </html>
