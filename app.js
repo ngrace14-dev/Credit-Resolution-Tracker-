@@ -1,4 +1,24 @@
+
 // app.js
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-app.js";
+import {
+    getFirestore,
+    collection,
+    addDoc
+} from "https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js";
+
+const firebaseConfig = {
+    apiKey: "PASTE_YOUR_FULL_API_KEY_HERE",
+    authDomain: "rredco-database.firebaseapp.com",
+    projectId: "rredco-database",
+    storageBucket: "rredco-database.firebasestorage.app",
+    messagingSenderId: "968362680607",
+    appId: "1:968362680607:web:dea3fe719d8f8d619fbe8a",
+    measurementId: "G-PGY27N2N17"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
 const { createApp, ref, computed, nextTick, onMounted } = window.Vue;
 
 createApp({
@@ -200,22 +220,36 @@ createApp({
             form.value.attachmentData = "mock_file_data"; 
         };
 
-        const saveCredit = () => {
-            if (!form.value.vendor) return alert("Vendor (Brand) is required.");
-            if (!form.value.trackingMonth) return alert("Tracking Month is required.");
-            
-            const payload = { ...form.value, site: activeSite.value };
-            
-            if (editingId.value) {
-                const idx = promoCredits.value.findIndex(c => c.id === editingId.value);
-                if (idx !== -1) promoCredits.value[idx] = payload;
-            } else {
-                payload.id = Date.now().toString() + Math.random().toString(36).substr(2,5);
-                promoCredits.value.unshift(payload);
-            }
-            closePromoModal();
-            refreshIcons();
-        };
+       const saveCredit = async () => {
+    if (!form.value.vendor) return alert("Vendor (Brand) is required.");
+    if (!form.value.trackingMonth) return alert("Tracking Month is required.");
+
+    const payload = {
+        ...form.value,
+        site: activeSite.value,
+        createdAt: new Date()
+    };
+
+    try {
+        await addDoc(collection(db, "promoCredits"), payload);
+
+        if (editingId.value) {
+            const idx = promoCredits.value.findIndex(c => c.id === editingId.value);
+            if (idx !== -1) promoCredits.value[idx] = payload;
+        } else {
+            payload.id = Date.now().toString() + Math.random().toString(36).substr(2,5);
+            promoCredits.value.unshift(payload);
+        }
+
+        alert("Credit saved successfully!");
+        closePromoModal();
+        refreshIcons();
+
+    } catch (error) {
+        console.error("Firestore Error:", error);
+        alert("Failed to save to Firebase. Check console for details.");
+    }
+};
 
         const editCredit = (credit) => {
             form.value = { ...credit };
