@@ -101,24 +101,76 @@
             </div>
         </div>
 
-        <!-- NEW: MONTHLY REPORTS TAB -->
+        <!-- MONTHLY REPORTS TAB (BROKEN OUT BY BRAND) -->
         <main v-if="isManagerUnlocked && activeTab === 'Reports'" class="flex-1 flex flex-col p-4 md:p-6 bg-gray-100 overflow-y-auto">
             <div class="mb-6">
-                <h2 class="text-xl font-bold text-gray-800">Monthly Reports Download</h2>
-                <p class="text-sm text-gray-500">View and download complete historical records (including active and archived items) grouped by month.</p>
+                <h2 class="text-xl font-bold text-gray-800">Monthly Brand Reports</h2>
+                <p class="text-sm text-gray-500">Reports broken out by brand for each month. Generate emails or download CSVs directly for each brand.</p>
             </div>
-            <div class="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-4 gap-4">
-                <div v-if="monthlyReportSummaries.length === 0" class="col-span-full text-center py-10 text-gray-500 font-bold">No records found for this location.</div>
-                
-                <div v-for="report in monthlyReportSummaries" :key="report.month" class="bg-white p-5 rounded-xl shadow-sm border border-gray-200 flex flex-col">
-                    <div class="flex justify-between items-start mb-4">
-                        <h3 class="text-lg font-bold text-blue-900">{{ report.month }}</h3>
-                        <span class="bg-blue-100 text-blue-800 text-[10px] px-2 py-1 rounded font-bold uppercase tracking-wider">{{ report.count }} Items</span>
+
+            <div v-if="monthlyReportSummaries.length === 0" class="text-center py-16 bg-white rounded-xl border border-gray-200 shadow-sm text-gray-500 font-bold">
+                No report entries found for {{ activeSite }} <span v-if="activeMonth !== 'All'">in {{ activeMonth }}</span>.
+            </div>
+
+            <div v-else class="space-y-6">
+                <div v-for="monthGroup in monthlyReportSummaries" :key="monthGroup.month" class="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+                    <!-- Month Header Bar -->
+                    <div class="bg-gradient-to-r from-blue-900 to-indigo-900 text-white px-6 py-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                        <div>
+                            <h3 class="text-xl font-bold tracking-wide flex items-center gap-2">
+                                <i data-lucide="calendar" class="w-5 h-5 text-blue-300"></i>
+                                {{ monthGroup.month }}
+                            </h3>
+                            <p class="text-xs text-blue-200 mt-0.5">{{ monthGroup.brandList.length }} Brands • {{ monthGroup.count }} Total Entries</p>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <span class="text-lg font-extrabold text-blue-100 bg-white/10 px-3 py-1 rounded-lg border border-white/10">{{ formatCurrency(monthGroup.total) }}</span>
+                            <button @click="downloadMonthlyReport(monthGroup)" class="bg-white text-blue-900 hover:bg-blue-50 px-3 py-1.5 rounded-lg font-bold text-xs shadow transition-colors flex items-center gap-1.5">
+                                <i data-lucide="download" class="w-3.5 h-3.5"></i> Full Month CSV
+                            </button>
+                        </div>
                     </div>
-                    <div class="text-2xl font-extrabold text-gray-800 mb-6">{{ formatCurrency(report.total) }}</div>
-                    <button @click="downloadMonthlyReport(report)" class="mt-auto w-full bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold py-2 rounded-lg text-sm flex items-center justify-center gap-2 transition-colors border border-gray-300">
-                        <i data-lucide="download" class="w-4 h-4"></i> Download CSV
-                    </button>
+
+                    <!-- Brand Breakdown Grid -->
+                    <div class="p-4 sm:p-6 grid grid-cols-1 lg:grid-cols-2 gap-4">
+                        <div v-for="brand in monthGroup.brandList" :key="brand.vendor" class="bg-gray-50 border border-gray-200 rounded-xl p-4 flex flex-col justify-between hover:border-blue-300 transition-all shadow-sm">
+                            <div class="flex justify-between items-start mb-3 border-b border-gray-200 pb-3">
+                                <div>
+                                    <h4 class="font-bold text-gray-900 text-base flex items-center gap-2">
+                                        <i data-lucide="building" class="w-4 h-4 text-blue-600"></i>
+                                        {{ brand.vendor }}
+                                    </h4>
+                                    <p class="text-xs text-gray-500 font-mono mt-0.5" :class="{'text-red-500 font-bold': !brand.email}">
+                                        {{ brand.email || '⚠️ No email mapped in Brand Directory' }}
+                                    </p>
+                                </div>
+                                <div class="text-right">
+                                    <div class="text-lg font-extrabold text-blue-700">{{ formatCurrency(brand.total) }}</div>
+                                    <div class="text-[10px] text-gray-400 font-bold uppercase tracking-wider">{{ brand.credits.length }} Credits</div>
+                                </div>
+                            </div>
+
+                            <!-- Preview List of Credits for this brand -->
+                            <div class="mb-4 text-xs text-gray-600 space-y-1 max-h-32 overflow-y-auto pr-1">
+                                <div v-for="c in brand.credits" :key="c.id" class="flex justify-between bg-white px-2 py-1.5 rounded border border-gray-100">
+                                    <span class="truncate pr-2 font-medium">{{ c.creditType || 'Promo' }} <span class="text-gray-400">({{ c.dates }})</span></span>
+                                    <span class="font-bold text-gray-800 whitespace-nowrap">{{ formatCurrency(c.amount) }}</span>
+                                </div>
+                            </div>
+
+                            <!-- Action Buttons Attached to Each Brand -->
+                            <div class="flex items-center gap-2 pt-2 border-t border-gray-200">
+                                <button @click="draftEmail(brand)" :disabled="!brand.email" 
+                                        :class="!brand.email ? 'bg-gray-300 text-gray-500 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm'" 
+                                        class="flex-1 py-2 rounded-lg font-bold flex items-center justify-center gap-1.5 text-xs transition-colors">
+                                    <i data-lucide="mail" class="w-3.5 h-3.5"></i> Generate Email
+                                </button>
+                                <button @click="downloadMonthlyReport(brand)" class="px-3 py-2 bg-white border border-gray-300 hover:bg-gray-100 text-gray-700 rounded-lg font-bold flex items-center gap-1.5 text-xs transition-colors shadow-sm">
+                                    <i data-lucide="file-spreadsheet" class="w-3.5 h-3.5 text-green-600"></i> CSV
+                                </button>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </main>
@@ -181,7 +233,6 @@
             <div class="flex justify-between items-end mb-4 shrink-0">
                 <h3 class="text-lg font-bold text-gray-800">Tracking Records</h3>
                 <div class="flex gap-2">
-                    <!-- EXPORT & CLEAR BUTTON -->
                     <button @click="archiveAndExportAnnualReport" class="bg-amber-500 hover:bg-amber-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm font-bold shadow-md transition-colors">
                         <i data-lucide="archive" class="w-4 h-4"></i> Export & Clear
                     </button>
@@ -413,7 +464,6 @@
                             </tr>
                         </thead>
                         <tbody>
-                            <!-- INLINE EDITING ENABLED HERE -->
                             <tr v-for="(brand, index) in masterBrands" :key="brand.id" class="hover:bg-blue-50/50" :class="{'bg-blue-50/30': selectedBrands.includes(brand.id)}">
                                 <td class="font-bold text-gray-900 sticky left-0 bg-white shadow-[1px_0_0_#e5e7eb] z-10 whitespace-nowrap">
                                     <div class="flex items-center gap-2">
