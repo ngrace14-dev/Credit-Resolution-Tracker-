@@ -54,10 +54,9 @@ createApp({
         const treesSalesData = ref(JSON.parse(localStorage.getItem('treesSalesData')) || []);
         watch(treesSalesData, (newVal) => localStorage.setItem('treesSalesData', JSON.stringify(newVal)), { deep: true });
 
-        // Cloud Synced Brands (No longer using localStorage watch)
         const masterBrands = ref([]);
-
         const selectedBrands = ref([]);
+        
         const allBrandsSelected = computed(() => {
             return masterBrands.value.length > 0 && selectedBrands.value.length === masterBrands.value.length;
         });
@@ -84,7 +83,6 @@ createApp({
             }
         };
 
-        // Inline edit saving function for Brands
         const updateBrandField = async (brandId, fieldName, event) => {
             const newValue = event.target.value;
             try {
@@ -105,16 +103,149 @@ createApp({
         const showPromoModal = ref(false);
         const showBrandDropdown = ref(false);
         const editingId = ref(null);
-        
-        // --- EMAIL REPORTS LOGIC ---
         const showReportModal = ref(false);
 
+        // --- NEW: MONTHLY REPORTS TAB LOGIC ---
+        const monthlyReportSummaries = computed(() => {
+            const groups = {};
+            // Gather all credits for the active site (including archived ones)
+            promoCredits.value.filter(c => c && c.site === activeSite.value).forEach(c => {
+                const m = c.trackingMonth || 'Unknown';
+                if (!groups[m]) {
+                    groups[m] = { month: m, total: 0, count: 0, credits: [] };
+                }
+                groups[m].total += (parseFloat(c.amount) || 0);
+                groups[m].count += 1;
+                groups[m].credits.push(c);
+            });
+            // Sort by month order
+            return Object.values(groups).sort((a, b) => calendarMonths.indexOf(a.month) - calendarMonths.indexOf(b.month));
+        });
+
+        const downloadMonthlyReport = (report) => {
+            let csvContent = "Site,Tracking Month,Vendor,Distributor,Credit Type,Dates,Credit Amount,Date Requested,Date Received,Invoice,Status,Archived\n";
+            let csvTotal = 0;
+            
+            report.credits.forEach(c => {
+                const safeSite = `"${(c.site || '').replace(/"/g, '""')}"`;
+                const safeMonth = `"${(c.trackingMonth || '').replace(/"/g, '""')}"`;
+                const safeVendor = `"${(c.vendor || '').replace(/"/g, '""')}"`;
+                const safeDist = `"${(c.distributor || '').replace(/"/g, '""')}"`;
+                const safeType = `"${(c.creditType || '').replace(/"/g, '""')}"`;
+                const safeDates = `"${(c.dates || '').replace(/"/g, '""')}"`;
+                const safeAmount = `"${formatCurrency(c.amount)}"`;
+                const safeReq = `"${(c.dateRequested || '').replace(/"/g, '""')}"`;
+                const safeRec = `"${(c.dateReceived || '').replace(/"/g, '""')}"`;
+                const safeInvoice = `"${(c.invoice || '').replace(/"/g, '""')}"`;
+                const safeStatus = `"${(c.status || '').replace(/"/g, '""')}"`;
+                const safeArchived = `"${c.archived ? 'Yes' : 'No'}"`;
+                
+                csvContent += `${safeSite},${safeMonth},${safeVendor},${safeDist},${safeType},${safeDates},${safeAmount},${safeReq},${safeRec},${safeInvoice},${safeStatus},${safeArchived}\n`;
+                csvTotal += parseFloat(c.amount) || 0;
+            });
+
+            csvContent += `,,,,,, "TOTAL:", "${formatCurrency(csvTotal)}"\n`;
+
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.setAttribute("href", url);
+            const currentYear = new Date().getFullYear();
+            link.setAttribute("download", `${activeSite.value.replace(/\s/g, '_')}_Monthly_Report_${report.month}_${currentYear}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+        };
+
+        // --- DASHBOARD CHARTS LOGIC ---
+        let chartMonthlyInstance = null;
+        let chartDistrosInstance = null;
+        let chartBrandsInstance = null;
+        let chartStoresInstance = null;
+
+        const drawCharts = () => {
+            const activeCredits = promoCredits.value.filter(c => !c.archived);
+
+            const currencyFormatter = (val) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(val);
+            const standardOptions = {
+                responsive: true, maintainAspectRatio: false,
+                plugins: { legend: { display: false }, tooltip: { callbacks: { label: (ctx) => currencyFormatter(ctx.raw) } } }
+            };
+
+            const monthlySums = {};
+            activeCredits.forEach(c => {
+                const m = c.trackingMonth || 'Unknown';
+                monthlySums[m] = (monthlySums[m] || 0) + (parseFloat(c.amount) || 0);
+            });
+            const sortedMonths = calendarMonths.filter(m => monthlySums[m] !== undefined);
+            
+            if(chartMonthlyInstance) chartMonthlyInstance.destroy();
+            chartMonthlyInstance = new Chart(document.getElementById('chartMonthly'), {
+                type: 'bar',
+                data: { labels: sortedMonths, datasets: [{ data: sortedMonths.map(m => monthlySums[m]), backgroundColor: '#4f46e5' }] },
+                options: { ...standardOptions, scales: { y: { ticks: { callback: currencyFormatter } } } }
+            });
+
+            const distroSums = {};
+            activeCredits.forEach(c => {
+                const d = c.distributor || 'Unmapped';
+                distroSums[d] = (distroSums[d] || 0) + (parseFloat(c.amount) || 0);
+            });
+            const topDistros = Object.entries(distroSums).sort((a, b) => b[1] - a[1]).slice(0, 10);
+            
+            if(chartDistrosInstance) chartDistrosInstance.destroy();
+            chartDistrosInstance = new Chart(document.getElementById('chartDistros'), {
+                type: 'bar',
+                data: { labels: topDistros.map(d => d[0]), datasets: [{ data: topDistros.map(d => d[1]), backgroundColor: '#4f46e5' }] },
+                options: { ...standardOptions, indexAxis: 'y', scales: { x: { ticks: { callback: currencyFormatter } } } }
+            });
+
+            const brandSums = {};
+            activeCredits.forEach(c => {
+                const b = c.vendor || 'Unmapped';
+                brandSums[b] = (brandSums[b] || 0) + (parseFloat(c.amount) || 0);
+            });
+            const topBrands = Object.entries(brandSums).sort((a, b) => b[1] - a[1]).slice(0, 10);
+            
+            if(chartBrandsInstance) chartBrandsInstance.destroy();
+            chartBrandsInstance = new Chart(document.getElementById('chartBrands'), {
+                type: 'bar',
+                data: { labels: topBrands.map(b => b[0]), datasets: [{ data: topBrands.map(b => b[1]), backgroundColor: '#14b8a6' }] },
+                options: { ...standardOptions, indexAxis: 'y', scales: { x: { ticks: { callback: currencyFormatter } } } }
+            });
+
+            const storeSums = {};
+            activeCredits.forEach(c => {
+                const s = c.site || 'Unknown';
+                storeSums[s] = (storeSums[s] || 0) + (parseFloat(c.amount) || 0);
+            });
+            
+            if(chartStoresInstance) chartStoresInstance.destroy();
+            chartStoresInstance = new Chart(document.getElementById('chartStores'), {
+                type: 'doughnut',
+                data: { labels: Object.keys(storeSums), datasets: [{ data: Object.values(storeSums), backgroundColor: ['#4f46e5', '#38bdf8', '#14b8a6'] }] },
+                options: {
+                    responsive: true, maintainAspectRatio: false, cutout: '70%',
+                    plugins: { tooltip: { callbacks: { label: (ctx) => ` ${ctx.label}: ${currencyFormatter(ctx.raw)}` } }, legend: { position: 'bottom' } }
+                }
+            });
+        };
+
+        watch(activeTab, (newTab) => {
+            if (newTab === 'Dashboard') {
+                nextTick(() => { drawCharts(); });
+            }
+        });
+
+        watch(promoCredits, () => {
+            if (activeTab.value === 'Dashboard') { drawCharts(); }
+        }, { deep: true });
+
+        // --- EMAIL DRAFTER LOGIC ---
         const groupedPendingReports = computed(() => {
             if (!promoCredits.value) return [];
-            
-            // Only grab active pending credits (ignoring archived)
             let pending = promoCredits.value.filter(c => c && c.site === activeSite.value && (c.status || '').toLowerCase() === 'pending' && c.archived !== true);
-            
             if (activeMonth.value !== 'All') {
                 pending = pending.filter(c => c.trackingMonth === activeMonth.value);
             }
@@ -124,18 +255,11 @@ createApp({
                 const vendorName = c.vendor || 'Unmapped Brand';
                 if (!groups[vendorName]) {
                     const brandInfo = masterBrands.value.find(b => (b.vendor || '').toLowerCase() === vendorName.toLowerCase()) || {};
-                    groups[vendorName] = {
-                        vendor: vendorName,
-                        email: brandInfo.email || '',
-                        rep: brandInfo.rep || '',
-                        credits: [],
-                        total: 0
-                    };
+                    groups[vendorName] = { vendor: vendorName, email: brandInfo.email || '', rep: brandInfo.rep || '', credits: [], total: 0 };
                 }
                 groups[vendorName].credits.push(c);
                 groups[vendorName].total += (parseFloat(c.amount) || 0);
             });
-            
             return Object.values(groups).sort((a, b) => a.vendor.localeCompare(b.vendor));
         });
 
@@ -150,22 +274,16 @@ createApp({
             const monthStr = activeMonth.value === 'All' ? 'Current' : activeMonth.value;
             const periodStr = `${monthStr} ${currentYear}`;
 
-            // --- 1. GENERATE & DOWNLOAD ITEMIZED CSV ---
             let csvContent = "";
             csvContent += "Date,Location,Brand,Product / Description,Discount Title,Tracking ID / Invoice,Entry Type,Credit Amount\n";
-            
             let csvTotal = 0;
 
             report.credits.forEach(c => {
                 const isAggregated = c.creditType && String(c.creditType).includes('Aggregated POS Sales');
-                
                 let matchedRawSales = [];
                 if (isAggregated) {
                     matchedRawSales = treesSalesData.value.filter(sale => {
-                        return (sale.brand || '').toLowerCase() === (c.vendor || '').toLowerCase() &&
-                               sale.detectedSite === c.site &&
-                               sale.month === c.trackingMonth &&
-                               sale.status === 'Synced';
+                        return (sale.brand || '').toLowerCase() === (c.vendor || '').toLowerCase() && sale.detectedSite === c.site && sale.month === c.trackingMonth && sale.status === 'Synced';
                     });
                 }
 
@@ -211,10 +329,8 @@ createApp({
             document.body.removeChild(link);
             URL.revokeObjectURL(url);
 
-            // --- 2. DRAFT THE EMAIL ---
             const cleanEmails = report.email.split(/[,;\s]+/).map(e => e.trim()).filter(Boolean).join(',');
             const senderEmail = 'nicholas.grace@rredco.com';
-            
             const subject = `credit report - ${storeName} promotions ${periodStr}`;
 
             let body = `Hello ${report.vendor},\n\n`;
@@ -246,7 +362,6 @@ createApp({
             window.location.href = `mailto:${cleanEmails}?cc=${encodedCc}&subject=${encodedSubject}&body=${encodedBody}`;
         };
 
-        // --- ARCHIVE & EXPORT LOGIC ---
         const archiveAndExportAnnualReport = async () => {
             const creditsToArchive = promoCredits.value.filter(c => 
                 (c.status === 'Applied' || c.status === 'Uncollectable') && c.archived !== true
@@ -305,7 +420,6 @@ createApp({
             }
         };
 
-        // --- IMPORTER STATE ---
         const showImportModal = ref(false);
         const rawPasteData = ref('');
         const pastedGrid = ref([]);
@@ -346,7 +460,6 @@ createApp({
                     activeSite.value = managerData.access[0];
                     isManagerUnlocked.value = true;
                     
-                    // Promo Credits Listener
                     unsubscribeSnapshot = onSnapshot(collection(db, "promoCredits"), (snapshot) => {
                         const fetchedCredits = [];
                         snapshot.forEach(docSnap => { fetchedCredits.push({ id: docSnap.id, ...docSnap.data() }); });
@@ -354,7 +467,6 @@ createApp({
                         promoCredits.value = fetchedCredits;
                     });
 
-                    // Brands Listener
                     unsubscribeBrands = onSnapshot(collection(db, "brands"), (snapshot) => {
                         const fetchedBrands = [];
                         snapshot.forEach(docSnap => { fetchedBrands.push({ id: docSnap.id, ...docSnap.data() }); });
@@ -362,19 +474,14 @@ createApp({
                         if (fetchedBrands.length === 0) {
                             const localBrands = JSON.parse(localStorage.getItem('masterBrands') || '[]');
                             if (localBrands.length > 0) {
-                                console.log("Migrating local brands to Firestore...");
                                 const batch = writeBatch(db);
                                 localBrands.forEach(b => {
                                     const newDocRef = doc(collection(db, "brands"));
                                     batch.set(newDocRef, b);
                                 });
-                                batch.commit().then(() => {
-                                    console.log("Migration complete!");
-                                    localStorage.removeItem('masterBrands');
-                                });
+                                batch.commit().then(() => { localStorage.removeItem('masterBrands'); });
                             }
                         }
-
                         fetchedBrands.sort((a, b) => (a.vendor || '').localeCompare(b.vendor || ''));
                         masterBrands.value = fetchedBrands;
                     });
@@ -431,7 +538,6 @@ createApp({
         };
 
         const filteredCredits = computed(() => {
-            // EXCLUDE ARCHIVED CREDITS FROM THE MAIN TRACKER
             let base = promoCredits.value.filter(c => c && c.site === activeSite.value && c.archived !== true);
             if (activeMonth.value !== 'All') base = base.filter(c => c.trackingMonth === activeMonth.value);
             if (searchQuery.value.trim() !== '') {
@@ -831,7 +937,8 @@ createApp({
             masterBrands, filteredBrands, showBrandDropdown, selectBrand,
             selectedBrands, allBrandsSelected, toggleAllBrands, deleteSelectedBrands, 
             showReportModal, groupedPendingReports, draftEmail,
-            archiveAndExportAnnualReport, // <-- NEW FUNCTION EXPORTED HERE
+            archiveAndExportAnnualReport, 
+            monthlyReportSummaries, downloadMonthlyReport, // <-- NEW FOR REPORTS TAB
             showImportModal, openImportModal, closeImportModal, resetImport, 
             rawPasteData, pastedGrid, displayGrid, mappedHeaders, availableHeaders, processRawPaste, processImport,
             showBrandImportModal, brandPasteData, brandPastedGrid, brandMappedHeaders, brandAvailableHeaders,
