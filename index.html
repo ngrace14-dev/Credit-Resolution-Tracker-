@@ -9,6 +9,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script> <!-- CHART.JS FOR DASHBOARD -->
     <link href="https://fonts.googleapis.com/css2?family=Calibri:wght@400;700&display=swap" rel="stylesheet">
     
     <!-- External CSS -->
@@ -73,6 +74,7 @@
 
         <!-- APP TABS NAV -->
         <div v-if="isManagerUnlocked" class="bg-blue-900 px-4 md:px-6 pt-2 flex gap-2 shrink-0 z-10 shadow-sm overflow-x-auto no-scrollbar">
+            <button @click="activeTab = 'Dashboard'" :class="activeTab === 'Dashboard' ? 'bg-gray-100 text-blue-900 font-bold' : 'bg-blue-800/50 text-blue-200 hover:bg-blue-800 hover:text-white'" class="px-6 py-2 rounded-t-xl text-sm transition-colors tracking-wide whitespace-nowrap">Dashboard</button>
             <button @click="activeTab = 'Tracker'" :class="activeTab === 'Tracker' ? 'bg-gray-100 text-blue-900 font-bold' : 'bg-blue-800/50 text-blue-200 hover:bg-blue-800 hover:text-white'" class="px-6 py-2 rounded-t-xl text-sm transition-colors tracking-wide whitespace-nowrap">Main Tracker</button>
             <button @click="activeTab = 'Sales'" :class="activeTab === 'Sales' ? 'bg-gray-100 text-blue-900 font-bold' : 'bg-blue-800/50 text-blue-200 hover:bg-blue-800 hover:text-white'" class="px-6 py-2 rounded-t-xl text-sm transition-colors tracking-wide flex items-center gap-2 whitespace-nowrap">Trees Sales CSV <span v-if="filteredTreesSalesData.length > 0 && activeTab !== 'Sales'" class="bg-blue-500 text-white text-[10px] px-1.5 py-0.5 rounded-full">{{ filteredTreesSalesData.length }}</span></button>
             <button @click="activeTab = 'Brands'" :class="activeTab === 'Brands' ? 'bg-gray-100 text-blue-900 font-bold' : 'bg-blue-800/50 text-blue-200 hover:bg-blue-800 hover:text-white'" class="px-6 py-2 rounded-t-xl text-sm transition-colors tracking-wide whitespace-nowrap">Brand Directory</button>
@@ -98,7 +100,42 @@
             </div>
         </div>
 
-        <!-- MAIN DASHBOARD TAB -->
+        <!-- DASHBOARD TAB -->
+        <main v-if="isManagerUnlocked && activeTab === 'Dashboard'" class="flex-1 flex flex-col p-4 md:p-6 bg-gray-100 overflow-y-auto">
+            <div class="mb-4">
+                <h2 class="text-xl font-bold text-gray-800">Financial Overview</h2>
+                <p class="text-sm text-gray-500">Live aggregated metrics for all non-archived promo credits.</p>
+            </div>
+            
+            <div class="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                <!-- Top Left: Monthly Credits -->
+                <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
+                    <h3 class="font-bold text-gray-800 mb-1">Monthly distributor credits</h3>
+                    <p class="text-xs text-gray-500 mb-4">Credit total per report month</p>
+                    <div class="h-64 relative"><canvas id="chartMonthly"></canvas></div>
+                </div>
+
+                <!-- Top Right: Top 10 Distros -->
+                <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
+                    <h3 class="font-bold text-gray-800 mb-4">Top 10 distributors</h3>
+                    <div class="h-64 relative"><canvas id="chartDistros"></canvas></div>
+                </div>
+
+                <!-- Bottom Left: Top 10 Brands -->
+                <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
+                    <h3 class="font-bold text-gray-800 mb-4">Top 10 brands</h3>
+                    <div class="h-64 relative"><canvas id="chartBrands"></canvas></div>
+                </div>
+
+                <!-- Bottom Right: Credits by Store -->
+                <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
+                    <h3 class="font-bold text-gray-800 mb-4">Credits by store</h3>
+                    <div class="h-64 relative flex items-center justify-center"><canvas id="chartStores"></canvas></div>
+                </div>
+            </div>
+        </main>
+
+        <!-- MAIN DASHBOARD TAB (TRACKER) -->
         <main v-if="isManagerUnlocked && activeTab === 'Tracker'" class="flex-1 flex flex-col p-4 md:p-6 pt-4 bg-gray-100 overflow-hidden">
             <div class="flex flex-col sm:flex-row gap-4 md:gap-6 mb-4 shrink-0">
                 <div class="bg-white border-l-4 border-blue-600 rounded-xl p-4 md:p-5 flex-1 shadow-sm flex items-center justify-between">
@@ -121,7 +158,7 @@
             <div class="flex justify-between items-end mb-4 shrink-0">
                 <h3 class="text-lg font-bold text-gray-800">Tracking Records</h3>
                 <div class="flex gap-2">
-                    <!-- NEW EXPORT & CLEAR BUTTON -->
+                    <!-- EXPORT & CLEAR BUTTON -->
                     <button @click="archiveAndExportAnnualReport" class="bg-amber-500 hover:bg-amber-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm font-bold shadow-md transition-colors">
                         <i data-lucide="archive" class="w-4 h-4"></i> Export & Clear
                     </button>
