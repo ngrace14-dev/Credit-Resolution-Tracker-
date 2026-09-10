@@ -36,7 +36,6 @@ const { createApp, ref, computed, nextTick, onMounted, watch } = window.Vue;
 
 createApp({
     setup() {
-        // --- GLOBAL APP STATE ---
         const isManagerUnlocked = ref(false);
         const loggedInUser = ref('');
         const emailInput = ref('');
@@ -45,7 +44,6 @@ createApp({
         const activeSite = ref('Red Bluff');
         const activeTab = ref('Tracker');
         
-        // --- SYSTEM USERS ---
         const systemUsers = {
             'lenay@rredco.com': { name: 'Lenay A.', access: ['Red Bluff', 'Redding'] },
             'tricia@rredco.com': { name: 'Tricia K.', access: ['Red Bluff', 'Redding'] },
@@ -53,26 +51,20 @@ createApp({
             'nicholas.grace@rredco.com': { name: 'Nicholas G.', access: ['Red Bluff', 'Redding'] } 
         };
 
-        // --- LOCAL STORAGE DATA ---
         const treesSalesData = ref(JSON.parse(localStorage.getItem('treesSalesData')) || []);
         watch(treesSalesData, (newVal) => localStorage.setItem('treesSalesData', JSON.stringify(newVal)), { deep: true });
 
-        const defaultBrands = [];
-        const masterBrands = ref(JSON.parse(localStorage.getItem('masterBrands')) || defaultBrands);
+        const masterBrands = ref(JSON.parse(localStorage.getItem('masterBrands')) || []);
         watch(masterBrands, (newVal) => localStorage.setItem('masterBrands', JSON.stringify(newVal)), { deep: true });
 
-        // --- BRAND BULK DELETE LOGIC ---
         const selectedBrands = ref([]);
         const allBrandsSelected = computed(() => {
             return masterBrands.value.length > 0 && selectedBrands.value.length === masterBrands.value.length;
         });
         
         const toggleAllBrands = () => {
-            if (allBrandsSelected.value) {
-                selectedBrands.value = [];
-            } else {
-                selectedBrands.value = masterBrands.value.map(b => b.vendor).filter(Boolean);
-            }
+            if (allBrandsSelected.value) selectedBrands.value = [];
+            else selectedBrands.value = masterBrands.value.map(b => b.vendor).filter(Boolean);
         };
 
         const deleteSelectedBrands = () => {
@@ -83,7 +75,6 @@ createApp({
             }
         };
 
-        // --- PROMO TRACKER STATE ---
         const promoCredits = ref([]);
         const calendarMonths = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
         const activeMonth = ref('August');
@@ -93,7 +84,6 @@ createApp({
         const showBrandDropdown = ref(false);
         const editingId = ref(null);
         
-        // --- IMPORTER STATE ---
         const showImportModal = ref(false);
         const rawPasteData = ref('');
         const pastedGrid = ref([]);
@@ -101,6 +91,12 @@ createApp({
         
         const showBrandImportModal = ref(false);
         const brandPasteData = ref('');
+        const brandPastedGrid = ref([]);
+        const brandMappedHeaders = ref([]);
+        const brandAvailableHeaders = ref([
+            '-- Ignore Column --', 'Brand', 'Rep', 'Email', 'Name as appears in TREES',
+            'Distro', 'Asset Library', 'Order From', 'Payee', 'Notes'
+        ]);
         
         const availableHeaders = ref([
             '-- Ignore Column --', 'Tracking Month', 'Vendor', 'Distributor', 'Credit Type',
@@ -117,7 +113,6 @@ createApp({
         const form = ref(getEmptyForm());
         let unsubscribeSnapshot = null;
 
-        // --- AUTHENTICATION & MOUNT ---
         onMounted(() => {
             refreshIcons();
             onAuthStateChanged(auth, (user) => {
@@ -151,7 +146,6 @@ createApp({
 
         const forceLock = () => { signOut(auth).then(() => { isManagerUnlocked.value = false; loggedInUser.value = ''; }); };
 
-        // --- COMPUTED PROPERTIES ---
         const filteredBrands = computed(() => {
             const query = (form.value.vendor || '').toLowerCase();
             if (!query) return masterBrands.value;
@@ -224,7 +218,6 @@ createApp({
         const totalApplied = computed(() => filteredCredits.value.filter(c => c.status === 'Applied').reduce((sum, c) => sum + (parseFloat(c.amount) || 0), 0));
         const unsyncedSalesCount = computed(() => filteredTreesSalesData.value.filter(s => s.status === 'Unsynced').length);
 
-        // --- MODAL & CRUD LOGIC ---
         const openPromoModal = () => { form.value = getEmptyForm(); editingId.value = null; showPromoModal.value = true; refreshIcons(); };
         const closePromoModal = () => { showPromoModal.value = false; showBrandDropdown.value = false; };
 
@@ -360,7 +353,6 @@ createApp({
             } catch (err) { alert("Failed to save import to cloud."); }
         };
 
-        // --- TREES POS AGGREGATOR ---
         const handleTreesCsvUpload = (e) => {
             const file = e.target.files[0];
             if (!file) return;
@@ -481,79 +473,96 @@ createApp({
             } catch (err) { alert("Failed to sync aggregated credits to the cloud."); }
         };
         
-        // --- BRAND DIRECTORY IMPORTER LOGIC ---
-        const processBrandPaste = () => {
+        // --- NEW DYNAMIC BRAND VISUAL GRID PARSER ---
+        const resetBrandImport = () => {
+            brandPastedGrid.value = [];
+            brandMappedHeaders.value = [];
+            brandPasteData.value = '';
+        };
+
+        const processBrandRawPaste = () => {
             const text = brandPasteData.value;
             if (!text.trim()) return;
-            
             const rows = text.split(/\r?\n/).filter(r => r.trim() !== '');
-            if (rows.length === 0) return;
+            const grid = rows.map(r => r.split('\t').map(c => c.trim()));
+            if (grid.length === 0) return;
+            
+            brandPastedGrid.value = grid;
+            
+            // Auto-detect columns based on the first row you pasted
+            const firstRow = grid[0].map(c => c.toLowerCase());
+            brandMappedHeaders.value = firstRow.map(cell => {
+                if (cell.includes('brand') || cell.includes('vendor')) return 'Brand';
+                if (cell.includes('rep')) return 'Rep';
+                if (cell.includes('email')) return 'Email';
+                if (cell.includes('trees')) return 'Name as appears in TREES';
+                if (cell.includes('distro')) return 'Distro';
+                if (cell.includes('asset')) return 'Asset Library';
+                if (cell.includes('order')) return 'Order From';
+                if (cell.includes('payee')) return 'Payee';
+                if (cell.includes('note')) return 'Notes';
+                return '-- Ignore Column --';
+            });
+        };
 
+        const processBrandImport = () => {
             let updatedCount = 0;
             let newCount = 0;
-
-            const firstRowRaw = rows[0].toLowerCase();
-            const dataRows = firstRowRaw.includes('brand') ? rows.slice(1) : rows;
-
-            // Detect if they copied Column A ("BRANDS" grouping column) vs starting at Column B
-            let offset = 0;
-            const testCols = rows[0].split('\t').map(c => c.toLowerCase().trim());
-            if (testCols[1] === 'brand' || testCols[2] === 'rep' || testCols.length >= 10) {
-                offset = 1; // Shift everything over by 1 column
-            }
-
-            dataRows.forEach(row => {
-                const cols = row.split('\t').map(c => c.trim());
-                
-                // Secondary check: if row data shifted but header didn't catch it
-                let currentOffset = offset;
-                if (offset === 0 && cols.length > 3 && cols[0].length <= 1 && cols[1].length > 1) {
-                    currentOffset = 1;
+            
+            // Detect if the top row of the grid is a header row (so we don't import "Email" as a brand name)
+            let startRow = 0;
+            if (brandPastedGrid.value.length > 0) {
+                const firstRowStr = brandPastedGrid.value[0].join('').toLowerCase();
+                if (firstRowStr.includes('brand') && (firstRowStr.includes('email') || firstRowStr.includes('rep') || firstRowStr.includes('distro'))) {
+                    startRow = 1;
                 }
-
-                const vendorName = cols[currentOffset + 0] || '';
-                const repName = cols[currentOffset + 1] || '';
-                const email = cols[currentOffset + 2] || '';
-                const treesName = cols[currentOffset + 3] || '';
-                const assetLibrary = cols[currentOffset + 4] || '';
-                const distributor = cols[currentOffset + 5] || ''; 
-                const orderFrom = cols[currentOffset + 6] || '';
-                const payee = cols[currentOffset + 7] || '';
-                const notes = cols[currentOffset + 8] || '';
-
-                if (!vendorName || vendorName.length === 1) return; 
-
+            }
+            
+            for (let r = startRow; r < brandPastedGrid.value.length; r++) {
+                const row = brandPastedGrid.value[r];
+                let currentBrand = {};
+                
+                // Map the row data to the dropdown headers you selected
+                for (let c = 0; c < row.length; c++) {
+                    const header = brandMappedHeaders.value[c];
+                    if (header === '-- Ignore Column --') continue;
+                    currentBrand[header] = row[c] || '';
+                }
+                
+                const vendorName = currentBrand['Brand'];
+                if (!vendorName || vendorName.length <= 1) continue; 
+                
                 const existingBrand = masterBrands.value.find(b => (b.vendor || '').toLowerCase() === vendorName.toLowerCase());
                 
                 if (existingBrand) {
-                    existingBrand.rep = repName;
-                    existingBrand.email = email;
-                    existingBrand.treesName = treesName;
-                    existingBrand.assetLibrary = assetLibrary;
-                    existingBrand.distributor = distributor;
-                    existingBrand.orderFrom = orderFrom;
-                    existingBrand.payee = payee;
-                    existingBrand.notes = notes;
+                    if (currentBrand['Rep'] !== undefined) existingBrand.rep = currentBrand['Rep'];
+                    if (currentBrand['Email'] !== undefined) existingBrand.email = currentBrand['Email'];
+                    if (currentBrand['Name as appears in TREES'] !== undefined) existingBrand.treesName = currentBrand['Name as appears in TREES'];
+                    if (currentBrand['Distro'] !== undefined) existingBrand.distributor = currentBrand['Distro'];
+                    if (currentBrand['Asset Library'] !== undefined) existingBrand.assetLibrary = currentBrand['Asset Library'];
+                    if (currentBrand['Order From'] !== undefined) existingBrand.orderFrom = currentBrand['Order From'];
+                    if (currentBrand['Payee'] !== undefined) existingBrand.payee = currentBrand['Payee'];
+                    if (currentBrand['Notes'] !== undefined) existingBrand.notes = currentBrand['Notes'];
                     updatedCount++;
                 } else {
-                    masterBrands.value.push({ 
-                        vendor: vendorName, 
-                        rep: repName,
-                        email: email,
-                        treesName: treesName,
-                        assetLibrary: assetLibrary,
-                        distributor: distributor,
-                        orderFrom: orderFrom,
-                        payee: payee,
-                        notes: notes
+                    masterBrands.value.push({
+                        vendor: vendorName,
+                        rep: currentBrand['Rep'] || '',
+                        email: currentBrand['Email'] || '',
+                        treesName: currentBrand['Name as appears in TREES'] || '',
+                        distributor: currentBrand['Distro'] || '',
+                        assetLibrary: currentBrand['Asset Library'] || '',
+                        orderFrom: currentBrand['Order From'] || '',
+                        payee: currentBrand['Payee'] || '',
+                        notes: currentBrand['Notes'] || ''
                     });
                     newCount++;
                 }
-            });
-
+            }
+            
             masterBrands.value.sort((a, b) => (a.vendor || '').localeCompare(b.vendor || ''));
             alert(`Success! Added ${newCount} new brands and FORCE UPDATED ${updatedCount} existing entries.`);
-            brandPasteData.value = '';
+            resetBrandImport();
             showBrandImportModal.value = false;
         };
 
@@ -569,7 +578,9 @@ createApp({
             selectedBrands, allBrandsSelected, toggleAllBrands, deleteSelectedBrands, 
             showImportModal, openImportModal, closeImportModal, resetImport, 
             rawPasteData, pastedGrid, displayGrid, mappedHeaders, availableHeaders, processRawPaste, processImport,
-            showBrandImportModal, brandPasteData, processBrandPaste,
+            // Exposed Dynamic Brand Import variables
+            showBrandImportModal, brandPasteData, brandPastedGrid, brandMappedHeaders, brandAvailableHeaders,
+            resetBrandImport, processBrandRawPaste, processBrandImport,
             calendarMonths, activeMonth, detectMonthInString, searchQuery
         };
     }
