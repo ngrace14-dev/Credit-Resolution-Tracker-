@@ -101,7 +101,6 @@
 
         <!-- MAIN DASHBOARD TAB -->
         <main v-if="isManagerUnlocked && activeTab === 'Tracker'" class="flex-1 flex flex-col p-4 md:p-6 pt-4 bg-gray-100 overflow-hidden">
-            <!-- (Tracker content remains unchanged from your previous version) -->
             <div class="flex flex-col sm:flex-row gap-4 md:gap-6 mb-4 md:mb-6 shrink-0">
                 <div class="bg-white border-l-4 border-blue-600 rounded-xl p-4 md:p-5 flex-1 shadow-sm flex items-center justify-between">
                     <div>
@@ -192,7 +191,6 @@
 
         <!-- TREES SALES REPORTS TAB -->
         <main v-if="isManagerUnlocked && activeTab === 'Sales'" class="flex-1 flex flex-col p-4 md:p-6 pt-4 bg-gray-100 overflow-hidden">
-            <!-- (Sales content remains unchanged) -->
             <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 shrink-0 gap-4">
                 <div>
                     <h2 class="text-xl font-bold text-gray-800 leading-tight">Trees POS Sales (Global)</h2>
@@ -264,18 +262,27 @@
                     <h2 class="text-xl font-bold text-gray-800 leading-tight">Brand Directory & Contacts</h2>
                     <p class="text-sm text-gray-500 mt-1">Map vendor details here to enable automated location-based credit reports.</p>
                 </div>
-                <button @click="showBrandImportModal = true" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-bold shadow-md transition-colors flex items-center gap-2 text-sm whitespace-nowrap">
-                    <i data-lucide="clipboard-paste" class="w-4 h-4"></i> Paste Contact Roster
-                </button>
+                <div class="flex gap-2">
+                    <button v-if="selectedBrands.length > 0" @click="deleteSelectedBrands" class="px-5 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg font-bold shadow-md transition-colors flex items-center gap-2 text-sm whitespace-nowrap">
+                        <i data-lucide="trash-2" class="w-4 h-4"></i> Delete Selected ({{ selectedBrands.length }})
+                    </button>
+                    <button @click="showBrandImportModal = true" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-bold shadow-md transition-colors flex items-center gap-2 text-sm whitespace-nowrap">
+                        <i data-lucide="clipboard-paste" class="w-4 h-4"></i> Paste Contact Roster
+                    </button>
+                </div>
             </div>
 
             <div class="bg-white rounded-xl border border-gray-300 shadow-sm flex-1 flex flex-col min-h-0 overflow-hidden">
                 <div class="overflow-auto flex-1 relative">
-                    <!-- Updated Table to match the screenshot -->
                     <table class="excel-table min-w-max">
                         <thead class="sticky top-0 z-10 shadow-sm bg-gray-50 whitespace-nowrap">
                             <tr>
-                                <th>Brand</th>
+                                <th class="whitespace-nowrap">
+                                    <div class="flex items-center gap-2">
+                                        <input type="checkbox" :checked="allBrandsSelected" @change="toggleAllBrands" class="w-4 h-4 cursor-pointer text-blue-600">
+                                        Brand
+                                    </div>
+                                </th>
                                 <th>Rep</th>
                                 <th>Email</th>
                                 <th>Name as appears in TREES</th>
@@ -287,8 +294,13 @@
                             </tr>
                         </thead>
                         <tbody>
-                            <tr v-for="(brand, index) in masterBrands" :key="index" class="hover:bg-blue-50/50">
-                                <td class="font-bold text-gray-900 sticky left-0 bg-white shadow-[1px_0_0_#e5e7eb] z-10">{{ brand.vendor }}</td>
+                            <tr v-for="(brand, index) in masterBrands" :key="index" class="hover:bg-blue-50/50" :class="{'bg-blue-50/30': selectedBrands.includes(brand.vendor)}">
+                                <td class="font-bold text-gray-900 sticky left-0 bg-white shadow-[1px_0_0_#e5e7eb] z-10 whitespace-nowrap">
+                                    <div class="flex items-center gap-2">
+                                        <input type="checkbox" :value="brand.vendor" v-model="selectedBrands" class="w-4 h-4 cursor-pointer text-blue-600">
+                                        {{ brand.vendor }}
+                                    </div>
+                                </td>
                                 <td><input type="text" v-model="brand.rep" placeholder="-" class="w-full min-w-[120px] bg-transparent border-b border-dashed border-transparent hover:border-gray-300 focus:border-blue-500 outline-none px-1 py-0.5"></td>
                                 <td><input type="email" v-model="brand.email" placeholder="-" class="w-full min-w-[180px] bg-transparent border-b border-dashed border-transparent hover:border-gray-300 focus:border-blue-500 outline-none px-1 py-0.5 text-blue-600"></td>
                                 <td><input type="text" v-model="brand.treesName" placeholder="-" class="w-full min-w-[160px] bg-transparent border-b border-dashed border-transparent hover:border-gray-300 focus:border-blue-500 outline-none px-1 py-0.5"></td>
@@ -306,7 +318,6 @@
 
         <!-- ADD/EDIT PROMO MODAL -->
         <div v-if="showPromoModal" class="fixed inset-0 bg-black/60 flex items-center justify-center z-50 backdrop-blur-sm p-2" @click.self="closePromoModal">
-            <!-- (Modal content remains unchanged) -->
             <div class="bg-white rounded-2xl shadow-2xl w-full md:w-[700px] max-w-[95vw] flex flex-col overflow-hidden max-h-[95vh] md:max-h-[80vh]">
                 <div class="px-4 md:px-6 py-4 border-b bg-gray-50 flex justify-between items-center shrink-0">
                     <h2 class="font-bold text-lg md:text-xl text-gray-800 flex items-center gap-2"><i data-lucide="file-edit" class="w-5 h-5 text-blue-600"></i> {{ editingId ? 'Edit Promo Credit' : 'Log New Credit' }}</h2>
@@ -378,7 +389,7 @@
                 </div>
                 <div class="p-6">
                     <div class="bg-indigo-50 border border-indigo-200 p-4 rounded-xl text-sm text-indigo-900 mb-4 shadow-sm">
-                        <strong>Important:</strong> Please highlight and copy your spreadsheet <strong>including the blue header row</strong> (Brand, Rep, Email, etc.). Our smart parser will automatically find the right columns based on your headers!
+                        <strong>Important:</strong> Please highlight and copy your spreadsheet <strong>including the blue header row</strong> (Brand, Rep, Email, etc.). Our parser automatically finds the right columns based on your headers!
                     </div>
                     <textarea v-model="brandPasteData" class="w-full h-48 border-2 border-dashed border-gray-300 rounded-xl p-4 font-mono text-sm outline-none focus:border-indigo-500" placeholder="Paste your Excel data here..."></textarea>
                 </div>
@@ -393,7 +404,6 @@
 
         <!-- DYNAMIC GRID IMPORT MODAL (Promo Credits) -->
         <div v-if="showImportModal" class="fixed inset-0 bg-black/60 flex items-center justify-center z-50 backdrop-blur-sm p-2" @click.self="closeImportModal">
-            <!-- (Import modal remains unchanged) -->
             <div class="bg-white rounded-2xl shadow-2xl w-full md:w-[95vw] max-w-7xl flex flex-col overflow-hidden max-h-[95vh] md:max-h-[90vh]">
                 <div class="px-4 md:px-6 py-4 border-b bg-gray-50 flex justify-between items-center shrink-0">
                     <h2 class="font-bold text-lg md:text-xl text-gray-800 flex items-center gap-2"><i data-lucide="grid" class="w-5 h-5 text-indigo-600"></i> Excel Import Hub</h2>
