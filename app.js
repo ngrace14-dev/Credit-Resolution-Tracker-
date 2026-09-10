@@ -1,14 +1,21 @@
-
 // app.js
+
+// 1. FIREBASE IMPORTS
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-app.js";
 import {
     getFirestore,
     collection,
-    addDoc
+    addDoc,
+    doc,
+    updateDoc,
+    deleteDoc,
+    writeBatch,
+    onSnapshot
 } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js";
 
+// 2. FIREBASE CONFIGURATION
 const firebaseConfig = {
-    apiKey: "PASTE_YOUR_FULL_API_KEY_HERE",
+    apiKey: "AIzaSyAslKhO_Wn2l1paJkqWj5lhxX_2YSekynk",
     authDomain: "rredco-database.firebaseapp.com",
     projectId: "rredco-database",
     storageBucket: "rredco-database.firebasestorage.app",
@@ -17,9 +24,12 @@ const firebaseConfig = {
     measurementId: "G-PGY27N2N17"
 };
 
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
-const { createApp, ref, computed, nextTick, onMounted } = window.Vue;
+const firebaseApp = initializeApp(firebaseConfig);
+const db = getFirestore(firebaseApp);
+console.log("Firebase Connected", db);
+
+// 3. VUE APP INIT
+const { createApp, ref, computed, nextTick, onMounted, watch } = window.Vue;
 
 createApp({
     setup() {
@@ -29,7 +39,10 @@ createApp({
         const activeSite = ref('Red Bluff');
         
         const activeTab = ref('Tracker');
-        const treesSalesData = ref([]);
+        
+        // Save Trees POS data to local storage so you don't burn Firebase limits on raw data
+        const treesSalesData = ref(JSON.parse(localStorage.getItem('treesSalesData')) || []);
+        watch(treesSalesData, (newVal) => localStorage.setItem('treesSalesData', JSON.stringify(newVal)), { deep: true });
 
         const systemUsers = {
             '4095': { name: 'Lenay A.', access: ['Red Bluff', 'Redding'] },
@@ -44,7 +57,7 @@ createApp({
         const activeMonth = ref('August');
         const searchQuery = ref('');
 
-        const masterBrands = ref([
+        const defaultBrands = [
             { vendor: "3 Bros", distributor: "Hash Tag Distribution" },
             { vendor: "710 LABS", distributor: "Fluids Manufacturing Inc" },
             { vendor: "ABX", distributor: "Groundwork Holdings, Inc." },
@@ -59,7 +72,10 @@ createApp({
             { vendor: "RAW GARDEN", distributor: "Raw Garden" },
             { vendor: "STIIIZY", distributor: "Ironworks Collective Inc" },
             { vendor: "WYLD", distributor: "Northwest Confections California LLC" }
-        ]);
+        ];
+
+        const masterBrands = ref(JSON.parse(localStorage.getItem('masterBrands')) || defaultBrands);
+        watch(masterBrands, (newVal) => localStorage.setItem('masterBrands', JSON.stringify(newVal)), { deep: true });
 
         const showPromoModal = ref(false);
         const showBrandDropdown = ref(false);
@@ -92,6 +108,23 @@ createApp({
         });
         
         const form = ref(getEmptyForm());
+
+        // --- REAL-TIME FIREBASE SYNC ON LOAD ---
+        onMounted(() => {
+            refreshIcons();
+            
+            // Listen to the cloud and populate the table automatically
+            onSnapshot(collection(db, "promoCredits"), (snapshot) => {
+                const fetchedCredits = [];
+                snapshot.forEach(docSnap => {
+                    fetchedCredits.push({ id: docSnap.id, ...docSnap.data() });
+                });
+                
+                // Sort newest items first
+                fetchedCredits.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+                promoCredits.value = fetchedCredits;
+            });
+        });
 
         const handleLogin = () => {
             const pin = pinInput.value.trim();
@@ -220,36 +253,34 @@ createApp({
             form.value.attachmentData = "mock_file_data"; 
         };
 
-       const saveCredit = async () => {
-    if (!form.value.vendor) return alert("Vendor (Brand) is required.");
-    if (!form.value.trackingMonth) return alert("Tracking Month is required.");
+        // --- FIREBASE CRUD LOGIC ---
 
-    const payload = {
-        ...form.value,
-        site: activeSite.value,
-        createdAt: new Date()
-    };
+        const saveCredit = async () => {
+            if (!form.value.vendor) return alert("Vendor (Brand) is required.");
+            if (!form.value.trackingMonth) return alert("Tracking Month is required.");
 
-    try {
-        await addDoc(collection(db, "promoCredits"), payload);
+            const payload = {
+                ...form.value,
+                site: activeSite.value,
+                createdAt: Date.now()
+            };
 
-        if (editingId.value) {
-            const idx = promoCredits.value.findIndex(c => c.id === editingId.value);
-            if (idx !== -1) promoCredits.value[idx] = payload;
-        } else {
-            payload.id = Date.now().toString() + Math.random().toString(36).substr(2,5);
-            promoCredits.value.unshift(payload);
-        }
+            try {
+                if (editingId.value) {
+                    await updateDoc(doc(db, "promoCredits", editingId.value), payload);
+                } else {
+                    await addDoc(collection(db, "promoCredits"), payload);
+                }
 
-        alert("Credit saved successfully!");
-        closePromoModal();
-        refreshIcons();
+                alert("Credit saved successfully!");
+                closePromoModal();
+                refreshIcons();
 
-    } catch (error) {
-        console.error("Firestore Error:", error);
-        alert("Failed to save to Firebase. Check console for details.");
-    }
-};
+            } catch (error) {
+                console.error("Firestore Error:", error);
+                alert("Failed to save to Firebase. Check console for details.");
+            }
+        };
 
         const editCredit = (credit) => {
             form.value = { ...credit };
@@ -258,23 +289,22 @@ createApp({
             refreshIcons();
         };
 
-        const deleteCredit = () => {
+        const deleteCredit = async () => {
             if (confirm("Are you sure you want to permanently delete this credit?")) {
-                promoCredits.value = promoCredits.value.filter(c => c.id !== editingId.value);
-                closePromoModal();
+                try {
+                    await deleteDoc(doc(db, "promoCredits", editingId.value));
+                    closePromoModal();
+                } catch (error) {
+                    console.error("Error deleting from Firebase:", error);
+                    alert("Failed to delete record from cloud.");
+                }
             }
         };
         
-        const openImportModal = () => {
-            resetImport();
-            showImportModal.value = true;
-            refreshIcons();
-        };
-
-        const closeImportModal = () => {
-            showImportModal.value = false;
-        };
-
+        // --- HORIZONTAL EXCEL IMPORT ENGINE ---
+        const openImportModal = () => { resetImport(); showImportModal.value = true; refreshIcons(); };
+        const closeImportModal = () => { showImportModal.value = false; };
+        
         const resetImport = () => {
             pastedGrid.value = [];
             mappedHeaders.value = [];
@@ -298,7 +328,6 @@ createApp({
             
             const rows = text.split('\n').filter(r => r.trim() !== '');
             const grid = rows.map(r => r.split('\t').map(c => c.trim()));
-            
             if (grid.length < 3) return; 
             
             pastedGrid.value = grid;
@@ -311,25 +340,19 @@ createApp({
         };
 
         const headerToFormKey = {
-            'Tracking Month': 'trackingMonth',
-            'Vendor': 'vendor',
-            'Distributor': 'distributor',
-            'Credit Type': 'creditType',
-            'Dates': 'dates',
-            'Credit amount $$$': 'amount',
-            'Date requested': 'dateRequested',
-            'Date received': 'dateReceived',
-            'Invoice / Credit Memo': 'invoice',
-            'Status': 'status'
+            'Tracking Month': 'trackingMonth', 'Vendor': 'vendor', 'Distributor': 'distributor',
+            'Credit Type': 'creditType', 'Dates': 'dates', 'Credit amount $$$': 'amount',
+            'Date requested': 'dateRequested', 'Date received': 'dateReceived',
+            'Invoice / Credit Memo': 'invoice', 'Status': 'status'
         };
 
-        const processImport = () => {
+        const processImport = async () => {
             let importedCount = 0;
             const superHeaders = pastedGrid.value[0];
+            const batch = writeBatch(db); 
             
             for (let r = 2; r < pastedGrid.value.length; r++) {
                 const row = pastedGrid.value[r];
-                
                 let currentCredit = getEmptyForm();
                 let hasData = false;
                 let seenHeadersInChunk = new Set();
@@ -337,20 +360,20 @@ createApp({
                 
                 for (let c = 0; c < row.length; c++) {
                     const detectedMonth = detectMonthInString(superHeaders[c]);
-                    if (detectedMonth) {
-                        currentChunkMonth = detectedMonth;
-                    }
+                    if (detectedMonth) currentChunkMonth = detectedMonth;
 
                     const header = mappedHeaders.value[c];
                     if (header === '-- Ignore Column --') continue;
                     
                     if (seenHeadersInChunk.has(header)) {
                         if (hasData && currentCredit.vendor) {
-                            currentCredit.id = Date.now().toString() + Math.random().toString(36).substr(2,5);
                             currentCredit.site = activeSite.value;
                             currentCredit.trackingMonth = currentChunkMonth !== 'Unknown' ? currentChunkMonth : (activeMonth.value === 'All' ? 'August' : activeMonth.value);
                             currentCredit.amount = parseFloat(String(currentCredit.amount).replace(/[^0-9.-]+/g,"")) || 0;
-                            promoCredits.value.unshift(currentCredit);
+                            currentCredit.createdAt = Date.now();
+                            
+                            const newDocRef = doc(collection(db, "promoCredits"));
+                            batch.set(newDocRef, currentCredit);
                             importedCount++;
                         }
                         currentCredit = getEmptyForm();
@@ -365,10 +388,8 @@ createApp({
                     if (key) {
                         currentCredit[key] = val;
                         seenHeadersInChunk.add(header);
-                        
                         if (key === 'vendor' && val) {
-                            const exists = masterBrands.value.find(b => b.vendor.toLowerCase() === val.toLowerCase());
-                            if (!exists) {
+                            if (!masterBrands.value.find(b => b.vendor.toLowerCase() === val.toLowerCase())) {
                                 masterBrands.value.push({ vendor: val, distributor: 'Auto-Imported' });
                             }
                         }
@@ -376,20 +397,29 @@ createApp({
                 }
                 
                 if (hasData && currentCredit.vendor) {
-                    currentCredit.id = Date.now().toString() + Math.random().toString(36).substr(2,5);
                     currentCredit.site = activeSite.value;
                     currentCredit.trackingMonth = currentChunkMonth !== 'Unknown' ? currentChunkMonth : (activeMonth.value === 'All' ? 'August' : activeMonth.value);
                     currentCredit.amount = parseFloat(String(currentCredit.amount).replace(/[^0-9.-]+/g,"")) || 0;
-                    promoCredits.value.unshift(currentCredit);
+                    currentCredit.createdAt = Date.now();
+
+                    const newDocRef = doc(collection(db, "promoCredits"));
+                    batch.set(newDocRef, currentCredit);
                     importedCount++;
                 }
             }
             
-            alert(`Successfully extracted and imported ${importedCount} individual promo credits to ${activeSite.value}!`);
-            closeImportModal();
-            refreshIcons();
+            try {
+                await batch.commit();
+                alert(`Successfully extracted and saved ${importedCount} promo credits to Firebase!`);
+                closeImportModal();
+                refreshIcons();
+            } catch (err) {
+                console.error("Batch Import Error:", err);
+                alert("Failed to save import to cloud.");
+            }
         };
 
+        // --- TREES POS AGGREGATOR ---
         const handleTreesCsvUpload = (e) => {
             const file = e.target.files[0];
             if (!file) return;
@@ -475,7 +505,7 @@ createApp({
             reader.readAsText(file); 
         };
 
-        const pushToMainTracker = () => {
+        const pushToMainTracker = async () => {
             const groupedBrands = {};
             const recordsToSync = treesSalesData.value.filter(s => s.status === 'Unsynced');
             
@@ -491,13 +521,13 @@ createApp({
             });
 
             let creditsCreated = 0;
+            const batch = writeBatch(db); 
             
             for (const [key, data] of Object.entries(groupedBrands)) {
                 if (data.totalOwed > 0) {
                     const masterRecord = masterBrands.value.find(b => b.vendor.toLowerCase() === data.brand.toLowerCase());
                     
-                    promoCredits.value.unshift({
-                        id: Date.now() + Math.random().toString(36).substr(2, 5),
+                    const payload = {
                         site: data.site, 
                         trackingMonth: data.month, 
                         vendor: data.brand,
@@ -508,23 +538,30 @@ createApp({
                         dateRequested: new Date().toLocaleDateString(),
                         dateReceived: '',
                         invoice: 'CSV-AUTO-SYNC',
-                        status: 'Pending'
-                    });
+                        status: 'Pending',
+                        createdAt: Date.now()
+                    };
+
+                    const newDocRef = doc(collection(db, "promoCredits"));
+                    batch.set(newDocRef, payload);
                     creditsCreated++;
                 }
             }
             
-            treesSalesData.value = treesSalesData.value.map(s => s.status === 'Unsynced' ? { ...s, status: 'Synced' } : s);
-            
-            alert(`Success! Aggregated ${creditsCreated} vendor credits across all locations and pushed them to the Main Tracker.`);
-            activeTab.value = 'Tracker'; 
+            try {
+                await batch.commit();
+                treesSalesData.value = treesSalesData.value.map(s => s.status === 'Unsynced' ? { ...s, status: 'Synced' } : s);
+                alert(`Success! Aggregated ${creditsCreated} vendor credits and pushed them to Firebase.`);
+                activeTab.value = 'Tracker'; 
+            } catch (err) {
+                console.error("Aggregation Firebase Error:", err);
+                alert("Failed to sync aggregated credits to the cloud.");
+            }
         };
 
         const refreshIcons = () => {
             nextTick(() => { if(window.lucide) window.lucide.createIcons(); });
         };
-
-        onMounted(() => refreshIcons());
 
         return {
             isManagerUnlocked, loggedInUser, pinInput, handleLogin, forceLock, activeSite, 
