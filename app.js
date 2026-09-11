@@ -274,7 +274,7 @@ createApp({
                 options: standardHorizontalOptions
             });
 
-            // 3. Top 10 Brands 
+            // 3. Top 10 Brands (CHANGED TO EMERALD)
             const brandSums = {};
             activeCredits.forEach(c => {
                 const b = (c.vendor || '').trim();
@@ -291,7 +291,7 @@ createApp({
                     labels: topBrands.map(b => b[0]), 
                     datasets: [{ 
                         data: topBrands.map(b => b[1]), 
-                        backgroundColor: '#111827', 
+                        backgroundColor: '#10b981', // Changed from Obsidian to Emerald
                         borderRadius: 6,
                         barPercentage: 0.65
                     }] 
@@ -299,7 +299,7 @@ createApp({
                 options: standardHorizontalOptions
             });
 
-            // 4. Credits by Store 
+            // 4. Credits by Store (CHANGED TO EMERALD AND GOLD PRIMARY)
             const storeSums = {};
             activeCredits.forEach(c => {
                 const s = c.site || 'Unknown';
@@ -313,7 +313,7 @@ createApp({
                     labels: Object.keys(storeSums), 
                     datasets: [{ 
                         data: Object.values(storeSums), 
-                        backgroundColor: ['#111827', '#f59e0b', '#10b981', '#64748b'], 
+                        backgroundColor: ['#10b981', '#f59e0b', '#64748b', '#111827'], // Swapped Obsidian for Emerald
                         borderWidth: 0 
                     }] 
                 },
