@@ -29,6 +29,7 @@ try {
 }
 
 const db = getFirestore(firebaseApp);
+
 const auth = getAuth(firebaseApp); 
 
 // 3. VUE APP INIT
@@ -1046,6 +1047,14 @@ createApp({
             }
         };
 
+                const systemLogs = ref([]);
+        const isSuperAdmin = computed(() => {
+            const userEmail = emailInput.value || ''; 
+            // Better to use loggedInUser state, adding that quickly:
+            const currentUser = Object.keys(systemUsers).find(email => systemUsers[email].name === loggedInUser.value);
+            return currentUser && systemUsers[currentUser] && systemUsers[currentUser].superAdmin;
+        });
+
         const refreshIcons = () => { nextTick(() => { if(window.lucide) window.lucide.createIcons(); }); };
 
         return {
@@ -1061,7 +1070,7 @@ createApp({
             monthlyReportSummaries, downloadMonthlyReport, 
             showImportModal, openImportModal, closeImportModal, resetImport, 
             rawPasteData, pastedGrid, displayGrid, mappedHeaders, availableHeaders, processRawPaste, processImport,
-                        showBrandImportModal, brandPasteData, brandPastedGrid, brandMappedHeaders, brandAvailableHeaders,
+            showBrandImportModal, brandPasteData, brandPastedGrid, brandMappedHeaders, brandAvailableHeaders,
             resetBrandImport, processBrandRawPaste, processBrandImport, updateBrandField,
             calendarMonths, activeMonth, detectMonthInString, searchQuery, searchQueryInput,
             isSuperAdmin, systemLogs
