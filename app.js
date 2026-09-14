@@ -44,15 +44,20 @@ createApp({
         const activeSite = ref('Red Bluff');
         const activeTab = ref('Tracker');
         
-        const systemUsers = {
-            'lenay@rredco.com': { name: 'Lenay A.', access: ['Red Bluff', 'Redding'] },
-            'tricia@rredco.com': { name: 'Tricia K.', access: ['Red Bluff', 'Redding'] },
-            'whitney@rredco.com': { name: 'Whitney M.', access: ['Red Bluff', 'Redding'] },
-            'nicholas.grace@rredco.com': { name: 'Nicholas G.', access: ['Red Bluff', 'Redding'] } 
-        };
+                const systemUsers = {
+                    'lenay@rredco.com': { name: 'Lenay A.', access: ['Red Bluff', 'Redding'], active: false },
+                    'tricia@rredco.com': { name: 'Tricia K.', access: ['Red Bluff', 'Redding'], active: false },
+                    'whitney@rredco.com': { name: 'Whitney M.', access: ['Red Bluff', 'Redding'], active: false },
+                    'nicholas.grace@rredco.com': { name: 'Nicholas G.', access: ['Red Bluff', 'Redding'], active: true },
+                    'accounting@rredco.com': { name: 'Accounting Team', access: ['Red Bluff', 'Redding'], active: true }
+                };
 
-        const treesSalesData = ref(JSON.parse(localStorage.getItem('treesSalesData')) || []);
-        watch(treesSalesData, (newVal) => localStorage.setItem('treesSalesData', JSON.stringify(newVal)), { deep: true });
+                const treesSalesData = ref(JSON.parse(localStorage.getItem('treesSalesData')) || []);
+        
+        // Manual save function instead of a deep watcher to prevent UI freezing
+        const saveTreesDataLocal = () => {
+            localStorage.setItem('treesSalesData', JSON.stringify(treesSalesData.value));
+        };
 
         const masterBrands = ref([]);
         const selectedBrands = ref([]);
@@ -96,9 +101,20 @@ createApp({
         };
 
         const promoCredits = ref([]);
-        const calendarMonths = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+                const calendarMonths = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
         const activeMonth = ref('August');
-        const searchQuery = ref('');
+        
+        // Debounced Search Logic
+        const searchQueryInput = ref(''); // Bound to the UI input
+        const searchQuery = ref('');      // Used by the computed filters
+        let searchTimeout = null;
+        
+        watch(searchQueryInput, (newVal) => {
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(() => {
+                searchQuery.value = newVal;
+            }, 300); // 300ms delay before executing the heavy search
+        });
 
         const showPromoModal = ref(false);
         const showBrandDropdown = ref(false);
@@ -545,17 +561,19 @@ createApp({
         let unsubscribeSnapshot = null;
         let unsubscribeBrands = null;
 
-        onMounted(() => {
+                onMounted(() => {
             refreshIcons();
             onAuthStateChanged(auth, (user) => {
                 if (user) {
                     const userEmail = user.email.toLowerCase();
-                    const managerData = systemUsers[userEmail] || { name: 'Manager', access: ['Red Bluff', 'Redding'] };
-                    loggedInUser.value = managerData.name;
-                    activeSite.value = managerData.access[0];
-                    isManagerUnlocked.value = true;
+                    const managerData = systemUsers[userEmail];
                     
-                    unsubscribeSnapshot = onSnapshot(collection(db, "promoCredits"), (snapshot) => {
+                    if (managerData && managerData.active) {
+                        loggedInUser.value = managerData.name;
+                        activeSite.value = managerData.access[0];
+                        isManagerUnlocked.value = true;
+                        
+                        unsubscribeSnapshot = onSnapshot(collection(db, "promoCredits"), (snapshot) => {
                         const fetchedCredits = [];
                         snapshot.forEach(docSnap => { fetchedCredits.push({ id: docSnap.id, ...docSnap.data() }); });
                         fetchedCredits.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
@@ -577,9 +595,14 @@ createApp({
                                 batch.commit().then(() => { localStorage.removeItem('masterBrands'); });
                             }
                         }
-                        fetchedBrands.sort((a, b) => (a.vendor || '').localeCompare(b.vendor || ''));
+                                                fetchedBrands.sort((a, b) => (a.vendor || '').localeCompare(b.vendor || ''));
                         masterBrands.value = fetchedBrands;
                     });
+                    } else {
+                        signOut(auth);
+                        authError.value = "Account is inactive or unauthorized.";
+                        isManagerUnlocked.value = false;
+                    }
                 } else {
                     isManagerUnlocked.value = false;
                     promoCredits.value = [];
@@ -872,7 +895,8 @@ createApp({
                         });
                     }
 
-                    treesSalesData.value = newSales.concat(treesSalesData.value);
+                                        treesSalesData.value = newSales.concat(treesSalesData.value);
+                    saveTreesDataLocal(); // Save only after full upload
                     e.target.value = ''; 
                     refreshIcons();
                 } catch (error) { alert("Error parsing CSV. Ensure it is a valid comma-separated file."); }
@@ -920,9 +944,10 @@ createApp({
                 }
             }
             
-            try {
+                        try {
                 await batch.commit();
                 treesSalesData.value = treesSalesData.value.map(s => s.status === 'Unsynced' ? { ...s, status: 'Synced' } : s);
+                saveTreesDataLocal(); // Save only after full sync
                 alert(`Success! Aggregated ${creditsCreated} vendor credits and pushed them to Firebase.`);
                 activeTab.value = 'Tracker'; 
             } catch (err) { alert("Failed to sync aggregated credits to the cloud."); }
@@ -1036,9 +1061,10 @@ createApp({
             monthlyReportSummaries, downloadMonthlyReport, 
             showImportModal, openImportModal, closeImportModal, resetImport, 
             rawPasteData, pastedGrid, displayGrid, mappedHeaders, availableHeaders, processRawPaste, processImport,
-            showBrandImportModal, brandPasteData, brandPastedGrid, brandMappedHeaders, brandAvailableHeaders,
+                        showBrandImportModal, brandPasteData, brandPastedGrid, brandMappedHeaders, brandAvailableHeaders,
             resetBrandImport, processBrandRawPaste, processBrandImport, updateBrandField,
-            calendarMonths, activeMonth, detectMonthInString, searchQuery
+            calendarMonths, activeMonth, detectMonthInString, searchQuery, searchQueryInput,
+            isSuperAdmin, systemLogs
         };
     }
 }).mount('#app');

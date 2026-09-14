@@ -1,0 +1,33 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Check if the user is logged in and is in the authorized list
+    function isAuthorizedManager() {
+      return request.auth != null && (
+        request.auth.token.email == 'nicholas.grace@rredco.com' ||
+        request.auth.token.email == 'accounting@rredco.com'
+      );
+    }
+
+    // Explicitly lock down the collections you use
+    match /promoCredits/{creditId} {
+      allow read, write: if isAuthorizedManager();
+    }
+    
+    match /brands/{brandId} {
+      allow read, write: if isAuthorizedManager();
+    }
+
+    // System Logs: Anyone authorized can write, only Nicholas can read/delete
+    match /systemLogs/{logId} {
+      allow create: if isAuthorizedManager();
+      allow read, update, delete: if request.auth != null && request.auth.token.email == 'nicholas.grace@rredco.com';
+    }
+    
+    // Deny access to everything else in the database
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

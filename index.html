@@ -16,7 +16,7 @@
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-    <div id="app" class="h-full flex flex-col bg-gray-100" v-cloak>
+        <div id="app" class="h-full flex flex-col bg-gray-100" v-cloak>
         
         <!-- HEADER (Obsidian & Gold) -->
         <header class="bg-gray-950 text-white px-4 md:px-5 py-3 flex flex-col md:flex-row justify-between items-center shrink-0 shadow-lg z-20 gap-3 md:gap-0 border-b border-gray-800">
@@ -42,6 +42,7 @@
                 <div class="flex items-center gap-2 mr-2 bg-gray-900 px-3 py-1.5 rounded shadow-inner border border-gray-800 text-gray-300">
                     <i data-lucide="user" class="w-4 h-4 text-emerald-500"></i> <span class="text-sm font-bold">{{ loggedInUser }}</span>
                 </div>
+                <button v-if="isSuperAdmin" @click="activeTab = 'Logs'" class="bg-gray-800 hover:bg-gray-700 text-amber-500 hover:text-amber-400 px-3 py-1.5 rounded flex items-center gap-1.5 text-sm font-bold shadow transition-colors"><i data-lucide="activity" class="w-4 h-4"></i> Logs</button>
                 <button @click="forceLock" class="bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-amber-500 px-3 py-1.5 rounded flex items-center gap-1.5 text-sm font-bold shadow transition-colors"><i data-lucide="lock" class="w-4 h-4"></i> Lock</button>
                 <button @click="openImportModal" class="bg-gray-800 border border-gray-700 hover:bg-gray-700 text-amber-500 px-3 py-1.5 rounded flex items-center gap-1.5 text-sm font-bold shadow transition-colors"><i data-lucide="grid" class="w-4 h-4"></i> Paste Excel</button>
                 <button @click="openPromoModal()" class="bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 rounded flex items-center gap-1.5 text-sm font-bold shadow transition-colors"><i data-lucide="plus" class="w-4 h-4"></i> New Promo</button>
@@ -72,17 +73,18 @@
              </div>
         </main>
 
-        <!-- APP TABS NAV (Obsidian Background) -->
+                <!-- APP TABS NAV (Obsidian Background) -->
         <div v-if="isManagerUnlocked" class="bg-gray-950 px-4 md:px-6 pt-2 flex gap-2 shrink-0 z-10 shadow-sm overflow-x-auto no-scrollbar border-b border-gray-800">
             <button @click="activeTab = 'Dashboard'" :class="activeTab === 'Dashboard' ? 'bg-gray-100 text-gray-900 font-extrabold border-t-4 border-emerald-500' : 'bg-gray-900/50 text-gray-400 hover:bg-gray-800 hover:text-white'" class="px-6 py-2 rounded-t-xl text-sm transition-colors tracking-wide whitespace-nowrap">Dashboard</button>
             <button @click="activeTab = 'Tracker'" :class="activeTab === 'Tracker' ? 'bg-gray-100 text-gray-900 font-extrabold border-t-4 border-emerald-500' : 'bg-gray-900/50 text-gray-400 hover:bg-gray-800 hover:text-white'" class="px-6 py-2 rounded-t-xl text-sm transition-colors tracking-wide whitespace-nowrap">Main Tracker</button>
             <button @click="activeTab = 'Reports'" :class="activeTab === 'Reports' ? 'bg-gray-100 text-gray-900 font-extrabold border-t-4 border-emerald-500' : 'bg-gray-900/50 text-gray-400 hover:bg-gray-800 hover:text-white'" class="px-6 py-2 rounded-t-xl text-sm transition-colors tracking-wide whitespace-nowrap">Monthly Reports</button>
             <button @click="activeTab = 'Sales'" :class="activeTab === 'Sales' ? 'bg-gray-100 text-gray-900 font-extrabold border-t-4 border-emerald-500' : 'bg-gray-900/50 text-gray-400 hover:bg-gray-800 hover:text-white'" class="px-6 py-2 rounded-t-xl text-sm transition-colors tracking-wide flex items-center gap-2 whitespace-nowrap">Trees Sales CSV <span v-if="filteredTreesSalesData.length > 0 && activeTab !== 'Sales'" class="bg-amber-500 text-gray-950 text-[10px] px-1.5 py-0.5 rounded-full">{{ filteredTreesSalesData.length }}</span></button>
             <button @click="activeTab = 'Brands'" :class="activeTab === 'Brands' ? 'bg-gray-100 text-gray-900 font-extrabold border-t-4 border-emerald-500' : 'bg-gray-900/50 text-gray-400 hover:bg-gray-800 hover:text-white'" class="px-6 py-2 rounded-t-xl text-sm transition-colors tracking-wide whitespace-nowrap">Brand Directory</button>
+            <button v-if="isSuperAdmin" @click="activeTab = 'Logs'" :class="activeTab === 'Logs' ? 'bg-gray-100 text-gray-900 font-extrabold border-t-4 border-amber-500' : 'bg-gray-900/50 text-gray-400 hover:bg-gray-800 hover:text-white'" class="px-6 py-2 rounded-t-xl text-sm transition-colors tracking-wide whitespace-nowrap"><i data-lucide="activity" class="w-3.5 h-3.5 inline mr-1 mb-0.5"></i>System Logs</button>
         </div>
 
-        <!-- SHARED GLOBAL FILTERS -->
-        <div v-if="isManagerUnlocked" class="bg-gray-100 px-4 md:px-6 pt-4 pb-2 flex flex-col lg:flex-row justify-between items-center shrink-0 gap-3 z-10 border-b border-gray-200">
+                <!-- SHARED GLOBAL FILTERS -->
+        <div v-if="isManagerUnlocked && activeTab !== 'Logs'" class="bg-gray-100 px-4 md:px-6 pt-4 pb-2 flex flex-col lg:flex-row justify-between items-center shrink-0 gap-3 z-10 border-b border-gray-200">
             <div class="bg-white rounded-xl shadow-sm border border-gray-300 p-1.5 flex overflow-x-auto gap-1 w-full lg:flex-1 no-scrollbar">
                 <button @click="activeMonth = 'All'" :class="activeMonth === 'All' ? 'bg-gray-900 text-emerald-500 font-bold shadow' : 'text-gray-600 hover:bg-gray-100 font-medium'" class="px-4 py-1.5 rounded-lg text-sm transition-all whitespace-nowrap">All Year</button>
                 <div class="w-px bg-gray-300 mx-1 shrink-0"></div>
@@ -92,10 +94,10 @@
                     {{ month }}
                 </button>
             </div>
-            <div class="relative w-full lg:w-80 shrink-0">
+                        <div class="relative w-full lg:w-80 shrink-0">
                 <i data-lucide="search" class="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
-                <input type="text" v-model="searchQuery" placeholder="Search brands, types, records..." class="w-full bg-white border border-gray-300 rounded-xl py-2 pl-10 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 shadow-sm transition-shadow">
-                <button v-if="searchQuery" @click="searchQuery = ''" class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                <input type="text" v-model="searchQueryInput" placeholder="Search brands, types, records..." class="w-full bg-white border border-gray-300 rounded-xl py-2 pl-10 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 shadow-sm transition-shadow">
+                <button v-if="searchQueryInput" @click="searchQueryInput = ''" class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
                     <i data-lucide="x-circle" class="w-4 h-4"></i>
                 </button>
             </div>
@@ -466,7 +468,7 @@
                             </tr>
                         </thead>
                         <tbody>
-                            <!-- INLINE EDITING ENABLED HERE -->
+                                                        <!-- INLINE EDITING ENABLED HERE -->
                             <tr v-for="(brand, index) in masterBrands" :key="brand.id" class="hover:bg-emerald-50/40" :class="{'bg-emerald-50/70': selectedBrands.includes(brand.id)}">
                                 <td class="font-bold text-gray-900 sticky left-0 bg-white shadow-[1px_0_0_#e5e7eb] z-10 whitespace-nowrap">
                                     <div class="flex items-center gap-2">
@@ -474,14 +476,60 @@
                                         {{ brand.vendor }}
                                     </div>
                                 </td>
-                                <td><input type="text" :value="brand.rep" @change="updateBrandField(brand.id, 'rep', $event)" placeholder="-" class="w-full min-w-[120px] bg-transparent border-b border-dashed border-transparent hover:border-gray-300 focus:border-emerald-500 outline-none px-1 py-0.5"></td>
-                                <td><input type="email" :value="brand.email" @change="updateBrandField(brand.id, 'email', $event)" placeholder="-" class="w-full min-w-[180px] bg-transparent border-b border-dashed border-transparent hover:border-gray-300 focus:border-emerald-500 outline-none px-1 py-0.5 text-emerald-600 font-medium"></td>
-                                <td><input type="text" :value="brand.treesName" @change="updateBrandField(brand.id, 'treesName', $event)" placeholder="-" class="w-full min-w-[160px] bg-transparent border-b border-dashed border-transparent hover:border-gray-300 focus:border-emerald-500 outline-none px-1 py-0.5"></td>
-                                <td><input type="text" :value="brand.distributor" @change="updateBrandField(brand.id, 'distributor', $event)" placeholder="-" class="w-full min-w-[140px] bg-transparent border-b border-dashed border-transparent hover:border-gray-300 focus:border-emerald-500 outline-none px-1 py-0.5"></td>
-                                <td><input type="text" :value="brand.assetLibrary" @change="updateBrandField(brand.id, 'assetLibrary', $event)" placeholder="-" class="w-full min-w-[180px] bg-transparent border-b border-dashed border-transparent hover:border-gray-300 focus:border-emerald-500 outline-none px-1 py-0.5 text-xs text-amber-600"></td>
-                                <td><input type="text" :value="brand.orderFrom" @change="updateBrandField(brand.id, 'orderFrom', $event)" placeholder="-" class="w-full min-w-[120px] bg-transparent border-b border-dashed border-transparent hover:border-gray-300 focus:border-emerald-500 outline-none px-1 py-0.5"></td>
-                                <td><input type="text" :value="brand.payee" @change="updateBrandField(brand.id, 'payee', $event)" placeholder="-" class="w-full min-w-[120px] bg-transparent border-b border-dashed border-transparent hover:border-gray-300 focus:border-emerald-500 outline-none px-1 py-0.5"></td>
-                                <td><input type="text" :value="brand.notes" @change="updateBrandField(brand.id, 'notes', $event)" placeholder="-" class="w-full min-w-[180px] bg-transparent border-b border-dashed border-transparent hover:border-gray-300 focus:border-emerald-500 outline-none px-1 py-0.5 text-xs"></td>
+                                <td><input type="text" :value="brand.rep" @change="updateBrandField(brand.id, 'rep', $event, brand.vendor)" placeholder="-" class="w-full min-w-[120px] bg-transparent border-b border-dashed border-transparent hover:border-gray-300 focus:border-emerald-500 outline-none px-1 py-0.5"></td>
+                                <td><input type="email" :value="brand.email" @change="updateBrandField(brand.id, 'email', $event, brand.vendor)" placeholder="-" class="w-full min-w-[180px] bg-transparent border-b border-dashed border-transparent hover:border-gray-300 focus:border-emerald-500 outline-none px-1 py-0.5 text-emerald-600 font-medium"></td>
+                                <td><input type="text" :value="brand.treesName" @change="updateBrandField(brand.id, 'treesName', $event, brand.vendor)" placeholder="-" class="w-full min-w-[160px] bg-transparent border-b border-dashed border-transparent hover:border-gray-300 focus:border-emerald-500 outline-none px-1 py-0.5"></td>
+                                <td><input type="text" :value="brand.distributor" @change="updateBrandField(brand.id, 'distributor', $event, brand.vendor)" placeholder="-" class="w-full min-w-[140px] bg-transparent border-b border-dashed border-transparent hover:border-gray-300 focus:border-emerald-500 outline-none px-1 py-0.5"></td>
+                                <td><input type="text" :value="brand.assetLibrary" @change="updateBrandField(brand.id, 'assetLibrary', $event, brand.vendor)" placeholder="-" class="w-full min-w-[180px] bg-transparent border-b border-dashed border-transparent hover:border-gray-300 focus:border-emerald-500 outline-none px-1 py-0.5 text-xs text-amber-600"></td>
+                                <td><input type="text" :value="brand.orderFrom" @change="updateBrandField(brand.id, 'orderFrom', $event, brand.vendor)" placeholder="-" class="w-full min-w-[120px] bg-transparent border-b border-dashed border-transparent hover:border-gray-300 focus:border-emerald-500 outline-none px-1 py-0.5"></td>
+                                <td><input type="text" :value="brand.payee" @change="updateBrandField(brand.id, 'payee', $event, brand.vendor)" placeholder="-" class="w-full min-w-[120px] bg-transparent border-b border-dashed border-transparent hover:border-gray-300 focus:border-emerald-500 outline-none px-1 py-0.5"></td>
+                                <td><input type="text" :value="brand.notes" @change="updateBrandField(brand.id, 'notes', $event, brand.vendor)" placeholder="-" class="w-full min-w-[180px] bg-transparent border-b border-dashed border-transparent hover:border-gray-300 focus:border-emerald-500 outline-none px-1 py-0.5 text-xs"></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+
+        <!-- SYSTEM LOGS TAB (SUPER ADMIN ONLY) -->
+        <main v-if="isSuperAdmin && activeTab === 'Logs'" class="flex-1 flex flex-col p-4 md:p-6 bg-gray-100 overflow-hidden">
+            <div class="mb-4 flex justify-between items-end shrink-0">
+                <div>
+                    <h2 class="text-xl font-bold text-gray-900 leading-tight flex items-center gap-2"><i data-lucide="activity" class="w-5 h-5 text-amber-600"></i> System Activity Logs</h2>
+                    <p class="text-sm text-gray-500 mt-1">Real-time audit trail of all user actions. Only visible to Nicholas.</p>
+                </div>
+            </div>
+            <div class="bg-white rounded-xl border border-gray-300 shadow-sm flex-1 flex flex-col min-h-0 overflow-hidden">
+                <div class="overflow-auto flex-1">
+                    <table class="excel-table min-w-max">
+                        <thead class="sticky top-0 z-10 shadow-sm bg-gray-50">
+                            <tr>
+                                <th>Timestamp</th>
+                                <th>User</th>
+                                <th>Action Type</th>
+                                <th>Details</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr v-if="systemLogs.length === 0">
+                                <td colspan="4" class="text-center py-10 text-gray-500 font-medium bg-gray-50">No logs recorded yet.</td>
+                            </tr>
+                            <tr v-for="log in systemLogs" :key="log.id" class="hover:bg-gray-50 text-sm">
+                                <td class="text-gray-500 whitespace-nowrap">{{ new Date(log.timestamp).toLocaleString() }}</td>
+                                <td class="font-bold text-gray-900">{{ log.user }}</td>
+                                <td>
+                                    <span class="px-2 py-0.5 rounded text-xs font-bold uppercase tracking-wider" 
+                                          :class="{
+                                              'bg-emerald-100 text-emerald-800': log.actionType === 'CREATE',
+                                              'bg-amber-100 text-amber-800': log.actionType === 'UPDATE',
+                                              'bg-red-100 text-red-800': log.actionType === 'DELETE',
+                                              'bg-blue-100 text-blue-800': log.actionType === 'IMPORT',
+                                              'bg-gray-200 text-gray-800': log.actionType === 'LOGIN' || log.actionType === 'LOGOUT'
+                                          }">
+                                        {{ log.actionType }}
+                                    </span>
+                                </td>
+                                <td class="text-gray-700 w-full">{{ log.details }}</td>
                             </tr>
                         </tbody>
                     </table>
