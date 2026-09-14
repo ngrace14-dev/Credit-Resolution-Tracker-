@@ -259,15 +259,16 @@
                                 <th>Credit amount $$$</th>
                                 <th>Date requested</th>
                                 <th>Date received</th>
-                                <th>Invoice / Credit Memo</th>
+                                                                <th>Invoice / Credit Memo</th>
                                 <th>Proof</th>
                                 <th class="text-center">Status</th>
+                                <th class="text-center">Email Workflow</th>
                                 <th class="text-center sticky-head">Actions</th>
                             </tr>
                         </thead>
                         <tbody>
                             <tr v-if="filteredCredits.length === 0">
-                                <td :colspan="activeMonth === 'All' ? 12 : 11" class="text-center py-10 text-gray-500 font-medium bg-gray-50">
+                                <td :colspan="activeMonth === 'All' ? 13 : 12" class="text-center py-10 text-gray-500 font-medium bg-gray-50">
                                     <span v-if="searchQuery">No results found for "{{ searchQuery }}".</span>
                                     <span v-else>No promo credits found for {{ activeSite }} in {{ activeMonth }}.</span>
                                 </td>
@@ -299,11 +300,21 @@
                                     <span class="px-2.5 py-1 rounded shadow-sm text-[11px] font-bold uppercase tracking-wider" 
                                           :class="{
                                               'bg-emerald-100 text-emerald-800 border border-emerald-200': credit.status === 'Applied',
+                                              'bg-blue-100 text-blue-800 border border-blue-200': credit.status === 'Report Sent',
                                               'bg-amber-100 text-amber-800 border border-amber-200': credit.status === 'Pending',
                                               'bg-gray-200 text-gray-800 border border-gray-300': credit.status === 'Uncollectable'
                                           }">
                                         {{ credit.status }}
                                     </span>
+                                </td>
+                                <td class="text-center">
+                                    <button v-if="credit.status === 'Pending'" @click="markAsSent(credit)" class="text-blue-600 hover:bg-blue-50 px-2 py-1 rounded border border-blue-200 text-[10px] font-bold uppercase tracking-wider transition-colors shadow-sm whitespace-nowrap">
+                                        Mark Sent
+                                    </button>
+                                    <button v-else-if="credit.status === 'Report Sent'" @click="openResolutionModal(credit)" class="text-emerald-600 hover:bg-emerald-50 px-2 py-1 rounded border border-emerald-200 text-[10px] font-bold uppercase tracking-wider transition-colors shadow-sm whitespace-nowrap">
+                                        Resolve
+                                    </button>
+                                    <span v-else class="text-gray-300">-</span>
                                 </td>
                                 <td class="text-center sticky-col">
                                     <button @click="editCredit(credit)" class="text-gray-900 hover:text-amber-500 hover:bg-gray-900 px-3 py-1.5 rounded shadow-sm border border-gray-300 text-xs font-bold transition-all bg-white flex items-center gap-1 mx-auto">
@@ -597,6 +608,37 @@
                         <button @click="closePromoModal" class="flex-1 md:px-5 py-2.5 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded-lg font-bold transition-colors">Cancel</button>
                         <button @click="saveCredit" class="flex-1 md:px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold shadow-md transition-colors flex items-center justify-center gap-2"><i data-lucide="save" class="w-4 h-4"></i> Save</button>
                     </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- EMAIL RESOLUTION MODAL -->
+        <div v-if="showResolutionModal" class="fixed inset-0 bg-black/60 flex items-center justify-center z-50 backdrop-blur-sm p-2" @click.self="showResolutionModal = false">
+            <div class="bg-white rounded-2xl shadow-2xl w-full md:w-[500px] max-w-[95vw] flex flex-col overflow-hidden">
+                <div class="px-4 md:px-6 py-4 border-b bg-gray-50 flex justify-between items-center shrink-0">
+                    <div>
+                        <h2 class="font-bold text-lg md:text-xl text-gray-900 flex items-center gap-2"><i data-lucide="check-square" class="w-5 h-5 text-emerald-600"></i> Log Vendor Resolution</h2>
+                        <p class="text-xs text-gray-500 mt-0.5">Finalize credit for {{ resolutionCredit?.vendor }}</p>
+                    </div>
+                    <button @click="showResolutionModal = false" class="text-gray-500 hover:text-red-600 transition-colors p-1 hover:bg-gray-200 rounded"><i data-lucide="x" class="w-5 h-5"></i></button>
+                </div>
+                
+                <div class="p-4 md:p-6 space-y-4">
+                    <div>
+                        <label class="text-[11px] font-bold text-gray-500 uppercase tracking-wide">Credit Memo / Invoice Number</label>
+                        <input type="text" v-model="resolutionForm.invoice" class="border border-gray-300 p-2.5 w-full rounded-lg mt-1 font-mono text-sm focus:ring-2 focus:ring-emerald-500 outline-none" placeholder="e.g. CM-12345">
+                    </div>
+                    <div>
+                        <label class="text-[11px] font-bold text-gray-500 uppercase tracking-wide">Date Received</label>
+                        <input type="date" v-model="resolutionForm.dateReceived" class="border border-gray-300 p-2.5 w-full rounded-lg mt-1 text-sm focus:ring-2 focus:ring-emerald-500 outline-none">
+                    </div>
+                </div>
+                
+                <div class="px-4 md:px-6 py-4 border-t bg-gray-50 flex gap-3">
+                    <button @click="showResolutionModal = false" class="flex-1 py-2.5 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded-lg font-bold transition-colors">Cancel</button>
+                    <button @click="submitResolution" class="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold shadow-md transition-colors flex items-center justify-center gap-2">
+                        <i data-lucide="check-circle" class="w-4 h-4"></i> Resolve Credit
+                    </button>
                 </div>
             </div>
         </div>

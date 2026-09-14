@@ -24,6 +24,10 @@ service cloud.firestore {
       allow create: if isAuthorizedManager();
       allow read, update, delete: if request.auth != null && request.auth.token.email == 'nicholas.grace@rredco.com';
     }
+
+    match /emailHistories/{historyId} {
+      allow read, write: if isAuthorizedManager();
+    }
     
     // Deny access to everything else in the database
     match /{document=**} {

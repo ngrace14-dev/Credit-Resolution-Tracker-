@@ -122,6 +122,70 @@ createApp({
         const editingId = ref(null);
         const showReportModal = ref(false);
 
+        const showResolutionModal = ref(false);
+        const resolutionCredit = ref(null);
+        const resolutionForm = ref({ invoice: '', dateReceived: '' });
+
+        const markAsSent = async (credit) => {
+            if (confirm(`Mark this credit for ${credit.vendor} as 'Report Sent'?`)) {
+                try {
+                    await updateDoc(doc(db, "promoCredits", credit.id), { status: "Report Sent" });
+                    
+                    // Log to the new emailHistories collection
+                    await addDoc(collection(db, "emailHistories"), {
+                        creditId: credit.id,
+                        vendor: credit.vendor,
+                        amount: credit.amount,
+                        site: credit.site,
+                        action: "Report Sent",
+                        sentBy: loggedInUser.value,
+                        timestamp: Date.now()
+                    });
+                    
+                    logSystemAction("UPDATE", `Marked credit for ${credit.vendor} as Report Sent`);
+                } catch (error) {
+                    console.error(error);
+                    alert("Failed to update status.");
+                }
+            }
+        };
+
+        const openResolutionModal = (credit) => {
+            resolutionCredit.value = credit;
+            resolutionForm.value = { invoice: '', dateReceived: new Date().toISOString().split('T')[0] };
+            showResolutionModal.value = true;
+            refreshIcons();
+        };
+
+        const submitResolution = async () => {
+            if (!resolutionForm.value.invoice) return alert("Invoice / Memo number is required to resolve.");
+            
+            try {
+                await updateDoc(doc(db, "promoCredits", resolutionCredit.value.id), { 
+                    status: "Applied",
+                    invoice: resolutionForm.value.invoice,
+                    dateReceived: resolutionForm.value.dateReceived
+                });
+                
+                await addDoc(collection(db, "emailHistories"), {
+                    creditId: resolutionCredit.value.id,
+                    vendor: resolutionCredit.value.vendor,
+                    amount: resolutionCredit.value.amount,
+                    site: resolutionCredit.value.site,
+                    action: "Resolved (Applied)",
+                    invoice: resolutionForm.value.invoice,
+                    resolvedBy: loggedInUser.value,
+                    timestamp: Date.now()
+                });
+                
+                logSystemAction("UPDATE", `Resolved credit for ${resolutionCredit.value.vendor} (Memo: ${resolutionForm.value.invoice})`);
+                showResolutionModal.value = false;
+            } catch (error) {
+                console.error(error);
+                alert("Failed to resolve credit.");
+            }
+        };
+
         // --- MONTHLY BRAND REPORTS LOGIC ---
         const monthlyReportSummaries = computed(() => {
             const groups = {};
@@ -1070,10 +1134,11 @@ createApp({
             monthlyReportSummaries, downloadMonthlyReport, 
             showImportModal, openImportModal, closeImportModal, resetImport, 
             rawPasteData, pastedGrid, displayGrid, mappedHeaders, availableHeaders, processRawPaste, processImport,
-            showBrandImportModal, brandPasteData, brandPastedGrid, brandMappedHeaders, brandAvailableHeaders,
+                        showBrandImportModal, brandPasteData, brandPastedGrid, brandMappedHeaders, brandAvailableHeaders,
             resetBrandImport, processBrandRawPaste, processBrandImport, updateBrandField,
             calendarMonths, activeMonth, detectMonthInString, searchQuery, searchQueryInput,
-            isSuperAdmin, systemLogs
+            isSuperAdmin, systemLogs,
+            showResolutionModal, resolutionCredit, resolutionForm, markAsSent, openResolutionModal, submitResolution
         };
     }
 }).mount('#app');
