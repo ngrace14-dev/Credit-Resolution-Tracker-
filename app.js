@@ -229,7 +229,7 @@ createApp({
                 }));
         });
 
-        const downloadMonthlyReport = (report) => {
+                const downloadMonthlyReport = (report) => {
             let csvContent = "Site,Tracking Month,Vendor,Distributor,Credit Type,Dates,Credit Amount,Date Requested,Date Received,Invoice,Status,Archived\n";
             let csvTotal = 0;
             
@@ -266,6 +266,9 @@ createApp({
             link.click();
             document.body.removeChild(link);
             URL.revokeObjectURL(url);
+
+            // Log the download event securely
+            logSystemAction("EXPORT", `Downloaded Monthly Report for ${reportName} (${creditsToExport.length} records, ${formatCurrency(csvTotal)})`);
         };
 
         // --- DASHBOARD CHARTS LOGIC (GOLD, EMERALD & OBSIDIAN THEME) ---
@@ -538,7 +541,7 @@ createApp({
             window.location.href = `mailto:${cleanEmails}?cc=${encodedCc}&subject=${encodedSubject}&body=${encodedBody}`;
         };
 
-        const archiveAndExportAnnualReport = async () => {
+                const archiveAndExportAnnualReport = async () => {
             const creditsToArchive = promoCredits.value.filter(c => 
                 (c.status === 'Applied' || c.status === 'Uncollectable') && c.archived !== true
             );
@@ -553,6 +556,7 @@ createApp({
             }
 
             let csvContent = "Site,Tracking Month,Vendor,Distributor,Credit Type,Dates,Credit Amount,Date Requested,Date Received,Invoice,Status,Archived Date\n";
+            let csvTotal = 0;
             
             creditsToArchive.forEach(c => {
                 const safeSite = `"${(c.site || '').replace(/"/g, '""')}"`;
@@ -569,7 +573,10 @@ createApp({
                 const archiveDate = `"${new Date().toLocaleDateString()}"`;
                 
                 csvContent += `${safeSite},${safeMonth},${safeVendor},${safeDist},${safeType},${safeDates},${safeAmount},${safeReq},${safeRec},${safeInvoice},${safeStatus},${archiveDate}\n`;
+                csvTotal += parseFloat(c.amount) || 0;
             });
+
+            csvContent += `,,,,,, "TOTAL:", "${formatCurrency(csvTotal)}"\n`;
 
             const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
             const url = URL.createObjectURL(blob);
@@ -589,6 +596,10 @@ createApp({
                     batch.update(docRef, { archived: true, archivedAt: Date.now() });
                 });
                 await batch.commit();
+                
+                // Securely log the archive event with financial totals
+                logSystemAction("ARCHIVE", `Archived & Exported ${creditsToArchive.length} records totaling ${formatCurrency(csvTotal)}`);
+                
                 alert(`Success! Master spreadsheet downloaded and ${creditsToArchive.length} records safely archived.`);
             } catch (error) {
                 console.error("Archive Error:", error);
