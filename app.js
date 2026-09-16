@@ -29,7 +29,6 @@ try {
 }
 
 const db = getFirestore(firebaseApp);
-
 const auth = getAuth(firebaseApp); 
 
 // 3. VUE APP INIT
@@ -45,31 +44,29 @@ createApp({
         const activeSite = ref('Red Bluff');
         const activeTab = ref('Tracker');
         
-                const systemUsers = {
-                    'lenay@rredco.com': { name: 'Lenay A.', access: ['Red Bluff', 'Redding'], active: false },
-                    'tricia@rredco.com': { name: 'Tricia K.', access: ['Red Bluff', 'Redding'], active: false },
-                    'whitney@rredco.com': { name: 'Whitney M.', access: ['Red Bluff', 'Redding'], active: false },
-                    'nicholas.grace@rredco.com': { name: 'Nicholas G.', access: ['Red Bluff', 'Redding'], active: true, superAdmin: true },
-                    'accounting@rredco.com': { name: 'Accounting Team', access: ['Red Bluff', 'Redding'], active: true, superAdmin: true }
-            };
+        const systemUsers = {
+            'lenay@rredco.com': { name: 'Lenay A.', access: ['Red Bluff', 'Redding'], active: false },
+            'tricia@rredco.com': { name: 'Tricia K.', access: ['Red Bluff', 'Redding'], active: false },
+            'whitney@rredco.com': { name: 'Whitney M.', access: ['Red Bluff', 'Redding'], active: false },
+            'nicholas.grace@rredco.com': { name: 'Nicholas G.', access: ['Red Bluff', 'Redding'], active: true, superAdmin: true },
+            'accounting@rredco.com': { name: 'Accounting Team', access: ['Red Bluff', 'Redding'], active: true, superAdmin: true }
+        };
 
-            const logSystemAction = async (actionType, details) => {
-                    try {
-                        await addDoc(collection(db, "systemLogs"), {
-                            timestamp: Date.now(),
-                            user: loggedInUser.value || 'System',
-                            actionType: actionType,
-                            details: details
-                        });
-                    } catch (error) {
-                        console.error("Error logging action:", error);
-                    }
-            };
+        const logSystemAction = async (actionType, details) => {
+            try {
+                await addDoc(collection(db, "systemLogs"), {
+                    timestamp: Date.now(),
+                    user: loggedInUser.value || 'System',
+                    actionType: actionType,
+                    details: details
+                });
+            } catch (error) {
+                console.error("Error logging action:", error);
+            }
+        };
 
-
-                const treesSalesData = ref(JSON.parse(localStorage.getItem('treesSalesData')) || []);
+        const treesSalesData = ref(JSON.parse(localStorage.getItem('treesSalesData')) || []);
         
-        // Manual save function instead of a deep watcher to prevent UI freezing
         const saveTreesDataLocal = () => {
             localStorage.setItem('treesSalesData', JSON.stringify(treesSalesData.value));
         };
@@ -116,19 +113,18 @@ createApp({
         };
 
         const promoCredits = ref([]);
-                const calendarMonths = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+        const calendarMonths = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
         const activeMonth = ref('August');
         
-        // Debounced Search Logic
-        const searchQueryInput = ref(''); // Bound to the UI input
-        const searchQuery = ref('');      // Used by the computed filters
+        const searchQueryInput = ref('');
+        const searchQuery = ref('');      
         let searchTimeout = null;
         
         watch(searchQueryInput, (newVal) => {
             clearTimeout(searchTimeout);
             searchTimeout = setTimeout(() => {
                 searchQuery.value = newVal;
-            }, 300); // 300ms delay before executing the heavy search
+            }, 300);
         });
 
         const showPromoModal = ref(false);
@@ -140,12 +136,11 @@ createApp({
         const resolutionCredit = ref(null);
         const resolutionForm = ref({ invoice: '', dateReceived: '' });
 
-                const markAsSent = async (credit) => {
+        const markAsSent = async (credit) => {
             if (confirm(`Mark this credit for ${credit.vendor} as 'Report Sent'?`)) {
                 try {
                     await updateDoc(doc(db, "promoCredits", credit.id), { status: "Report Sent" });
                     
-                    // Log to the new emailHistories collection
                     await addDoc(collection(db, "emailHistories"), {
                         creditId: credit.id,
                         vendor: credit.vendor,
@@ -175,7 +170,6 @@ createApp({
                             const ref = doc(db, "promoCredits", credit.id);
                             batch.update(ref, { status: "Report Sent" });
                             
-                            // History log
                             const historyRef = doc(collection(db, "emailHistories"));
                             batch.set(historyRef, {
                                 creditId: credit.id,
@@ -197,7 +191,6 @@ createApp({
                 }
             }
         };
-
 
         const openResolutionModal = (credit) => {
             resolutionCredit.value = credit;
@@ -235,7 +228,6 @@ createApp({
             }
         };
 
-        // --- MONTHLY BRAND REPORTS LOGIC ---
         const monthlyReportSummaries = computed(() => {
             const groups = {};
             let baseCredits = promoCredits.value.filter(c => c && c.site === activeSite.value);
@@ -252,18 +244,17 @@ createApp({
                     groups[m] = { month: m, total: 0, count: 0, credits: [], brands: {} };
                 }
                 
-                                if (!groups[m].brands[vendorName]) {
+                if (!groups[m].brands[vendorName]) {
                     const brandInfo = masterBrands.value.find(b => (b.vendor || '').toLowerCase() === vendorName.toLowerCase()) || {};
                     groups[m].brands[vendorName] = {
                         vendor: vendorName,
-                        month: m, // Store month here for report generation
+                        month: m,
                         email: brandInfo.email || '',
                         rep: brandInfo.rep || '',
                         credits: [],
                         total: 0
                     };
                 }
-
                 
                 groups[m].brands[vendorName].credits.push(c);
                 groups[m].brands[vendorName].total += (parseFloat(c.amount) || 0);
@@ -280,54 +271,52 @@ createApp({
                 }));
         });
 
-                const downloadMonthlyReport = (report) => {
-                    let csvContent = "Site,Date,Vendor,Distributor,Product/Description,Tracking ID,Credit Amount,Status\n";
-                    let csvTotal = 0;
-            
-                    const creditsToExport = report.credits || [];
-            
-                    creditsToExport.forEach(c => {
-                        const isAggregated = c.creditType && String(c.creditType).includes('Aggregated POS Sales');
-                        let matchedRawSales = [];
-                        if (isAggregated) {
-                            matchedRawSales = treesSalesData.value.filter(sale => {
-                                const brandMatch = (sale.brand || '').trim().toLowerCase() === (c.vendor || '').trim().toLowerCase();
-                                const siteMatch = sale.detectedSite === c.site;
-                                const monthMatch = sale.month === c.trackingMonth;
-                                return brandMatch && siteMatch && monthMatch;
-                            });
-                        }
-
-                        if (isAggregated && matchedRawSales.length > 0) {
-                            matchedRawSales.forEach(sale => {
-                                csvContent += `"${sale.detectedSite}","${sale.dateClosed}","${sale.brand}","${c.distributor}","${sale.productName} (${sale.discountTitle})","${sale.trackingId}","${formatCurrency(sale.owed)}","Synced"\n`;
-                                csvTotal += parseFloat(sale.owed) || 0;
-                            });
-                        } else {
-                            csvContent += `"${c.site}","${c.dates}","${c.vendor}","${c.distributor}","${c.creditType}","${c.invoice}","${formatCurrency(c.amount)}","${c.status}"\n`;
-                            csvTotal += parseFloat(c.amount) || 0;
-                        }
+        const downloadMonthlyReport = (report) => {
+            let csvContent = "Site,Date,Vendor,Distributor,Product/Description,Tracking ID,Credit Amount,Status\n";
+            let csvTotal = 0;
+    
+            const creditsToExport = report.credits || [];
+    
+            creditsToExport.forEach(c => {
+                const isAggregated = c.creditType && String(c.creditType).includes('Aggregated POS Sales');
+                let matchedRawSales = [];
+                if (isAggregated) {
+                    matchedRawSales = treesSalesData.value.filter(sale => {
+                        const brandMatch = (sale.brand || '').trim().toLowerCase() === (c.vendor || '').trim().toLowerCase();
+                        const siteMatch = sale.detectedSite === c.site;
+                        const monthMatch = sale.month === c.trackingMonth;
+                        return brandMatch && siteMatch && monthMatch;
                     });
+                }
 
-                    csvContent += `,,,,,, "TOTAL:", "${formatCurrency(csvTotal)}"\n`;
+                if (isAggregated && matchedRawSales.length > 0) {
+                    matchedRawSales.forEach(sale => {
+                        csvContent += `"${sale.detectedSite}","${sale.dateClosed}","${sale.brand}","${c.distributor}","${sale.productName} (${sale.discountTitle})","${sale.trackingId}","${formatCurrency(sale.owed)}","Synced"\n`;
+                        csvTotal += parseFloat(sale.owed) || 0;
+                    });
+                } else {
+                    csvContent += `"${c.site}","${c.dates}","${c.vendor}","${c.distributor}","${c.creditType}","${c.invoice}","${formatCurrency(c.amount)}","${c.status}"\n`;
+                    csvTotal += parseFloat(c.amount) || 0;
+                }
+            });
 
-                    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-                    const url = URL.createObjectURL(blob);
-                    const link = document.createElement("a");
-                    link.setAttribute("href", url);
-                    const currentYear = new Date().getFullYear();
-                    const reportName = report.vendor ? report.vendor.replace(/[^a-zA-Z0-9]/g, '_') : (report.month || 'Month');
-                    link.setAttribute("download", `${activeSite.value.replace(/\s/g, '_')}_Breakdown_${reportName}_${currentYear}.csv`);
-                    document.body.appendChild(link);
-                    link.click();
-                    document.body.removeChild(link);
-                    URL.revokeObjectURL(url);
+            csvContent += `,,,,,, "TOTAL:", "${formatCurrency(csvTotal)}"\n`;
 
-                    logSystemAction("EXPORT", `Downloaded Detailed Report for ${reportName}`);
-                };
+            const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.setAttribute("href", url);
+            const currentYear = new Date().getFullYear();
+            const reportName = report.vendor ? String(report.vendor).replace(/[^a-zA-Z0-9]/g, '_') : (report.month || 'Month');
+            link.setAttribute("download", `${activeSite.value.replace(/\s/g, '_')}_Breakdown_${reportName}_${currentYear}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            setTimeout(() => URL.revokeObjectURL(url), 150);
 
+            logSystemAction("EXPORT", `Downloaded Detailed Report for ${reportName}`);
+        };
 
-        // --- DASHBOARD CHARTS LOGIC (GOLD, EMERALD & OBSIDIAN THEME) ---
         let chartMonthlyInstance = null;
         let chartDistrosInstance = null;
         let chartBrandsInstance = null;
@@ -335,7 +324,6 @@ createApp({
 
         const drawCharts = () => {
             const activeCredits = promoCredits.value.filter(c => !c.archived);
-
             const currencyFormatter = (val) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(val);
             
             const customTooltip = {
@@ -366,7 +354,6 @@ createApp({
                 }
             };
 
-            // 1. Monthly Distributor Credits 
             const monthlySums = {};
             activeCredits.forEach(c => {
                 const m = c.trackingMonth || 'Unknown';
@@ -389,7 +376,6 @@ createApp({
                 options: standardVerticalOptions
             });
 
-            // 2. Top 10 Distributors 
             const distroSums = {};
             activeCredits.forEach(c => {
                 const d = (c.distributor || '').trim();
@@ -414,7 +400,6 @@ createApp({
                 options: standardHorizontalOptions
             });
 
-            // 3. Top 10 Brands (CHANGED TO EMERALD)
             const brandSums = {};
             activeCredits.forEach(c => {
                 const b = (c.vendor || '').trim();
@@ -431,7 +416,7 @@ createApp({
                     labels: topBrands.map(b => b[0]), 
                     datasets: [{ 
                         data: topBrands.map(b => b[1]), 
-                        backgroundColor: '#10b981', // Changed from Obsidian to Emerald
+                        backgroundColor: '#10b981', 
                         borderRadius: 6,
                         barPercentage: 0.65
                     }] 
@@ -439,7 +424,6 @@ createApp({
                 options: standardHorizontalOptions
             });
 
-            // 4. Credits by Store (CHANGED TO EMERALD AND GOLD PRIMARY)
             const storeSums = {};
             activeCredits.forEach(c => {
                 const s = c.site || 'Unknown';
@@ -453,7 +437,7 @@ createApp({
                     labels: Object.keys(storeSums), 
                     datasets: [{ 
                         data: Object.values(storeSums), 
-                        backgroundColor: ['#10b981', '#f59e0b', '#64748b', '#111827'], // Swapped Obsidian for Emerald
+                        backgroundColor: ['#10b981', '#f59e0b', '#64748b', '#111827'], 
                         borderWidth: 0 
                     }] 
                 },
@@ -477,7 +461,6 @@ createApp({
             if (activeTab.value === 'Dashboard') { drawCharts(); }
         }, { deep: true });
 
-        // --- EMAIL DRAFTER LOGIC ---
         const groupedPendingReports = computed(() => {
             if (!promoCredits.value) return [];
             let pending = promoCredits.value.filter(c => c && c.site === activeSite.value && (c.status || '').toLowerCase() === 'pending' && c.archived !== true);
@@ -498,7 +481,7 @@ createApp({
             return Object.values(groups).sort((a, b) => a.vendor.localeCompare(b.vendor));
         });
 
-                const draftEmail = (report) => {
+        const draftEmail = (report) => {
             if (!report.email) {
                 alert(`No email mapped for ${report.vendor}. Please add one in the Brand Directory first.`);
                 return;
@@ -507,36 +490,32 @@ createApp({
             const storeName = activeSite.value === 'Redding' ? 'Sundial' : activeSite.value;
             const currentYear = new Date().getFullYear();
             
-            // Use the specific month from the report object or the first credit
             const monthStr = report.month || (report.credits[0] && report.credits[0].trackingMonth) || activeMonth.value;
             const periodStr = `${monthStr} ${currentYear}`;
 
-            let csvContent = "";
-
-            csvContent += "Date,Location,Brand,Product / Description,Discount Title,Tracking ID / Invoice,Entry Type,Credit Amount\n";
+            let csvContent = "Date,Location,Brand,Product / Description,Discount Title,Tracking ID / Invoice,Entry Type,Credit Amount\n";
             let csvTotal = 0;
 
-                            report.credits.forEach(c => {
-                    const isAggregated = c.creditType && String(c.creditType).includes('Aggregated POS Sales');
-                    let matchedRawSales = [];
-                    if (isAggregated) {
-                        matchedRawSales = treesSalesData.value.filter(sale => {
-                            const brandMatch = (sale.brand || '').trim().toLowerCase() === (c.vendor || '').trim().toLowerCase();
-                            const siteMatch = sale.detectedSite === c.site;
-                            const monthMatch = sale.month === c.trackingMonth;
-                            return brandMatch && siteMatch && monthMatch;
-                        });
-                    }
-
+            report.credits.forEach(c => {
+                const isAggregated = c.creditType && String(c.creditType).includes('Aggregated POS Sales');
+                let matchedRawSales = [];
+                if (isAggregated) {
+                    matchedRawSales = treesSalesData.value.filter(sale => {
+                        const brandMatch = (sale.brand || '').trim().toLowerCase() === (c.vendor || '').trim().toLowerCase();
+                        const siteMatch = sale.detectedSite === c.site;
+                        const monthMatch = sale.month === c.trackingMonth;
+                        return brandMatch && siteMatch && monthMatch;
+                    });
+                }
 
                 if (isAggregated && matchedRawSales.length > 0) {
                     matchedRawSales.forEach(sale => {
-                        const safeDate = `"${(sale.dateClosed || '').replace(/"/g, '""')}"`;
-                        const safeLoc = `"${(sale.storeName || '').replace(/"/g, '""')}"`;
-                        const safeBrand = `"${(sale.brand || '').replace(/"/g, '""')}"`;
-                        const safeProd = `"${(sale.productName || '').replace(/"/g, '""')}"`;
-                        const safeDisc = `"${(sale.discountTitle || '').replace(/"/g, '""')}"`;
-                        const safeTrack = `"${(sale.trackingId || '').replace(/"/g, '""')}"`;
+                        const safeDate = `"${String(sale.dateClosed || '').replace(/"/g, '""')}"`;
+                        const safeLoc = `"${String(sale.storeName || '').replace(/"/g, '""')}"`;
+                        const safeBrand = `"${String(sale.brand || '').replace(/"/g, '""')}"`;
+                        const safeProd = `"${String(sale.productName || '').replace(/"/g, '""')}"`;
+                        const safeDisc = `"${String(sale.discountTitle || '').replace(/"/g, '""')}"`;
+                        const safeTrack = `"${String(sale.trackingId || '').replace(/"/g, '""')}"`;
                         const safeType = `"POS Itemized"`;
                         const safeAmount = `"${formatCurrency(sale.owed)}"`;
                         
@@ -544,12 +523,12 @@ createApp({
                         csvTotal += parseFloat(sale.owed) || 0;
                     });
                 } else {
-                    const safeDate = `"${(c.dates || '').replace(/"/g, '""')}"`;
-                    const safeLoc = `"${(c.site || '').replace(/"/g, '""')}"`;
-                    const safeBrand = `"${(c.vendor || '').replace(/"/g, '""')}"`;
-                    const safeProd = `"${(c.creditType || '').replace(/"/g, '""')}"`; 
+                    const safeDate = `"${String(c.dates || '').replace(/"/g, '""')}"`;
+                    const safeLoc = `"${String(c.site || '').replace(/"/g, '""')}"`;
+                    const safeBrand = `"${String(c.vendor || '').replace(/"/g, '""')}"`;
+                    const safeProd = `"${String(c.creditType || '').replace(/"/g, '""')}"`; 
                     const safeDisc = `"-"`;
-                    const safeTrack = `"${(c.invoice || '').replace(/"/g, '""')}"`;
+                    const safeTrack = `"${String(c.invoice || '').replace(/"/g, '""')}"`;
                     const safeType = isAggregated ? `"Summary (Raw Data Missing)"` : `"Manual Entry"`; 
                     const safeAmount = `"${formatCurrency(c.amount)}"`;
                     
@@ -560,22 +539,25 @@ createApp({
 
             csvContent += `,,,,,, "TOTAL:", "${formatCurrency(csvTotal)}"\n`;
 
-            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
             const url = URL.createObjectURL(blob);
             const link = document.createElement("a");
             link.setAttribute("href", url);
-            const cleanVendorName = report.vendor.replace(/[^a-zA-Z0-9]/g, '_');
-            link.setAttribute("download", `${cleanVendorName}_${storeName}_Credits_${periodStr.replace(/\s/g, '_')}.csv`);
+            
+            const cleanVendorName = String(report.vendor || 'Vendor').replace(/[^a-zA-Z0-9]/g, '_');
+            const cleanPeriodStr = String(periodStr || '').replace(/\s/g, '_');
+            link.setAttribute("download", `${cleanVendorName}_${storeName}_Credits_${cleanPeriodStr}.csv`);
+            
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
-            URL.revokeObjectURL(url);
+            setTimeout(() => URL.revokeObjectURL(url), 150);
 
-                        const cleanEmails = report.email.split(/[,;\s]+/).map(e => e.trim()).filter(Boolean).join(',');
+            const cleanEmails = String(report.email || '').split(/[,;\s]+/).map(e => e.trim()).filter(Boolean).join(',');
             const senderEmail = 'nicholas.grace@rredco.com';
             const subject = `credit report - ${storeName} promotions ${periodStr}`;
 
-                        let body = `Hello ${report.vendor},\n\n`;
+            let body = `Hello ${report.vendor || 'Vendor'},\n\n`;
             body += `Please see the attached itemized breakdown for vendor credits owed to ${storeName} for ${periodStr}.\n\n`;
             body += `The total amount for this period is ${formatCurrency(csvTotal)}.\n\n`;
             body += `Please review the attached CSV and let us know if you have any questions or when we can expect the credit to be applied to our account.\n\n`;
@@ -588,12 +570,10 @@ createApp({
             const encodedBody = encodeURIComponent(body);
             const encodedCc = encodeURIComponent(`accounting@rredco.com,${senderEmail}`);
 
-                        window.location.href = `mailto:${cleanEmails}?cc=${encodedCc}&subject=${encodedSubject}&body=${encodedBody}`;
+            window.location.href = `mailto:${cleanEmails}?cc=${encodedCc}&subject=${encodedSubject}&body=${encodedBody}`;
         };
 
-
-
-                const archiveAndExportAnnualReport = async () => {
+        const archiveAndExportAnnualReport = async () => {
             const creditsToArchive = promoCredits.value.filter(c => 
                 (c.status === 'Applied' || c.status === 'Uncollectable') && c.archived !== true
             );
@@ -611,17 +591,17 @@ createApp({
             let csvTotal = 0;
             
             creditsToArchive.forEach(c => {
-                const safeSite = `"${(c.site || '').replace(/"/g, '""')}"`;
-                const safeMonth = `"${(c.trackingMonth || '').replace(/"/g, '""')}"`;
-                const safeVendor = `"${(c.vendor || '').replace(/"/g, '""')}"`;
-                const safeDist = `"${(c.distributor || '').replace(/"/g, '""')}"`;
-                const safeType = `"${(c.creditType || '').replace(/"/g, '""')}"`;
-                const safeDates = `"${(c.dates || '').replace(/"/g, '""')}"`;
+                const safeSite = `"${String(c.site || '').replace(/"/g, '""')}"`;
+                const safeMonth = `"${String(c.trackingMonth || '').replace(/"/g, '""')}"`;
+                const safeVendor = `"${String(c.vendor || '').replace(/"/g, '""')}"`;
+                const safeDist = `"${String(c.distributor || '').replace(/"/g, '""')}"`;
+                const safeType = `"${String(c.creditType || '').replace(/"/g, '""')}"`;
+                const safeDates = `"${String(c.dates || '').replace(/"/g, '""')}"`;
                 const safeAmount = `"${formatCurrency(c.amount)}"`;
-                const safeReq = `"${(c.dateRequested || '').replace(/"/g, '""')}"`;
-                const safeRec = `"${(c.dateReceived || '').replace(/"/g, '""')}"`;
-                const safeInvoice = `"${(c.invoice || '').replace(/"/g, '""')}"`;
-                const safeStatus = `"${(c.status || '').replace(/"/g, '""')}"`;
+                const safeReq = `"${String(c.dateRequested || '').replace(/"/g, '""')}"`;
+                const safeRec = `"${String(c.dateReceived || '').replace(/"/g, '""')}"`;
+                const safeInvoice = `"${String(c.invoice || '').replace(/"/g, '""')}"`;
+                const safeStatus = `"${String(c.status || '').replace(/"/g, '""')}"`;
                 const archiveDate = `"${new Date().toLocaleDateString()}"`;
                 
                 csvContent += `${safeSite},${safeMonth},${safeVendor},${safeDist},${safeType},${safeDates},${safeAmount},${safeReq},${safeRec},${safeInvoice},${safeStatus},${archiveDate}\n`;
@@ -630,7 +610,7 @@ createApp({
 
             csvContent += `,,,,,, "TOTAL:", "${formatCurrency(csvTotal)}"\n`;
 
-            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
             const url = URL.createObjectURL(blob);
             const link = document.createElement("a");
             link.setAttribute("href", url);
@@ -639,7 +619,7 @@ createApp({
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
-            URL.revokeObjectURL(url);
+            setTimeout(() => URL.revokeObjectURL(url), 150);
 
             try {
                 const batch = writeBatch(db);
@@ -649,7 +629,6 @@ createApp({
                 });
                 await batch.commit();
                 
-                // Securely log the archive event with financial totals
                 logSystemAction("ARCHIVE", `Archived & Exported ${creditsToArchive.length} records totaling ${formatCurrency(csvTotal)}`);
                 
                 alert(`Success! Master spreadsheet downloaded and ${creditsToArchive.length} records safely archived.`);
@@ -686,59 +665,60 @@ createApp({
         });
         
         const form = ref(getEmptyForm());
-        let unsubscribeSnapshot = null;
         let unsubscribeBrands = null;
 
-           onMounted(() => {
-    refreshIcons();
+        onMounted(() => {
+            refreshIcons();
 
-    onAuthStateChanged(auth, (user) => {
+            onAuthStateChanged(auth, (user) => {
+                showImportModal.value = false;
+                showBrandImportModal.value = false;
 
-        showImportModal.value = false;
-        showBrandImportModal.value = false;
+                if (!user) {
+                    isManagerUnlocked.value = false;
+                    loggedInUser.value = '';
+                    return;
+                }
 
-        if (!user) {
-            isManagerUnlocked.value = false;
-            loggedInUser.value = '';
-            return;
-        }
+                const userEmail = user.email.toLowerCase();
+                const managerData = systemUsers[userEmail];
 
-        const userEmail = user.email.toLowerCase();
-        const managerData = systemUsers[userEmail];
+                if (managerData && managerData.active) {
+                    loggedInUser.value = managerData.name;
+                    activeSite.value = managerData.access[0];
+                    isManagerUnlocked.value = true;
+                    
+                    unsubscribeBrands = onSnapshot(collection(db, "brands"), (snapshot) => {
+                        const fetchedBrands = [];
+                        snapshot.forEach(docSnap => { fetchedBrands.push({ id: docSnap.id, ...docSnap.data() }); });
+                        fetchedBrands.sort((a, b) => (a.vendor || '').localeCompare(b.vendor || ''));
+                        masterBrands.value = fetchedBrands;
+                    });
 
-       if (managerData && managerData.active) {
+                    onSnapshot(collection(db, "treesSales"), (snapshot) => {
+                        const fetchedSales = [];
+                        snapshot.forEach(docSnap => { fetchedSales.push({ id: docSnap.id, ...docSnap.data() }); });
+                        treesSalesData.value = fetchedSales;
+                    });
 
-    loggedInUser.value = managerData.name;
-    activeSite.value = managerData.access[0];
-    isManagerUnlocked.value = true;
-                            // 2. Brand Directory Sync
-                            unsubscribeBrands = onSnapshot(collection(db, "brands"), (snapshot) => {
-                                const fetchedBrands = [];
-                                snapshot.forEach(docSnap => { fetchedBrands.push({ id: docSnap.id, ...docSnap.data() }); });
-                                fetchedBrands.sort((a, b) => (a.vendor || '').localeCompare(b.vendor || ''));
-                                masterBrands.value = fetchedBrands;
-                            });
+                    onSnapshot(collection(db, "promoCredits"), (snapshot) => {
+                        const fetchedCredits = [];
+                        snapshot.forEach(docSnap => { fetchedCredits.push({ id: docSnap.id, ...docSnap.data() }); });
+                        promoCredits.value = fetchedCredits;
+                    });
 
-                            // 3. Raw Trees Sales Sync (Added for shared breakdowns)
-                            onSnapshot(collection(db, "treesSales"), (snapshot) => {
-                                const fetchedSales = [];
-                                snapshot.forEach(docSnap => { fetchedSales.push({ id: docSnap.id, ...docSnap.data() }); });
-                                treesSalesData.value = fetchedSales;
-                            });
+                    if (managerData.superAdmin) {
+                        onSnapshot(collection(db, "systemLogs"), (snapshot) => {
+                            const logs = [];
+                            snapshot.forEach(docSnap => { logs.push({ id: docSnap.id, ...docSnap.data() }); });
+                            logs.sort((a, b) => b.timestamp - a.timestamp);
+                            systemLogs.value = logs;
+                        });
+                    }
+                }
+            });
+        });
 
-                            // 4. System Logs Sync
-                            if (managerData.superAdmin) {
-                                onSnapshot(collection(db, "systemLogs"), (snapshot) => {
-                                    const logs = [];
-                                    snapshot.forEach(docSnap => { logs.push({ id: docSnap.id, ...docSnap.data() }); });
-                                    logs.sort((a, b) => b.timestamp - a.timestamp);
-                                    systemLogs.value = logs;
-                                });
-                            
-
-                            });
-            
-                            });
         const handleLogin = () => {
             authError.value = '';
             signInWithEmailAndPassword(auth, emailInput.value.trim(), passwordInput.value)
@@ -957,7 +937,7 @@ createApp({
             } catch (err) { alert("Failed to save import to cloud."); }
         };
 
-                        const regenerateBrandSummary = async (brandReport) => {
+        const regenerateBrandSummary = async (brandReport) => {
             if (!confirm(`This will delete current aggregated summaries for ${brandReport.vendor} in ${brandReport.month} and re-calculate them from raw sales data. Continue?`)) return;
             await runRegeneration([brandReport], brandReport.month);
         };
@@ -967,56 +947,53 @@ createApp({
             await runRegeneration(monthGroup.brandList, monthGroup.month);
         };
 
-                const runRegeneration = async (brandList, month) => {
-                    try {
-                        const batch = writeBatch(db);
-                        let workFound = false;
+        const runRegeneration = async (brandList, month) => {
+            try {
+                const batch = writeBatch(db);
+                let workFound = false;
 
-                        for (const brand of brandList) {
-                            // 1. Find and delete existing aggregated credits for this brand/month/site
-                            const existingAggregated = promoCredits.value.filter(c => 
-                                c.site === activeSite.value && 
-                                c.trackingMonth === month && 
-                                (c.vendor || '').toLowerCase() === (brand.vendor || '').toLowerCase() &&
-                                c.creditType && String(c.creditType).includes('Aggregated POS Sales')
-                            );
-                    
-                            existingAggregated.forEach(c => {
-                                batch.delete(doc(db, "promoCredits", c.id));
-                                workFound = true;
-                            });
+                for (const brand of brandList) {
+                    const existingAggregated = promoCredits.value.filter(c => 
+                        c.site === activeSite.value && 
+                        c.trackingMonth === month && 
+                        (c.vendor || '').toLowerCase() === (brand.vendor || '').toLowerCase() &&
+                        c.creditType && String(c.creditType).includes('Aggregated POS Sales')
+                    );
+            
+                    existingAggregated.forEach(c => {
+                        batch.delete(doc(db, "promoCredits", c.id));
+                        workFound = true;
+                    });
 
-                            // 2. Find all sales for this brand/month/site and mark as Unsynced
-                            const relevantSales = treesSalesData.value.filter(sale => 
-                                sale.detectedSite === activeSite.value &&
-                                sale.month === month &&
-                                (sale.brand || '').toLowerCase() === (brand.vendor || '').toLowerCase()
-                            );
+                    const relevantSales = treesSalesData.value.filter(sale => 
+                        sale.detectedSite === activeSite.value &&
+                        sale.month === month &&
+                        (sale.brand || '').toLowerCase() === (brand.vendor || '').toLowerCase()
+                    );
 
-                            relevantSales.forEach(sale => {
-                                batch.update(doc(db, "treesSales", sale.id), { status: 'Unsynced' });
-                                workFound = true;
-                            });
-                        }
+                    relevantSales.forEach(sale => {
+                        batch.update(doc(db, "treesSales", sale.id), { status: 'Unsynced' });
+                        workFound = true;
+                    });
+                }
 
-                        if (workFound) {
-                            await batch.commit();
-                            // Small delay to ensure Firestore processed deletions before re-aggregation
-                            setTimeout(async () => {
-                                await pushToMainTracker();
-                                logSystemAction("UPDATE", `Regenerated reports for ${month} (${brandList.length} brands)`);
-                            }, 800);
-                        } else {
-                            alert("No automated POS credits found to regenerate for this selection.");
-                        }
-                    } catch (err) {
-                        console.error(err);
-                        alert("Failed to regenerate reports.");
-                    }
-                };
+                if (workFound) {
+                    await batch.commit();
+                    setTimeout(async () => {
+                        await pushToMainTracker();
+                        logSystemAction("UPDATE", `Regenerated reports for ${month} (${brandList.length} brands)`);
+                    }, 800);
+                } else {
+                    alert("No automated POS credits found to regenerate for this selection.");
+                }
+            } catch (err) {
+                console.error(err);
+                alert("Failed to regenerate reports.");
+            }
+        };
 
-                const handleTreesCsvUpload = async (e) => {
-                    const file = e.target.files[0];
+        const handleTreesCsvUpload = async (e) => {
+            const file = e.target.files[0];
             if (!file) return;
             const reader = new FileReader();
             reader.onload = async (evt) => {
@@ -1084,7 +1061,7 @@ createApp({
                         batch.set(newDocRef, newSale);
                         count++;
 
-                        if (count % 400 === 0) { // Firestore batch limit is 500
+                        if (count % 400 === 0) {
                             await batch.commit();
                         }
                     }
@@ -1141,7 +1118,6 @@ createApp({
                     batch.set(newDocRef, payload);
                     creditsCreated++;
 
-                    // Mark sales items as synced in Firestore
                     data.salesItems.forEach(saleId => {
                         const saleRef = doc(db, "treesSales", saleId);
                         batch.update(saleRef, { status: 'Synced' });
@@ -1160,7 +1136,6 @@ createApp({
             }
         };
 
-        
         const resetBrandImport = () => {
             brandPastedGrid.value = [];
             brandMappedHeaders.value = [];
@@ -1254,7 +1229,7 @@ createApp({
             }
         };
 
-                                        const isSuperAdmin = ref(false);
+        const isSuperAdmin = ref(false);
         const systemLogs = ref([]);
 
         const refreshIcons = () => {
@@ -1300,4 +1275,3 @@ createApp({
         };
     }
 }).mount('#app');
-
