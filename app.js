@@ -689,26 +689,30 @@ createApp({
         let unsubscribeSnapshot = null;
         let unsubscribeBrands = null;
 
-                onMounted(() => {
-            refreshIcons();
-            onAuthStateChanged(auth, (user) => {
-                if (user) {
-                    const userEmail = user.email.toLowerCase();
-                    const managerData = systemUsers[userEmail];
-                    
-                                            if (managerData && managerData.active) {
-                            loggedInUser.value = managerData.name;
-                            activeSite.value = managerData.access[0];
-                            isManagerUnlocked.value = true;
-                            
-                            // 1. Promo Credits Sync
-                            unsubscribeSnapshot = onSnapshot(collection(db, "promoCredits"), (snapshot) => {
-                                const fetchedCredits = [];
-                                snapshot.forEach(docSnap => { fetchedCredits.push({ id: docSnap.id, ...docSnap.data() }); });
-                                fetchedCredits.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
-                                promoCredits.value = fetchedCredits;
-                            });
+           onMounted(() => {
+    refreshIcons();
 
+    onAuthStateChanged(auth, (user) => {
+
+        showImportModal.value = false;
+        showBrandImportModal.value = false;
+
+        if (!user) {
+            isManagerUnlocked.value = false;
+            loggedInUser.value = '';
+            return;
+        }
+
+        const userEmail = user.email.toLowerCase();
+        const managerData = systemUsers[userEmail];
+
+        if (!managerData || !managerData.active) {
+            return;
+        }
+
+        loggedInUser.value = managerData.name;
+        activeSite.value = managerData.access[0];
+        isManagerUnlocked.value = true;
                             // 2. Brand Directory Sync
                             unsubscribeBrands = onSnapshot(collection(db, "brands"), (snapshot) => {
                                 const fetchedBrands = [];
