@@ -9,7 +9,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script> <!-- CHART.JS FOR DASHBOARD -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Calibri:wght@400;700&display=swap" rel="stylesheet">
     
     <!-- External CSS -->
@@ -177,7 +177,7 @@
                             
                             <button v-if="brand.credits.some(c => c.status === 'Pending')"
                                 @click="markReportGroupAsSent(brand)"
-                                class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg font-bold text-xs shadow-sm transition-colors flex items-center gap-1.5 mt-2">
+                                class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg font-bold text-xs shadow-sm transition-colors flex items-center justify-center gap-1.5 mt-2">
                                 <i data-lucide="send" class="w-3.5 h-3.5"></i> Mark Sent
                             </button>
 
@@ -523,7 +523,7 @@
                                     </div>
                                 </td>
                                 <td><input type="text" :value="brand.rep" @change="updateBrandField(brand.id, 'rep', $event, brand.vendor)" placeholder="-" class="w-full min-w-[120px] bg-transparent border-b border-dashed border-transparent hover:border-gray-300 focus:border-emerald-500 outline-none px-1 py-0.5"></td>
-                                <td><input type="email" :value="brand.email" @change="updateBrandField(brand.id, 'email', $event, brand.vendor)" placeholder="-" class="w-full min-w-[180px] bg-transparent border-b border-dashed border-transparent hover:border-gray-300 focus:border-emerald-500 outline-none px-1 py-0.5 text-emerald-600 font-medium"></td>
+                                <td><input type="text" :value="brand.email" @change="updateBrandField(brand.id, 'email', $event, brand.vendor)" placeholder="-" class="w-full min-w-[180px] bg-transparent border-b border-dashed border-transparent hover:border-gray-300 focus:border-emerald-500 outline-none px-1 py-0.5 text-emerald-600 font-medium"></td>
                                 <td><input type="text" :value="brand.treesName" @change="updateBrandField(brand.id, 'treesName', $event, brand.vendor)" placeholder="-" class="w-full min-w-[160px] bg-transparent border-b border-dashed border-transparent hover:border-gray-300 focus:border-emerald-500 outline-none px-1 py-0.5"></td>
                                 <td><input type="text" :value="brand.distributor" @change="updateBrandField(brand.id, 'distributor', $event, brand.vendor)" placeholder="-" class="w-full min-w-[140px] bg-transparent border-b border-dashed border-transparent hover:border-gray-300 focus:border-emerald-500 outline-none px-1 py-0.5"></td>
                                 <td><input type="text" :value="brand.assetLibrary" @change="updateBrandField(brand.id, 'assetLibrary', $event, brand.vendor)" placeholder="-" class="w-full min-w-[180px] bg-transparent border-b border-dashed border-transparent hover:border-gray-300 focus:border-emerald-500 outline-none px-1 py-0.5 text-xs text-amber-600"></td>
