@@ -734,7 +734,7 @@ createApp({
                                     logs.sort((a, b) => b.timestamp - a.timestamp);
                                     systemLogs.value = logs;
                                 });
-                            }
+                            
 
                             });
             
