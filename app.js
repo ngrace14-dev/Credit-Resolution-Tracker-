@@ -1264,26 +1264,13 @@ createApp({
             }
         };
 
-                                const isSuperAdmin = ref(false);
+                                        const isSuperAdmin = ref(false);
         const systemLogs = ref([]);
 
         const refreshIcons = () => {
             nextTick(() => {
                 if (window.lucide) window.lucide.createIcons();
             });
-        };
-
-        const logSystemAction = async (actionType, details) => {
-            try {
-                await addDoc(collection(db, "systemLogs"), {
-                    timestamp: Date.now(),
-                    user: loggedInUser.value || 'System',
-                    actionType: actionType,
-                    details: details
-                });
-            } catch (error) {
-                console.error("Error logging action:", error);
-            }
         };
 
         const clearAllSalesData = async () => {
