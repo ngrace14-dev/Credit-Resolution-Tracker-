@@ -271,7 +271,6 @@ createApp({
                 }));
         });
 
-        // REFACTORED FOR DIME REQUIREMENTS
         const downloadMonthlyReport = (report) => {
             let csvContent = "Location,Date & Time,Brand,Product Name,Transaction ID,Quantity Sold,Unit Price,Total Before Tax,Discount Title,Discount Amount,Credit Owed,Entry Type\n";
             let csvTotal = 0;
@@ -536,7 +535,7 @@ createApp({
             const periodStr = `${monthStr} ${currentYear}`;
             const cleanStr = (str) => String(str || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
 
-            let csvContent = "Date,Location,Brand,Product / Description,Discount Title,Tracking ID / Invoice,Entry Type,Credit Amount\n";
+            let csvContent = "Location,Date & Time,Brand,Product Name,Transaction ID,Quantity Sold,Unit Price,Total Before Tax,Discount Title,Discount Amount,Credit Owed,Entry Type\n";
             let csvTotal = 0;
 
             const matchedRawSales = treesSalesData.value.filter(sale => {
@@ -554,10 +553,14 @@ createApp({
                     const safeProd = `"${String(sale.productName || '').replace(/"/g, '""')}"`;
                     const safeDisc = `"${String(sale.discountTitle || '').replace(/"/g, '""')}"`;
                     const safeTrack = `"${String(sale.trackingId || '').replace(/"/g, '""')}"`;
+                    const safeQty = `"${sale.unitsSold || 0}"`;
+                    const safePrice = `"${formatCurrency(sale.unitPrice || 0)}"`;
+                    const safePreTax = `"${formatCurrency((sale.unitsSold || 0) * (sale.unitPrice || 0))}"`;
+                    const safeDiscAmount = `"${formatCurrency(sale.discountAmount || 0)}"`;
                     const safeType = `"POS Itemized"`;
                     const safeAmount = `"${formatCurrency(sale.owed)}"`;
                     
-                    csvContent += `${safeDate},${safeLoc},${safeBrand},${safeProd},${safeDisc},${safeTrack},${safeType},${safeAmount}\n`;
+                    csvContent += `${safeLoc},${safeDate},${safeBrand},${safeProd},${safeTrack},${safeQty},${safePrice},${safePreTax},${safeDiscTitle},${safeDiscAmount},${safeAmount},${safeType}\n`;
                     csvTotal += parseFloat(sale.owed) || 0;
                 });
             }
@@ -569,29 +572,37 @@ createApp({
                     const safeLoc = `"${String(c.site || '').replace(/"/g, '""')}"`;
                     const safeBrand = `"${String(c.vendor || '').replace(/"/g, '""')}"`;
                     const safeProd = `"${String(c.creditType || '').replace(/"/g, '""')}"`; 
-                    const safeDisc = `"-"`;
                     const safeTrack = `"${String(c.invoice || '').replace(/"/g, '""')}"`;
+                    const safeQty = `"-"`;
+                    const safePrice = `"-"`;
+                    const safePreTax = `"-"`;
+                    const safeDiscTitle = `"-"`;
+                    const safeDiscAmount = `"-"`;
                     const safeType = `"Manual Entry"`; 
                     const safeAmount = `"${formatCurrency(c.amount)}"`;
                     
-                    csvContent += `${safeDate},${safeLoc},${safeBrand},${safeProd},${safeDisc},${safeTrack},${safeType},${safeAmount}\n`;
+                    csvContent += `${safeLoc},${safeDate},${safeBrand},${safeProd},${safeTrack},${safeQty},${safePrice},${safePreTax},${safeDiscTitle},${safeDiscAmount},${safeAmount},${safeType}\n`;
                     csvTotal += parseFloat(c.amount) || 0;
                 } else if (matchedRawSales.length === 0) {
                     const safeDate = `"${String(c.dates || '').replace(/"/g, '""')}"`;
                     const safeLoc = `"${String(c.site || '').replace(/"/g, '""')}"`;
                     const safeBrand = `"${String(c.vendor || '').replace(/"/g, '""')}"`;
                     const safeProd = `"${String(c.creditType || '').replace(/"/g, '""')}"`; 
-                    const safeDisc = `"-"`;
                     const safeTrack = `"${String(c.invoice || '').replace(/"/g, '""')}"`;
+                    const safeQty = `"-"`;
+                    const safePrice = `"-"`;
+                    const safePreTax = `"-"`;
+                    const safeDiscTitle = `"-"`;
+                    const safeDiscAmount = `"-"`;
                     const safeType = `"Summary (Raw Data Missing)"`; 
                     const safeAmount = `"${formatCurrency(c.amount)}"`;
                     
-                    csvContent += `${safeDate},${safeLoc},${safeBrand},${safeProd},${safeDisc},${safeTrack},${safeType},${safeAmount}\n`;
+                    csvContent += `${safeLoc},${safeDate},${safeBrand},${safeProd},${safeTrack},${safeQty},${safePrice},${safePreTax},${safeDiscTitle},${safeDiscAmount},${safeAmount},${safeType}\n`;
                     csvTotal += parseFloat(c.amount) || 0;
                 }
             });
 
-            csvContent += `,,,,,, "TOTAL:", "${formatCurrency(csvTotal)}"\n`;
+            csvContent += `,,,,,,,,,, "TOTAL:", "${formatCurrency(csvTotal)}"\n`;
 
             const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
             const url = URL.createObjectURL(blob);
@@ -609,7 +620,9 @@ createApp({
 
             const cleanEmails = String(report.email || '').split(/[,;\s]+/).map(e => e.trim()).filter(Boolean).join(',');
             const senderEmail = 'nicholas.grace@rredco.com';
-            const subject = `credit report - ${storeName} promotions ${periodStr}`;
+            
+            const subjectStoreName = activeSite.value === 'Redding' ? 'Redding Sundial' : activeSite.value;
+            const subject = `credit report - ${subjectStoreName} promotions ${periodStr}`;
 
             let body = `Hello ${report.vendor || 'Vendor'},\n\n`;
             body += `Please see the attached itemized breakdown for vendor credits owed to ${storeName} for ${periodStr}.\n\n`;
@@ -1046,7 +1059,6 @@ createApp({
             }
         };
 
-        // REFACTORED TO CAPTURE DIME REQUIRED COLUMNS
         const handleTreesCsvUpload = async (e) => {
             const file = e.target.files[0];
             if (!file) return;
@@ -1102,7 +1114,7 @@ createApp({
                             month: parsedMonth, 
                             brand: rowObj['Product Brand'] || 'Unknown Brand',
                             discountTitle: rowObj['Discount Title'] || '',
-                            dateClosed: dateStr, // Preserving full date/time for DIME
+                            dateClosed: dateStr, 
                             storeName: storeString,
                             detectedSite: detectedSite,
                             productName: rowObj['Product Name'] || '',
@@ -1318,7 +1330,6 @@ createApp({
             const currentYear = new Date().getFullYear();
             const monthStr = brand.month || activeMonth.value;
 
-            // 1. Build the text summary for the clipboard
             let textToCopy = `Store: ${storeName}\n`;
             textToCopy += `Promo Period: ${monthStr} ${currentYear}\n`;
             textToCopy += `Total Credit Requested: ${formatCurrency(brand.total)}\n\n`;
@@ -1333,12 +1344,9 @@ createApp({
             
             textToCopy += `\n*Itemized POS report attached to submission.`;
 
-            // 2. Copy to clipboard and open portal
             try {
                 await navigator.clipboard.writeText(textToCopy);
                 alert(`✅ Text Copied to Clipboard!\n\nSimply paste into the DIME "Promotion Details" box.\n\nOpening the DIME Portal now...`);
-                
-                // OPENS THE JOTFORM LINK
                 window.open('https://form.jotform.com/252994629916172', '_blank'); 
             } catch (err) {
                 console.error('Failed to copy text: ', err);
