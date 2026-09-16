@@ -1264,44 +1264,62 @@ createApp({
             }
         };
 
-                        const systemLogs = ref([]);
-
-        const isSuperAdmin = computed(() => {
-            const user = auth.currentUser;
-            if (!user) return false;
-            const userData = systemUsers[user.email.toLowerCase()];
-            return userData && userData.superAdmin;
-        });
+                                const isSuperAdmin = ref(false);
+        const systemLogs = ref([]);
 
         const refreshIcons = () => {
-            if (window.lucide) {
-                nextTick(() => {
-                    window.lucide.createIcons();
+            nextTick(() => {
+                if (window.lucide) window.lucide.createIcons();
+            });
+        };
+
+        const logSystemAction = async (actionType, details) => {
+            try {
+                await addDoc(collection(db, "systemLogs"), {
+                    timestamp: Date.now(),
+                    user: loggedInUser.value || 'System',
+                    actionType: actionType,
+                    details: details
                 });
+            } catch (error) {
+                console.error("Error logging action:", error);
+            }
+        };
+
+        const clearAllSalesData = async () => {
+            if (confirm("Are you sure you want to permanently delete ALL raw sales data from the cloud? This cannot be undone.")) {
+                try {
+                    const batch = writeBatch(db);
+                    treesSalesData.value.forEach(sale => {
+                        batch.delete(doc(db, "treesSales", sale.id));
+                    });
+                    await batch.commit();
+                    logSystemAction("DELETE", "Cleared all raw sales data");
+                    alert("All raw sales data has been cleared.");
+                } catch (error) {
+                    console.error("Error clearing sales data:", error);
+                    alert("Failed to clear sales data.");
+                }
             }
         };
 
         return {
-            isManagerUnlocked, loggedInUser, emailInput, passwordInput, authError, activeSite, activeTab,
-            masterBrands, selectedBrands, allBrandsSelected, toggleAllBrands, deleteSelectedBrands, updateBrandField,
-            promoCredits, calendarMonths, activeMonth, searchQueryInput, searchQuery,
-            showPromoModal, showBrandDropdown, editingId, showReportModal, showResolutionModal, resolutionCredit, resolutionForm,
-            markAsSent, markReportGroupAsSent, openResolutionModal, submitResolution, monthlyReportSummaries, downloadMonthlyReport,
-            groupedPendingReports, draftEmail, archiveAndExportAnnualReport, showImportModal, rawPasteData, pastedGrid, mappedHeaders,
-            showBrandImportModal, brandPasteData, brandPastedGrid, brandMappedHeaders, brandAvailableHeaders, availableHeaders,
-            form, handleLogin, forceLock, filteredBrands, selectBrand, formatCurrency, filteredCredits, totalPending, totalApplied,
-            openPromoModal, closePromoModal, handleFileUpload, saveCredit, editCredit, deleteCredit, openImportModal, closeImportModal,
-            resetImport, processRawPaste, processImport, regenerateBrandSummary, regenerateMonthReports, treesSalesData, 
-            filteredTreesSalesData, displayTreesSalesData, unsyncedSalesCount, handleTreesCsvUpload, pushToMainTracker,
-            resetBrandImport, showBrandImportModal, processBrandRawPaste, processBrandImport, systemLogs, isSuperAdmin, refreshIcons,
-            displayGrid, detectMonthInString, clearAllSalesData: async () => {
-                if (confirm("Permanently clear ALL sales data? This cannot be undone.")) {
-                    const batch = writeBatch(db);
-                    treesSalesData.value.forEach(s => batch.delete(doc(db, "treesSales", s.id)));
-                    await batch.commit();
-                    logSystemAction("DELETE", "Cleared all sales data");
-                }
-            }
+            isManagerUnlocked, isSuperAdmin, loggedInUser, emailInput, passwordInput, authError, activeSite, activeTab,
+            treesSalesData, masterBrands, selectedBrands, allBrandsSelected, toggleAllBrands,
+            deleteSelectedBrands, updateBrandField, promoCredits, calendarMonths, activeMonth,
+            searchQueryInput, searchQuery, showPromoModal, showBrandDropdown, editingId, showReportModal,
+            showResolutionModal, resolutionCredit, resolutionForm, markAsSent, markReportGroupAsSent,
+            openResolutionModal, submitResolution, monthlyReportSummaries, downloadMonthlyReport,
+            groupedPendingReports, draftEmail, archiveAndExportAnnualReport, showImportModal,
+            rawPasteData, pastedGrid, mappedHeaders, showBrandImportModal, brandPasteData, brandPastedGrid,
+            brandMappedHeaders, brandAvailableHeaders, availableHeaders, form, handleLogin, forceLock,
+            filteredBrands, selectBrand, formatCurrency, filteredCredits, filteredTreesSalesData,
+            displayTreesSalesData, totalPending, totalApplied, unsyncedSalesCount, openPromoModal,
+            closePromoModal, handleFileUpload, saveCredit, editCredit, deleteCredit, openImportModal,
+            closeImportModal, resetImport, displayGrid, processRawPaste, processImport, regenerateBrandSummary,
+            regenerateMonthReports, handleTreesCsvUpload, pushToMainTracker, resetBrandImport,
+            processBrandRawPaste, processBrandImport, systemLogs, refreshIcons, clearAllSalesData,
+            detectMonthInString, drawCharts
         };
     }
 }).mount('#app');
