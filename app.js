@@ -274,17 +274,19 @@ createApp({
         const downloadMonthlyReport = (report) => {
             let csvContent = "Site,Date,Vendor,Distributor,Product/Description,Tracking ID,Credit Amount,Status\n";
             let csvTotal = 0;
+            const cleanStr = (str) => String(str || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
     
             const creditsToExport = report.credits || [];
     
             creditsToExport.forEach(c => {
                 const isAggregated = c.creditType && String(c.creditType).includes('Aggregated POS Sales');
                 let matchedRawSales = [];
+                
                 if (isAggregated) {
                     matchedRawSales = treesSalesData.value.filter(sale => {
-                        const brandMatch = (sale.brand || '').trim().toLowerCase() === (c.vendor || '').trim().toLowerCase();
-                        const siteMatch = sale.detectedSite === c.site;
-                        const monthMatch = sale.month === c.trackingMonth;
+                        const brandMatch = cleanStr(sale.brand) === cleanStr(c.vendor);
+                        const siteMatch = cleanStr(sale.detectedSite) === cleanStr(c.site);
+                        const monthMatch = cleanStr(sale.month) === cleanStr(c.trackingMonth);
                         return brandMatch && siteMatch && monthMatch;
                     });
                 }
@@ -489,9 +491,9 @@ createApp({
 
             const storeName = activeSite.value === 'Redding' ? 'Sundial' : activeSite.value;
             const currentYear = new Date().getFullYear();
-            
             const monthStr = report.month || (report.credits[0] && report.credits[0].trackingMonth) || activeMonth.value;
             const periodStr = `${monthStr} ${currentYear}`;
+            const cleanStr = (str) => String(str || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
 
             let csvContent = "Date,Location,Brand,Product / Description,Discount Title,Tracking ID / Invoice,Entry Type,Credit Amount\n";
             let csvTotal = 0;
@@ -499,11 +501,12 @@ createApp({
             report.credits.forEach(c => {
                 const isAggregated = c.creditType && String(c.creditType).includes('Aggregated POS Sales');
                 let matchedRawSales = [];
+                
                 if (isAggregated) {
                     matchedRawSales = treesSalesData.value.filter(sale => {
-                        const brandMatch = (sale.brand || '').trim().toLowerCase() === (c.vendor || '').trim().toLowerCase();
-                        const siteMatch = sale.detectedSite === c.site;
-                        const monthMatch = sale.month === c.trackingMonth;
+                        const brandMatch = cleanStr(sale.brand) === cleanStr(c.vendor);
+                        const siteMatch = cleanStr(sale.detectedSite) === cleanStr(c.site);
+                        const monthMatch = cleanStr(sale.month) === cleanStr(c.trackingMonth);
                         return brandMatch && siteMatch && monthMatch;
                     });
                 }
@@ -757,7 +760,7 @@ createApp({
             if (!storeNameStr) return activeSite.value; 
             const s = storeNameStr.toLowerCase();
             if (s.includes('red bluff') || s.includes('redbluff')) return 'Red Bluff';
-            if (s.includes('redding')) return 'Redding';
+            if (s.includes('redding') || s.includes('sundial')) return 'Redding';
             return activeSite.value; 
         };
 
