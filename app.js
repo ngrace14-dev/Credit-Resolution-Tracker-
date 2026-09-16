@@ -483,7 +483,7 @@ createApp({
             return Object.values(groups).sort((a, b) => a.vendor.localeCompare(b.vendor));
         });
 
-        const draftEmail = (report) => {
+      const draftEmail = (report) => {
             if (!report.email) {
                 alert(`No email mapped for ${report.vendor}. Please add one in the Brand Directory first.`);
                 return;
@@ -498,41 +498,55 @@ createApp({
             let csvContent = "Date,Location,Brand,Product / Description,Discount Title,Tracking ID / Invoice,Entry Type,Credit Amount\n";
             let csvTotal = 0;
 
+            // 1. Pull raw data directly by brand + month + site
+            const matchedRawSales = treesSalesData.value.filter(sale => {
+                const brandMatch = cleanStr(sale.brand) === cleanStr(report.vendor);
+                const siteMatch = cleanStr(sale.detectedSite) === cleanStr(activeSite.value);
+                const monthMatch = cleanStr(sale.month) === cleanStr(monthStr);
+                return brandMatch && siteMatch && monthMatch;
+            });
+
+            // 2. Output Itemized List
+            if (matchedRawSales.length > 0) {
+                matchedRawSales.forEach(sale => {
+                    const safeDate = `"${String(sale.dateClosed || '').replace(/"/g, '""')}"`;
+                    const safeLoc = `"${String(sale.storeName || '').replace(/"/g, '""')}"`;
+                    const safeBrand = `"${String(sale.brand || '').replace(/"/g, '""')}"`;
+                    const safeProd = `"${String(sale.productName || '').replace(/"/g, '""')}"`;
+                    const safeDisc = `"${String(sale.discountTitle || '').replace(/"/g, '""')}"`;
+                    const safeTrack = `"${String(sale.trackingId || '').replace(/"/g, '""')}"`;
+                    const safeType = `"POS Itemized"`;
+                    const safeAmount = `"${formatCurrency(sale.owed)}"`;
+                    
+                    csvContent += `${safeDate},${safeLoc},${safeBrand},${safeProd},${safeDisc},${safeTrack},${safeType},${safeAmount}\n`;
+                    csvTotal += parseFloat(sale.owed) || 0;
+                });
+            }
+
+            // 3. Output Manual Entries & Fallbacks
             report.credits.forEach(c => {
                 const isAggregated = c.creditType && String(c.creditType).includes('Aggregated POS Sales');
-                let matchedRawSales = [];
-                
-                if (isAggregated) {
-                    matchedRawSales = treesSalesData.value.filter(sale => {
-                        const brandMatch = cleanStr(sale.brand) === cleanStr(c.vendor);
-                        const siteMatch = cleanStr(sale.detectedSite) === cleanStr(c.site);
-                        const monthMatch = cleanStr(sale.month) === cleanStr(c.trackingMonth);
-                        return brandMatch && siteMatch && monthMatch;
-                    });
-                }
-
-                if (isAggregated && matchedRawSales.length > 0) {
-                    matchedRawSales.forEach(sale => {
-                        const safeDate = `"${String(sale.dateClosed || '').replace(/"/g, '""')}"`;
-                        const safeLoc = `"${String(sale.storeName || '').replace(/"/g, '""')}"`;
-                        const safeBrand = `"${String(sale.brand || '').replace(/"/g, '""')}"`;
-                        const safeProd = `"${String(sale.productName || '').replace(/"/g, '""')}"`;
-                        const safeDisc = `"${String(sale.discountTitle || '').replace(/"/g, '""')}"`;
-                        const safeTrack = `"${String(sale.trackingId || '').replace(/"/g, '""')}"`;
-                        const safeType = `"POS Itemized"`;
-                        const safeAmount = `"${formatCurrency(sale.owed)}"`;
-                        
-                        csvContent += `${safeDate},${safeLoc},${safeBrand},${safeProd},${safeDisc},${safeTrack},${safeType},${safeAmount}\n`;
-                        csvTotal += parseFloat(sale.owed) || 0;
-                    });
-                } else {
+                if (!isAggregated) {
                     const safeDate = `"${String(c.dates || '').replace(/"/g, '""')}"`;
                     const safeLoc = `"${String(c.site || '').replace(/"/g, '""')}"`;
                     const safeBrand = `"${String(c.vendor || '').replace(/"/g, '""')}"`;
                     const safeProd = `"${String(c.creditType || '').replace(/"/g, '""')}"`; 
                     const safeDisc = `"-"`;
                     const safeTrack = `"${String(c.invoice || '').replace(/"/g, '""')}"`;
-                    const safeType = isAggregated ? `"Summary (Raw Data Missing)"` : `"Manual Entry"`; 
+                    const safeType = `"Manual Entry"`; 
+                    const safeAmount = `"${formatCurrency(c.amount)}"`;
+                    
+                    csvContent += `${safeDate},${safeLoc},${safeBrand},${safeProd},${safeDisc},${safeTrack},${safeType},${safeAmount}\n`;
+                    csvTotal += parseFloat(c.amount) || 0;
+                } else if (matchedRawSales.length === 0) {
+                    // Fallback to summary if raw data fails to link
+                    const safeDate = `"${String(c.dates || '').replace(/"/g, '""')}"`;
+                    const safeLoc = `"${String(c.site || '').replace(/"/g, '""')}"`;
+                    const safeBrand = `"${String(c.vendor || '').replace(/"/g, '""')}"`;
+                    const safeProd = `"${String(c.creditType || '').replace(/"/g, '""')}"`; 
+                    const safeDisc = `"-"`;
+                    const safeTrack = `"${String(c.invoice || '').replace(/"/g, '""')}"`;
+                    const safeType = `"Summary (Raw Data Missing)"`; 
                     const safeAmount = `"${formatCurrency(c.amount)}"`;
                     
                     csvContent += `${safeDate},${safeLoc},${safeBrand},${safeProd},${safeDisc},${safeTrack},${safeType},${safeAmount}\n`;
@@ -571,7 +585,7 @@ createApp({
 
             const encodedSubject = encodeURIComponent(subject);
             const encodedBody = encodeURIComponent(body);
-            const encodedCc = encodeURIComponent(`accounting@rredco.com,${senderEmail}`);
+            const encodedCc = encodeURIComponent(`accounting@rredco.com`);
 
             window.location.href = `mailto:${cleanEmails}?cc=${encodedCc}&subject=${encodedSubject}&body=${encodedBody}`;
         };
