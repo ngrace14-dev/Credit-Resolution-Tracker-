@@ -271,6 +271,7 @@ createApp({
                 }));
         });
 
+        // REFACTORED FOR DIME REQUIREMENTS
         const downloadMonthlyReport = (report) => {
             let csvContent = "Location,Date & Time,Brand,Product Name,Transaction ID,Quantity Sold,Unit Price,Total Before Tax,Discount Title,Discount Amount,Credit Owed,Entry Type\n";
             let csvTotal = 0;
@@ -523,6 +524,7 @@ createApp({
             return Object.values(groups).sort((a, b) => a.vendor.localeCompare(b.vendor));
         });
 
+        // EMAIL DRAFTER WITH DIME COLUMNS, REDDING SUNDIAL SUBJECT, RESTRICTED CC & VARIABLE FIX
         const draftEmail = (report) => {
             if (!report.email) {
                 alert(`No email mapped for ${report.vendor}. Please add one in the Brand Directory first.`);
@@ -547,20 +549,20 @@ createApp({
 
             if (matchedRawSales.length > 0) {
                 matchedRawSales.forEach(sale => {
+                    const safeLoc = `"${String(sale.detectedSite || '').replace(/"/g, '""')}"`;
                     const safeDate = `"${String(sale.dateClosed || '').replace(/"/g, '""')}"`;
-                    const safeLoc = `"${String(sale.storeName || '').replace(/"/g, '""')}"`;
                     const safeBrand = `"${String(sale.brand || '').replace(/"/g, '""')}"`;
                     const safeProd = `"${String(sale.productName || '').replace(/"/g, '""')}"`;
-                    const safeDisc = `"${String(sale.discountTitle || '').replace(/"/g, '""')}"`;
                     const safeTrack = `"${String(sale.trackingId || '').replace(/"/g, '""')}"`;
                     const safeQty = `"${sale.unitsSold || 0}"`;
                     const safePrice = `"${formatCurrency(sale.unitPrice || 0)}"`;
                     const safePreTax = `"${formatCurrency((sale.unitsSold || 0) * (sale.unitPrice || 0))}"`;
+                    const safeDiscTitle = `"${String(sale.discountTitle || '').replace(/"/g, '""')}"`;
                     const safeDiscAmount = `"${formatCurrency(sale.discountAmount || 0)}"`;
+                    const safeOwed = `"${formatCurrency(sale.owed || 0)}"`;
                     const safeType = `"POS Itemized"`;
-                    const safeAmount = `"${formatCurrency(sale.owed)}"`;
                     
-                    csvContent += `${safeLoc},${safeDate},${safeBrand},${safeProd},${safeTrack},${safeQty},${safePrice},${safePreTax},${safeDiscTitle},${safeDiscAmount},${safeAmount},${safeType}\n`;
+                    csvContent += `${safeLoc},${safeDate},${safeBrand},${safeProd},${safeTrack},${safeQty},${safePrice},${safePreTax},${safeDiscTitle},${safeDiscAmount},${safeOwed},${safeType}\n`;
                     csvTotal += parseFloat(sale.owed) || 0;
                 });
             }
@@ -568,8 +570,8 @@ createApp({
             report.credits.forEach(c => {
                 const isAggregated = c.creditType && String(c.creditType).includes('Aggregated POS Sales');
                 if (!isAggregated) {
-                    const safeDate = `"${String(c.dates || '').replace(/"/g, '""')}"`;
                     const safeLoc = `"${String(c.site || '').replace(/"/g, '""')}"`;
+                    const safeDate = `"${String(c.dates || '').replace(/"/g, '""')}"`;
                     const safeBrand = `"${String(c.vendor || '').replace(/"/g, '""')}"`;
                     const safeProd = `"${String(c.creditType || '').replace(/"/g, '""')}"`; 
                     const safeTrack = `"${String(c.invoice || '').replace(/"/g, '""')}"`;
@@ -578,14 +580,14 @@ createApp({
                     const safePreTax = `"-"`;
                     const safeDiscTitle = `"-"`;
                     const safeDiscAmount = `"-"`;
+                    const safeOwed = `"${formatCurrency(c.amount)}"`;
                     const safeType = `"Manual Entry"`; 
-                    const safeAmount = `"${formatCurrency(c.amount)}"`;
                     
-                    csvContent += `${safeLoc},${safeDate},${safeBrand},${safeProd},${safeTrack},${safeQty},${safePrice},${safePreTax},${safeDiscTitle},${safeDiscAmount},${safeAmount},${safeType}\n`;
+                    csvContent += `${safeLoc},${safeDate},${safeBrand},${safeProd},${safeTrack},${safeQty},${safePrice},${safePreTax},${safeDiscTitle},${safeDiscAmount},${safeOwed},${safeType}\n`;
                     csvTotal += parseFloat(c.amount) || 0;
                 } else if (matchedRawSales.length === 0) {
-                    const safeDate = `"${String(c.dates || '').replace(/"/g, '""')}"`;
                     const safeLoc = `"${String(c.site || '').replace(/"/g, '""')}"`;
+                    const safeDate = `"${String(c.dates || '').replace(/"/g, '""')}"`;
                     const safeBrand = `"${String(c.vendor || '').replace(/"/g, '""')}"`;
                     const safeProd = `"${String(c.creditType || '').replace(/"/g, '""')}"`; 
                     const safeTrack = `"${String(c.invoice || '').replace(/"/g, '""')}"`;
@@ -594,10 +596,10 @@ createApp({
                     const safePreTax = `"-"`;
                     const safeDiscTitle = `"-"`;
                     const safeDiscAmount = `"-"`;
+                    const safeOwed = `"${formatCurrency(c.amount)}"`;
                     const safeType = `"Summary (Raw Data Missing)"`; 
-                    const safeAmount = `"${formatCurrency(c.amount)}"`;
                     
-                    csvContent += `${safeLoc},${safeDate},${safeBrand},${safeProd},${safeTrack},${safeQty},${safePrice},${safePreTax},${safeDiscTitle},${safeDiscAmount},${safeAmount},${safeType}\n`;
+                    csvContent += `${safeLoc},${safeDate},${safeBrand},${safeProd},${safeTrack},${safeQty},${safePrice},${safePreTax},${safeDiscTitle},${safeDiscAmount},${safeOwed},${safeType}\n`;
                     csvTotal += parseFloat(c.amount) || 0;
                 }
             });
