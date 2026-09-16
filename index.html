@@ -356,8 +356,9 @@
             </div>
         </main>
 
-        <!-- OLD EMAIL REPORT DRAFTER MODAL (Kept as fallback in UI) -->
-        <div v-if="showReportModal" class="fixed inset-0 bg-black/60 flex items-center justify-center z-50 backdrop-blur-sm p-2" @click.self="showReportModal = false">
+                <!-- OLD EMAIL REPORT DRAFTER MODAL (Kept as fallback in UI) -->
+        <div v-if="isManagerUnlocked && showReportModal" class="fixed inset-0 bg-black/60 flex items-center justify-center z-50 backdrop-blur-sm p-2" @click.self="showReportModal = false">
+
             <div class="bg-white rounded-2xl shadow-2xl w-full md:w-[800px] max-w-[95vw] flex flex-col overflow-hidden max-h-[95vh] md:max-h-[85vh]">
                 <div class="px-4 md:px-6 py-4 border-b bg-gray-50 flex justify-between items-center shrink-0">
                     <div>
@@ -576,8 +577,9 @@
             </div>
         </main>
 
-        <!-- ADD/EDIT PROMO MODAL -->
-        <div v-if="showPromoModal" class="fixed inset-0 bg-black/60 flex items-center justify-center z-50 backdrop-blur-sm p-2" @click.self="closePromoModal">
+                <!-- ADD/EDIT PROMO MODAL -->
+        <div v-if="isManagerUnlocked && showPromoModal" class="fixed inset-0 bg-black/60 flex items-center justify-center z-50 backdrop-blur-sm p-2" @click.self="closePromoModal">
+
             <div class="bg-white rounded-2xl shadow-2xl w-full md:w-[700px] max-w-[95vw] flex flex-col overflow-hidden max-h-[95vh] md:max-h-[80vh]">
                 <div class="px-4 md:px-6 py-4 border-b bg-gray-50 flex justify-between items-center shrink-0">
                     <h2 class="font-bold text-lg md:text-xl text-gray-900 flex items-center gap-2"><i data-lucide="file-edit" class="w-5 h-5 text-emerald-600"></i> {{ editingId ? 'Edit Promo Credit' : 'Log New Credit' }}</h2>
@@ -640,8 +642,9 @@
             </div>
         </div>
 
-        <!-- EMAIL RESOLUTION MODAL -->
-        <div v-if="showResolutionModal" class="fixed inset-0 bg-black/60 flex items-center justify-center z-50 backdrop-blur-sm p-2" @click.self="showResolutionModal = false">
+                <!-- EMAIL RESOLUTION MODAL -->
+        <div v-if="isManagerUnlocked && showResolutionModal" class="fixed inset-0 bg-black/60 flex items-center justify-center z-50 backdrop-blur-sm p-2" @click.self="showResolutionModal = false">
+
             <div class="bg-white rounded-2xl shadow-2xl w-full md:w-[500px] max-w-[95vw] flex flex-col overflow-hidden">
                 <div class="px-4 md:px-6 py-4 border-b bg-gray-50 flex justify-between items-center shrink-0">
                     <div>
@@ -671,8 +674,9 @@
             </div>
         </div>
 
-        <!-- NEW VISUAL BRAND IMPORT MODAL -->
-        <div v-if="showBrandImportModal" class="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-2 backdrop-blur-sm" @click.self="showBrandImportModal = false">
+                <!-- NEW VISUAL BRAND IMPORT MODAL -->
+        <div v-if="isManagerUnlocked && showBrandImportModal" class="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-2 backdrop-blur-sm" @click.self="showBrandImportModal = false">
+
             <div class="bg-white rounded-2xl shadow-2xl w-full md:w-[95vw] max-w-7xl flex flex-col overflow-hidden max-h-[95vh] md:max-h-[90vh]">
                 <div class="px-4 md:px-6 py-4 border-b bg-gray-50 flex justify-between items-center shrink-0">
                     <h2 class="font-bold text-lg text-gray-900 flex items-center gap-2"><i data-lucide="contact" class="w-5 h-5 text-emerald-600"></i> Import Brand Directory</h2>
@@ -728,8 +732,9 @@
             </div>
         </div>
 
-        <!-- DYNAMIC GRID IMPORT MODAL (Promo Credits) -->
-        <div v-if="showImportModal" class="fixed inset-0 bg-black/60 flex items-center justify-center z-50 backdrop-blur-sm p-2" @click.self="closeImportModal">
+                <!-- DYNAMIC GRID IMPORT MODAL (Promo Credits) -->
+        <div v-if="isManagerUnlocked && showImportModal" class="fixed inset-0 bg-black/60 flex items-center justify-center z-50 backdrop-blur-sm p-2" @click.self="closeImportModal">
+
             <div class="bg-white rounded-2xl shadow-2xl w-full md:w-[95vw] max-w-7xl flex flex-col overflow-hidden max-h-[95vh] md:max-h-[90vh]">
                 <div class="px-4 md:px-6 py-4 border-b bg-gray-50 flex justify-between items-center shrink-0">
                     <h2 class="font-bold text-lg md:text-xl text-gray-900 flex items-center gap-2"><i data-lucide="grid" class="w-5 h-5 text-emerald-600"></i> Excel Import Hub</h2>
