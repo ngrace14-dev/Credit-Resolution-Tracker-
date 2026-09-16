@@ -524,7 +524,6 @@ createApp({
             return Object.values(groups).sort((a, b) => a.vendor.localeCompare(b.vendor));
         });
 
-        // REFACTORED FOR DIME REQUIREMENTS
         const draftEmail = (report) => {
             if (!report.email) {
                 alert(`No email mapped for ${report.vendor}. Please add one in the Brand Directory first.`);
@@ -537,7 +536,7 @@ createApp({
             const periodStr = `${monthStr} ${currentYear}`;
             const cleanStr = (str) => String(str || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
 
-            let csvContent = "Location,Date & Time,Brand,Product Name,Transaction ID,Quantity Sold,Unit Price,Total Before Tax,Discount Title,Discount Amount,Credit Owed,Entry Type\n";
+            let csvContent = "Date,Location,Brand,Product / Description,Discount Title,Tracking ID / Invoice,Entry Type,Credit Amount\n";
             let csvTotal = 0;
 
             const matchedRawSales = treesSalesData.value.filter(sale => {
@@ -549,20 +548,16 @@ createApp({
 
             if (matchedRawSales.length > 0) {
                 matchedRawSales.forEach(sale => {
-                    const safeLoc = `"${String(sale.detectedSite || '').replace(/"/g, '""')}"`;
                     const safeDate = `"${String(sale.dateClosed || '').replace(/"/g, '""')}"`;
+                    const safeLoc = `"${String(sale.storeName || '').replace(/"/g, '""')}"`;
                     const safeBrand = `"${String(sale.brand || '').replace(/"/g, '""')}"`;
                     const safeProd = `"${String(sale.productName || '').replace(/"/g, '""')}"`;
+                    const safeDisc = `"${String(sale.discountTitle || '').replace(/"/g, '""')}"`;
                     const safeTrack = `"${String(sale.trackingId || '').replace(/"/g, '""')}"`;
-                    const safeQty = `"${sale.unitsSold || 0}"`;
-                    const safePrice = `"${formatCurrency(sale.unitPrice || 0)}"`;
-                    const safePreTax = `"${formatCurrency((sale.unitsSold || 0) * (sale.unitPrice || 0))}"`;
-                    const safeDiscTitle = `"${String(sale.discountTitle || '').replace(/"/g, '""')}"`;
-                    const safeDiscAmount = `"${formatCurrency(sale.discountAmount || 0)}"`;
-                    const safeOwed = `"${formatCurrency(sale.owed || 0)}"`;
                     const safeType = `"POS Itemized"`;
+                    const safeAmount = `"${formatCurrency(sale.owed)}"`;
                     
-                    csvContent += `${safeLoc},${safeDate},${safeBrand},${safeProd},${safeTrack},${safeQty},${safePrice},${safePreTax},${safeDiscTitle},${safeDiscAmount},${safeOwed},${safeType}\n`;
+                    csvContent += `${safeDate},${safeLoc},${safeBrand},${safeProd},${safeDisc},${safeTrack},${safeType},${safeAmount}\n`;
                     csvTotal += parseFloat(sale.owed) || 0;
                 });
             }
@@ -570,41 +565,33 @@ createApp({
             report.credits.forEach(c => {
                 const isAggregated = c.creditType && String(c.creditType).includes('Aggregated POS Sales');
                 if (!isAggregated) {
-                    const safeLoc = `"${String(c.site || '').replace(/"/g, '""')}"`;
                     const safeDate = `"${String(c.dates || '').replace(/"/g, '""')}"`;
+                    const safeLoc = `"${String(c.site || '').replace(/"/g, '""')}"`;
                     const safeBrand = `"${String(c.vendor || '').replace(/"/g, '""')}"`;
                     const safeProd = `"${String(c.creditType || '').replace(/"/g, '""')}"`; 
+                    const safeDisc = `"-"`;
                     const safeTrack = `"${String(c.invoice || '').replace(/"/g, '""')}"`;
-                    const safeQty = `"-"`;
-                    const safePrice = `"-"`;
-                    const safePreTax = `"-"`;
-                    const safeDiscTitle = `"-"`;
-                    const safeDiscAmount = `"-"`;
-                    const safeOwed = `"${formatCurrency(c.amount)}"`;
                     const safeType = `"Manual Entry"`; 
+                    const safeAmount = `"${formatCurrency(c.amount)}"`;
                     
-                    csvContent += `${safeLoc},${safeDate},${safeBrand},${safeProd},${safeTrack},${safeQty},${safePrice},${safePreTax},${safeDiscTitle},${safeDiscAmount},${safeOwed},${safeType}\n`;
+                    csvContent += `${safeDate},${safeLoc},${safeBrand},${safeProd},${safeDisc},${safeTrack},${safeType},${safeAmount}\n`;
                     csvTotal += parseFloat(c.amount) || 0;
                 } else if (matchedRawSales.length === 0) {
-                    const safeLoc = `"${String(c.site || '').replace(/"/g, '""')}"`;
                     const safeDate = `"${String(c.dates || '').replace(/"/g, '""')}"`;
+                    const safeLoc = `"${String(c.site || '').replace(/"/g, '""')}"`;
                     const safeBrand = `"${String(c.vendor || '').replace(/"/g, '""')}"`;
                     const safeProd = `"${String(c.creditType || '').replace(/"/g, '""')}"`; 
+                    const safeDisc = `"-"`;
                     const safeTrack = `"${String(c.invoice || '').replace(/"/g, '""')}"`;
-                    const safeQty = `"-"`;
-                    const safePrice = `"-"`;
-                    const safePreTax = `"-"`;
-                    const safeDiscTitle = `"-"`;
-                    const safeDiscAmount = `"-"`;
-                    const safeOwed = `"${formatCurrency(c.amount)}"`;
                     const safeType = `"Summary (Raw Data Missing)"`; 
+                    const safeAmount = `"${formatCurrency(c.amount)}"`;
                     
-                    csvContent += `${safeLoc},${safeDate},${safeBrand},${safeProd},${safeTrack},${safeQty},${safePrice},${safePreTax},${safeDiscTitle},${safeDiscAmount},${safeOwed},${safeType}\n`;
+                    csvContent += `${safeDate},${safeLoc},${safeBrand},${safeProd},${safeDisc},${safeTrack},${safeType},${safeAmount}\n`;
                     csvTotal += parseFloat(c.amount) || 0;
                 }
             });
 
-            csvContent += `,,,,,,,,,, "TOTAL:", "${formatCurrency(csvTotal)}"\n`;
+            csvContent += `,,,,,, "TOTAL:", "${formatCurrency(csvTotal)}"\n`;
 
             const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
             const url = URL.createObjectURL(blob);
@@ -1325,6 +1312,39 @@ createApp({
                 }
             }
         };
+        
+        const openDimeHelper = async (brand) => {
+            const storeName = activeSite.value === 'Redding' ? 'Sundial' : activeSite.value;
+            const currentYear = new Date().getFullYear();
+            const monthStr = brand.month || activeMonth.value;
+
+            // 1. Build the text summary for the clipboard
+            let textToCopy = `Store: ${storeName}\n`;
+            textToCopy += `Promo Period: ${monthStr} ${currentYear}\n`;
+            textToCopy += `Total Credit Requested: ${formatCurrency(brand.total)}\n\n`;
+            textToCopy += `Promotion Details:\n`;
+            
+            brand.credits.forEach(c => {
+                const type = c.creditType || 'Promo';
+                const dates = c.dates || 'N/A';
+                const amt = formatCurrency(c.amount);
+                textToCopy += `- ${type} (${dates}): ${amt}\n`;
+            });
+            
+            textToCopy += `\n*Itemized POS report attached to submission.`;
+
+            // 2. Copy to clipboard and open portal
+            try {
+                await navigator.clipboard.writeText(textToCopy);
+                alert(`✅ Text Copied to Clipboard!\n\nSimply paste into the DIME "Promotion Details" box.\n\nOpening the DIME Portal now...`);
+                
+                // OPENS THE JOTFORM LINK
+                window.open('https://form.jotform.com/252994629916172', '_blank'); 
+            } catch (err) {
+                console.error('Failed to copy text: ', err);
+                alert('Failed to copy to clipboard. Please check your browser permissions.');
+            }
+        };
 
         return {
             isManagerUnlocked, isSuperAdmin, loggedInUser, emailInput, passwordInput, authError, activeSite, activeTab,
@@ -1342,7 +1362,7 @@ createApp({
             closeImportModal, resetImport, displayGrid, processRawPaste, processImport, regenerateBrandSummary,
             regenerateMonthReports, handleTreesCsvUpload, pushToMainTracker, resetBrandImport,
             processBrandRawPaste, processBrandImport, systemLogs, refreshIcons, clearAllSalesData,
-            detectMonthInString, drawCharts
+            detectMonthInString, drawCharts, openDimeHelper
         };
     }
 }).mount('#app');
