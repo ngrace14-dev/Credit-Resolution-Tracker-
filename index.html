@@ -125,22 +125,29 @@
                             </h3>
                             <p class="text-xs text-gray-300 mt-0.5">{{ monthGroup.brandList.length }} Brands • {{ monthGroup.count }} Total Entries</p>
                         </div>
-                        <div class="flex items-center gap-3">
+                                                <div class="flex items-center gap-3">
                             <span class="text-lg font-extrabold text-emerald-400 bg-white/10 px-3 py-1 rounded-lg border border-white/10">{{ formatCurrency(monthGroup.total) }}</span>
+                            <button @click="regenerateMonthReports(monthGroup)" class="bg-gray-800 text-amber-500 hover:bg-gray-700 px-3 py-1.5 rounded-lg font-bold text-xs shadow transition-colors flex items-center gap-1.5 border border-gray-700">
+                                <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i> Regenerate Month
+                            </button>
                             <button @click="downloadMonthlyReport(monthGroup)" class="bg-emerald-600 text-white hover:bg-emerald-500 px-3 py-1.5 rounded-lg font-bold text-xs shadow transition-colors flex items-center gap-1.5">
                                 <i data-lucide="download" class="w-3.5 h-3.5"></i> Full Month CSV
                             </button>
                         </div>
+
                     </div>
 
                     <!-- Brand Breakdown Grid -->
                     <div class="p-4 sm:p-6 grid grid-cols-1 lg:grid-cols-2 gap-4">
                         <div v-for="brand in monthGroup.brandList" :key="brand.vendor" class="bg-gray-50 border border-gray-200 rounded-xl p-4 flex flex-col justify-between hover:border-emerald-300 transition-all shadow-sm">
-                            <div class="flex justify-between items-start mb-3 border-b border-gray-200 pb-3">
+                                                        <div class="flex justify-between items-start mb-3 border-b border-gray-200 pb-3">
                                 <div>
                                     <h4 class="font-bold text-gray-900 text-base flex items-center gap-2">
                                         <i data-lucide="building" class="w-4 h-4 text-emerald-600"></i>
                                         {{ brand.vendor }}
+                                        <button @click="regenerateBrandSummary(brand)" title="Regenerate from Raw Sales" class="text-gray-400 hover:text-amber-600 transition-colors">
+                                            <i data-lucide="refresh-cw" class="w-3 h-3"></i>
+                                        </button>
                                     </h4>
                                     <p class="text-xs text-gray-500 font-mono mt-0.5" :class="{'text-amber-600 font-bold': !brand.email}">
                                         {{ brand.email || '⚠️ No email mapped in Brand Directory' }}
@@ -152,6 +159,7 @@
                                 </div>
                             </div>
 
+
                             <!-- Preview List of Credits for this brand -->
                             <div class="mb-4 text-xs text-gray-600 space-y-1 max-h-32 overflow-y-auto pr-1">
                                 <div v-for="c in brand.credits" :key="c.id" class="flex justify-between bg-white px-2 py-1.5 rounded border border-gray-100">
@@ -160,17 +168,37 @@
                                 </div>
                             </div>
 
-                            <!-- Action Buttons Attached to Each Brand -->
-                            <div class="flex items-center gap-2 pt-2 border-t border-gray-200">
-                                <button @click="draftEmail(brand)" :disabled="!brand.email" 
-                                        :class="!brand.email ? 'bg-gray-300 text-gray-500 cursor-not-allowed' : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm'" 
-                                        class="flex-1 py-2 rounded-lg font-bold flex items-center justify-center gap-1.5 text-xs transition-colors">
-                                    <i data-lucide="mail" class="w-3.5 h-3.5"></i> Generate Email
-                                </button>
-                                <button @click="downloadMonthlyReport(brand)" class="px-3 py-2 bg-white border border-gray-300 hover:bg-gray-100 text-gray-700 rounded-lg font-bold flex items-center gap-1.5 text-xs transition-colors shadow-sm">
-                                    <i data-lucide="file-spreadsheet" class="w-3.5 h-3.5 text-amber-500"></i> CSV
-                                </button>
-                            </div>
+                                                        <!-- Action Buttons Attached to Each Brand -->
+                                                        <div class="flex items-center gap-2 pt-2 border-t border-gray-200">
+                                                            <button v-if="brand.credits.some(c => c.status === 'Pending')" 
+                                                                    @click="draftEmail(report || brand)" :disabled="!brand.email" 
+                                                                    :class="!brand.email ? 'bg-gray-300 text-gray-500 cursor-not-allowed' : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm'" 
+                                                                    class="flex-1 py-2 rounded-lg font-bold flex items-center justify-center gap-1.5 text-xs transition-colors">
+                                                                <i data-lucide="mail" class="w-3.5 h-3.5"></i> Draft Email
+                                                            </button>
+                                
+                                                            <button v-if="brand.credits.some(c => c.status === 'Pending')"
+                                                                    @click="markReportGroupAsSent(brand)"
+                                                                    class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg font-bold text-xs shadow-sm transition-colors flex items-center gap-1.5">
+                                                                <i data-lucide="send" class="w-3.5 h-3.5"></i> Mark Sent
+                                                            </button>
+
+                                                            <button v-else-if="brand.credits.every(c => c.status === 'Report Sent')" 
+                                                                    class="flex-1 py-2 rounded-lg font-bold flex items-center justify-center gap-1.5 text-xs bg-blue-50 text-blue-700 border border-blue-200 cursor-default">
+                                                                <i data-lucide="clock" class="w-3.5 h-3.5"></i> Waiting for Resolution
+                                                            </button>
+
+                                                            <button v-else
+                                                                    class="flex-1 py-2 rounded-lg font-bold flex items-center justify-center gap-1.5 text-xs bg-gray-100 text-gray-600 border border-gray-200 cursor-default">
+                                                                <i data-lucide="check-circle" class="w-3.5 h-3.5"></i> All Resolved
+                                                            </button>
+
+                                                            <button @click="downloadMonthlyReport(brand)" class="px-3 py-2 bg-white border border-gray-300 hover:bg-gray-100 text-gray-700 rounded-lg font-bold flex items-center gap-1.5 text-xs transition-colors shadow-sm" title="Download CSV Breakdown">
+                                                                <i data-lucide="file-spreadsheet" class="w-3.5 h-3.5 text-amber-500"></i>
+                                                            </button>
+                                                        </div>
+
+
                         </div>
                     </div>
                 </div>

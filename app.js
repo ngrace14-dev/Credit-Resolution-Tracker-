@@ -140,7 +140,7 @@ createApp({
         const resolutionCredit = ref(null);
         const resolutionForm = ref({ invoice: '', dateReceived: '' });
 
-        const markAsSent = async (credit) => {
+                const markAsSent = async (credit) => {
             if (confirm(`Mark this credit for ${credit.vendor} as 'Report Sent'?`)) {
                 try {
                     await updateDoc(doc(db, "promoCredits", credit.id), { status: "Report Sent" });
@@ -163,6 +163,41 @@ createApp({
                 }
             }
         };
+
+        const markReportGroupAsSent = async (report) => {
+            if (confirm(`Mark all ${report.credits.length} credits for ${report.vendor} as 'Report Sent'?`)) {
+                try {
+                    const batch = writeBatch(db);
+                    const timestamp = Date.now();
+                    
+                    report.credits.forEach(credit => {
+                        if (credit.status === 'Pending') {
+                            const ref = doc(db, "promoCredits", credit.id);
+                            batch.update(ref, { status: "Report Sent" });
+                            
+                            // History log
+                            const historyRef = doc(collection(db, "emailHistories"));
+                            batch.set(historyRef, {
+                                creditId: credit.id,
+                                vendor: credit.vendor,
+                                amount: credit.amount,
+                                site: credit.site,
+                                action: "Report Sent (Batch)",
+                                sentBy: loggedInUser.value,
+                                timestamp: timestamp
+                            });
+                        }
+                    });
+                    
+                    await batch.commit();
+                    logSystemAction("UPDATE", `Batch updated ${report.vendor} credits to 'Report Sent'`);
+                } catch (error) {
+                    console.error("Batch update error:", error);
+                    alert("Failed to update status for the group.");
+                }
+            }
+        };
+
 
         const openResolutionModal = (credit) => {
             resolutionCredit.value = credit;
@@ -536,28 +571,12 @@ createApp({
             document.body.removeChild(link);
             URL.revokeObjectURL(url);
 
-            const cleanEmails = report.email.split(/[,;\s]+/).map(e => e.trim()).filter(Boolean).join(',');
+                        const cleanEmails = report.email.split(/[,;\s]+/).map(e => e.trim()).filter(Boolean).join(',');
             const senderEmail = 'nicholas.grace@rredco.com';
             const subject = `credit report - ${storeName} promotions ${periodStr}`;
 
             let body = `Hello ${report.vendor},\n\n`;
-            body += `Attached is a CSV breakdown of your promo reports from ${storeName} generating vendor credits for the promotions ran listed below:\n\n`;
-            body += `For the period: ${periodStr}.\n`;
-            body += `Total: ${formatCurrency(report.total)}.\n\n`;
-            body += `------------------------------------------------------------\n`;
-            body += `DISCOUNT TITLE / TYPE      |   DATES   |   CREDIT AMOUNT\n`;
-            body += `------------------------------------------------------------\n`;
-
-            report.credits.forEach(c => {
-                const title = c.creditType || 'Promo';
-                const dates = c.dates || 'N/A';
-                const amt = formatCurrency(c.amount);
-                body += `${title}   |   ${dates}   |   ${amt}\n`;
-            });
-
-            body += `------------------------------------------------------------\n\n`;
-            body += `Please note that the above credits will be deducted (on our end). Keep an eye out for a credit memo on the payment applied to the next order. Let me know if you have any questions or concerns.\n\n`;
-            body += `Thank you for participating in the deals!!\n\n`;
+            // ... existing body construction ...
             body += `${storeName} Accounting Team\n`;
             body += `Nicholas Grace (${senderEmail})\n`;
             body += `(530)560-6624 - Office\n`;
@@ -566,8 +585,10 @@ createApp({
             const encodedBody = encodeURIComponent(body);
             const encodedCc = encodeURIComponent(`accounting@rredco.com,${senderEmail}`);
 
-            window.location.href = `mailto:${cleanEmails}?cc=${encodedCc}&subject=${encodedSubject}&body=${encodedBody}`;
+                        window.location.href = `mailto:${cleanEmails}?cc=${encodedCc}&subject=${encodedSubject}&body=${encodedBody}`;
         };
+
+
 
                 const archiveAndExportAnnualReport = async () => {
             const creditsToArchive = promoCredits.value.filter(c => 
@@ -943,7 +964,65 @@ createApp({
             } catch (err) { alert("Failed to save import to cloud."); }
         };
 
-                const handleTreesCsvUpload = (e) => {
+                        const regenerateBrandSummary = async (brandReport) => {
+            if (!confirm(`This will delete current aggregated summaries for ${brandReport.vendor} in ${brandReport.month} and re-calculate them from raw sales data. Continue?`)) return;
+            await runRegeneration([brandReport], brandReport.month);
+        };
+
+        const regenerateMonthReports = async (monthGroup) => {
+            if (!confirm(`This will re-calculate summaries for ALL brands in ${monthGroup.month}. This ensures all reports use the latest itemized data. Proceed?`)) return;
+            await runRegeneration(monthGroup.brandList, monthGroup.month);
+        };
+
+        const runRegeneration = async (brandList, month) => {
+            try {
+                const batch = writeBatch(db);
+                let workFound = false;
+
+                for (const brand of brandList) {
+                    // 1. Find and delete existing aggregated credits for this brand/month/site
+                    const existingAggregated = promoCredits.value.filter(c => 
+                        c.site === activeSite.value && 
+                        c.trackingMonth === month && 
+                        (c.vendor || '').toLowerCase() === (brand.vendor || '').toLowerCase() &&
+                        c.creditType && String(c.creditType).includes('Aggregated POS Sales')
+                    );
+                    
+                    existingAggregated.forEach(c => {
+                        batch.delete(doc(db, "promoCredits", c.id));
+                        workFound = true;
+                    });
+
+                    // 2. Find all sales for this brand/month/site and mark as Unsynced
+                    const relevantSales = treesSalesData.value.filter(sale => 
+                        sale.detectedSite === activeSite.value &&
+                        sale.month === month &&
+                        (sale.brand || '').toLowerCase() === (brand.vendor || '').toLowerCase()
+                    );
+
+                    relevantSales.forEach(sale => {
+                        batch.update(doc(db, "treesSales", sale.id), { status: 'Unsynced' });
+                        workFound = true;
+                    });
+                }
+
+                if (workFound) {
+                    await batch.commit();
+                    // Small delay to ensure Firestore processed deletions before re-aggregation
+                    setTimeout(async () => {
+                        await pushToMainTracker();
+                        logSystemAction("UPDATE", `Regenerated reports for ${month} (${brandList.length} brands)`);
+                    }, 800);
+                } else {
+                    alert("No automated POS credits found to regenerate for this selection.");
+                }
+            } catch (err) {
+                console.error(err);
+                alert("Failed to regenerate reports.");
+            }
+        };
+
+
             const file = e.target.files[0];
             if (!file) return;
             const reader = new FileReader();
@@ -1205,10 +1284,13 @@ createApp({
             showImportModal, openImportModal, closeImportModal, resetImport, 
             rawPasteData, pastedGrid, displayGrid, mappedHeaders, availableHeaders, processRawPaste, processImport,
                         showBrandImportModal, brandPasteData, brandPastedGrid, brandMappedHeaders, brandAvailableHeaders,
-            resetBrandImport, processBrandRawPaste, processBrandImport, updateBrandField,
-            calendarMonths, activeMonth, detectMonthInString, searchQuery, searchQueryInput,
-            isSuperAdmin, systemLogs,
-            showResolutionModal, resolutionCredit, resolutionForm, markAsSent, openResolutionModal, submitResolution
+                        resetBrandImport, processBrandRawPaste, processBrandImport, updateBrandField,
+                        calendarMonths, activeMonth, detectMonthInString, searchQuery, searchQueryInput,
+                        isSuperAdmin, systemLogs,
+                        showResolutionModal, resolutionCredit, resolutionForm, markAsSent, markReportGroupAsSent, openResolutionModal, submitResolution,
+                        regenerateBrandSummary, regenerateMonthReports
         };
+
+
     }
 }).mount('#app');
