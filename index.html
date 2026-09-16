@@ -177,22 +177,29 @@
                             
                             <button v-if="brand.credits.some(c => c.status === 'Pending')"
                                 @click="markReportGroupAsSent(brand)"
-                                class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg font-bold text-xs shadow-sm transition-colors flex items-center gap-1.5">
+                                class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg font-bold text-xs shadow-sm transition-colors flex items-center gap-1.5 mt-2">
                                 <i data-lucide="send" class="w-3.5 h-3.5"></i> Mark Sent
                             </button>
 
+                            <!-- NEW DIME HELPER BUTTON -->
+                            <button v-if="brand.vendor.toLowerCase().includes('dime')"
+                                @click="openDimeHelper(brand)"
+                                class="bg-purple-600 hover:bg-purple-700 text-white px-3 py-2 rounded-lg font-bold text-xs shadow-sm transition-colors flex items-center justify-center gap-1.5 mt-2">
+                                <i data-lucide="external-link" class="w-3.5 h-3.5"></i> DIME Portal
+                            </button>
+
                             <button v-else-if="brand.credits.every(c => c.status === 'Report Sent')" 
-                                class="flex-1 py-2 rounded-lg font-bold flex items-center justify-center gap-1.5 text-xs bg-blue-50 text-blue-700 border border-blue-200 cursor-default">
+                                class="flex-1 py-2 rounded-lg font-bold flex items-center justify-center gap-1.5 text-xs bg-blue-50 text-blue-700 border border-blue-200 cursor-default mt-2">
                                 <i data-lucide="clock" class="w-3.5 h-3.5"></i> Waiting for Resolution
                             </button>
 
-                            <button v-else
-                                class="flex-1 py-2 rounded-lg font-bold flex items-center justify-center gap-1.5 text-xs bg-gray-100 text-gray-600 border border-gray-200 cursor-default">
+                            <button v-else-if="!brand.credits.some(c => c.status === 'Pending') && !brand.credits.some(c => c.status === 'Report Sent')"
+                                class="flex-1 py-2 rounded-lg font-bold flex items-center justify-center gap-1.5 text-xs bg-gray-100 text-gray-600 border border-gray-200 cursor-default mt-2">
                                 <i data-lucide="check-circle" class="w-3.5 h-3.5"></i> All Resolved
                             </button>
 
-                            <button @click="downloadMonthlyReport(brand)" class="px-3 py-2 bg-white border border-gray-300 hover:bg-gray-100 text-gray-700 rounded-lg font-bold flex items-center gap-1.5 text-xs transition-colors shadow-sm" title="Download CSV Breakdown">
-                                <i data-lucide="file-spreadsheet" class="w-3.5 h-3.5 text-amber-500"></i>
+                            <button @click="downloadMonthlyReport(brand)" class="px-3 py-2 mt-2 w-full bg-white border border-gray-300 hover:bg-gray-100 text-gray-700 rounded-lg font-bold flex justify-center items-center gap-1.5 text-xs transition-colors shadow-sm" title="Download CSV Breakdown">
+                                <i data-lucide="file-spreadsheet" class="w-3.5 h-3.5 text-amber-500"></i> Download Data CSV
                             </button>
                         </div>
                     </div>
