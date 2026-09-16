@@ -706,13 +706,11 @@ createApp({
         const userEmail = user.email.toLowerCase();
         const managerData = systemUsers[userEmail];
 
-        if (!managerData || !managerData.active) {
-            return;
-        }
+       if (managerData && managerData.active) {
 
-        loggedInUser.value = managerData.name;
-        activeSite.value = managerData.access[0];
-        isManagerUnlocked.value = true;
+    loggedInUser.value = managerData.name;
+    activeSite.value = managerData.access[0];
+    isManagerUnlocked.value = true;
                             // 2. Brand Directory Sync
                             unsubscribeBrands = onSnapshot(collection(db, "brands"), (snapshot) => {
                                 const fetchedBrands = [];
@@ -737,17 +735,10 @@ createApp({
                                     systemLogs.value = logs;
                                 });
                             }
-                        }    } else {
-        isManagerUnlocked.value = false;
-        promoCredits.value = [];
-        masterBrands.value = [];
 
-        if (unsubscribeSnapshot) unsubscribeSnapshot();
-        if (unsubscribeBrands) unsubscribeBrands();
-    }
-
-});
-});
+                            });
+            
+                            });
         const handleLogin = () => {
             authError.value = '';
             signInWithEmailAndPassword(auth, emailInput.value.trim(), passwordInput.value)
