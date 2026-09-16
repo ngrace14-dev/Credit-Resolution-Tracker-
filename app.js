@@ -575,8 +575,11 @@ createApp({
             const senderEmail = 'nicholas.grace@rredco.com';
             const subject = `credit report - ${storeName} promotions ${periodStr}`;
 
-            let body = `Hello ${report.vendor},\n\n`;
-            // ... existing body construction ...
+                        let body = `Hello ${report.vendor},\n\n`;
+            body += `Please see the attached itemized breakdown for vendor credits owed to ${storeName} for ${periodStr}.\n\n`;
+            body += `The total amount for this period is ${formatCurrency(csvTotal)}.\n\n`;
+            body += `Please review the attached CSV and let us know if you have any questions or when we can expect the credit to be applied to our account.\n\n`;
+            body += `Best regards,\n\n`;
             body += `${storeName} Accounting Team\n`;
             body += `Nicholas Grace (${senderEmail})\n`;
             body += `(530)560-6624 - Office\n`;
@@ -974,56 +977,56 @@ createApp({
             await runRegeneration(monthGroup.brandList, monthGroup.month);
         };
 
-        const runRegeneration = async (brandList, month) => {
-            try {
-                const batch = writeBatch(db);
-                let workFound = false;
+                const runRegeneration = async (brandList, month) => {
+                    try {
+                        const batch = writeBatch(db);
+                        let workFound = false;
 
-                for (const brand of brandList) {
-                    // 1. Find and delete existing aggregated credits for this brand/month/site
-                    const existingAggregated = promoCredits.value.filter(c => 
-                        c.site === activeSite.value && 
-                        c.trackingMonth === month && 
-                        (c.vendor || '').toLowerCase() === (brand.vendor || '').toLowerCase() &&
-                        c.creditType && String(c.creditType).includes('Aggregated POS Sales')
-                    );
+                        for (const brand of brandList) {
+                            // 1. Find and delete existing aggregated credits for this brand/month/site
+                            const existingAggregated = promoCredits.value.filter(c => 
+                                c.site === activeSite.value && 
+                                c.trackingMonth === month && 
+                                (c.vendor || '').toLowerCase() === (brand.vendor || '').toLowerCase() &&
+                                c.creditType && String(c.creditType).includes('Aggregated POS Sales')
+                            );
                     
-                    existingAggregated.forEach(c => {
-                        batch.delete(doc(db, "promoCredits", c.id));
-                        workFound = true;
-                    });
+                            existingAggregated.forEach(c => {
+                                batch.delete(doc(db, "promoCredits", c.id));
+                                workFound = true;
+                            });
 
-                    // 2. Find all sales for this brand/month/site and mark as Unsynced
-                    const relevantSales = treesSalesData.value.filter(sale => 
-                        sale.detectedSite === activeSite.value &&
-                        sale.month === month &&
-                        (sale.brand || '').toLowerCase() === (brand.vendor || '').toLowerCase()
-                    );
+                            // 2. Find all sales for this brand/month/site and mark as Unsynced
+                            const relevantSales = treesSalesData.value.filter(sale => 
+                                sale.detectedSite === activeSite.value &&
+                                sale.month === month &&
+                                (sale.brand || '').toLowerCase() === (brand.vendor || '').toLowerCase()
+                            );
 
-                    relevantSales.forEach(sale => {
-                        batch.update(doc(db, "treesSales", sale.id), { status: 'Unsynced' });
-                        workFound = true;
-                    });
-                }
+                            relevantSales.forEach(sale => {
+                                batch.update(doc(db, "treesSales", sale.id), { status: 'Unsynced' });
+                                workFound = true;
+                            });
+                        }
 
-                if (workFound) {
-                    await batch.commit();
-                    // Small delay to ensure Firestore processed deletions before re-aggregation
-                    setTimeout(async () => {
-                        await pushToMainTracker();
-                        logSystemAction("UPDATE", `Regenerated reports for ${month} (${brandList.length} brands)`);
-                    }, 800);
-                } else {
-                    alert("No automated POS credits found to regenerate for this selection.");
-                }
-            } catch (err) {
-                console.error(err);
-                alert("Failed to regenerate reports.");
-            }
-        };
+                        if (workFound) {
+                            await batch.commit();
+                            // Small delay to ensure Firestore processed deletions before re-aggregation
+                            setTimeout(async () => {
+                                await pushToMainTracker();
+                                logSystemAction("UPDATE", `Regenerated reports for ${month} (${brandList.length} brands)`);
+                            }, 800);
+                        } else {
+                            alert("No automated POS credits found to regenerate for this selection.");
+                        }
+                    } catch (err) {
+                        console.error(err);
+                        alert("Failed to regenerate reports.");
+                    }
+                };
 
-
-            const file = e.target.files[0];
+                const handleTreesCsvUpload = async (e) => {
+                    const file = e.target.files[0];
             if (!file) return;
             const reader = new FileReader();
             reader.onload = async (evt) => {
@@ -1261,36 +1264,7 @@ createApp({
             }
         };
 
-                const systemLogs = ref([]);
-                const isSuperAdmin = computed(() => {
-            const currentUser = Object.keys(systemUsers).find(email => systemUsers[email].name === loggedInUser.value);
-            return currentUser && systemUsers[currentUser] && systemUsers[currentUser].superAdmin === true;
-        });
+                        const systemLogs = ref([]);
 
+        const logSystemAction = async (actionType, details) => {
 
-        const refreshIcons = () => { nextTick(() => { if(window.lucide) window.lucide.createIcons(); }); };
-
-        return {
-            isManagerUnlocked, loggedInUser, emailInput, passwordInput, authError, handleLogin, forceLock, activeSite, 
-            activeTab, treesSalesData, filteredTreesSalesData, displayTreesSalesData, unsyncedSalesCount, handleTreesCsvUpload, pushToMainTracker,
-            promoCredits, filteredCredits, showPromoModal, form, editingId, 
-            openPromoModal, closePromoModal, saveCredit, editCredit, deleteCredit, handleFileUpload,
-            formatCurrency, totalPending, totalApplied,
-            masterBrands, filteredBrands, showBrandDropdown, selectBrand,
-            selectedBrands, allBrandsSelected, toggleAllBrands, deleteSelectedBrands, 
-            showReportModal, groupedPendingReports, draftEmail,
-            archiveAndExportAnnualReport, 
-            monthlyReportSummaries, downloadMonthlyReport, 
-            showImportModal, openImportModal, closeImportModal, resetImport, 
-            rawPasteData, pastedGrid, displayGrid, mappedHeaders, availableHeaders, processRawPaste, processImport,
-                        showBrandImportModal, brandPasteData, brandPastedGrid, brandMappedHeaders, brandAvailableHeaders,
-                        resetBrandImport, processBrandRawPaste, processBrandImport, updateBrandField,
-                        calendarMonths, activeMonth, detectMonthInString, searchQuery, searchQueryInput,
-                        isSuperAdmin, systemLogs,
-                        showResolutionModal, resolutionCredit, resolutionForm, markAsSent, markReportGroupAsSent, openResolutionModal, submitResolution,
-                        regenerateBrandSummary, regenerateMonthReports
-        };
-
-
-    }
-}).mount('#app');
