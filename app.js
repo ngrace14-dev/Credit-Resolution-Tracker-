@@ -1266,5 +1266,43 @@ createApp({
 
                         const systemLogs = ref([]);
 
-        const logSystemAction = async (actionType, details) => {
+        const isSuperAdmin = computed(() => {
+            const user = auth.currentUser;
+            if (!user) return false;
+            const userData = systemUsers[user.email.toLowerCase()];
+            return userData && userData.superAdmin;
+        });
+
+        const refreshIcons = () => {
+            if (window.lucide) {
+                nextTick(() => {
+                    window.lucide.createIcons();
+                });
+            }
+        };
+
+        return {
+            isManagerUnlocked, loggedInUser, emailInput, passwordInput, authError, activeSite, activeTab,
+            masterBrands, selectedBrands, allBrandsSelected, toggleAllBrands, deleteSelectedBrands, updateBrandField,
+            promoCredits, calendarMonths, activeMonth, searchQueryInput, searchQuery,
+            showPromoModal, showBrandDropdown, editingId, showReportModal, showResolutionModal, resolutionCredit, resolutionForm,
+            markAsSent, markReportGroupAsSent, openResolutionModal, submitResolution, monthlyReportSummaries, downloadMonthlyReport,
+            groupedPendingReports, draftEmail, archiveAndExportAnnualReport, showImportModal, rawPasteData, pastedGrid, mappedHeaders,
+            showBrandImportModal, brandPasteData, brandPastedGrid, brandMappedHeaders, brandAvailableHeaders, availableHeaders,
+            form, handleLogin, forceLock, filteredBrands, selectBrand, formatCurrency, filteredCredits, totalPending, totalApplied,
+            openPromoModal, closePromoModal, handleFileUpload, saveCredit, editCredit, deleteCredit, openImportModal, closeImportModal,
+            resetImport, processRawPaste, processImport, regenerateBrandSummary, regenerateMonthReports, treesSalesData, 
+            filteredTreesSalesData, displayTreesSalesData, unsyncedSalesCount, handleTreesCsvUpload, pushToMainTracker,
+            resetBrandImport, showBrandImportModal, processBrandRawPaste, processBrandImport, systemLogs, isSuperAdmin, refreshIcons,
+            displayGrid, detectMonthInString, clearAllSalesData: async () => {
+                if (confirm("Permanently clear ALL sales data? This cannot be undone.")) {
+                    const batch = writeBatch(db);
+                    treesSalesData.value.forEach(s => batch.delete(doc(db, "treesSales", s.id)));
+                    await batch.commit();
+                    logSystemAction("DELETE", "Cleared all sales data");
+                }
+            }
+        };
+    }
+}).mount('#app');
 
