@@ -738,12 +738,7 @@ createApp({
                                 });
                             }
                         }
- else {
-                        signOut(auth);
-                        authError.value = "Account is inactive or unauthorized.";
-                        isManagerUnlocked.value = false;
-                    }
-                } else {
+} else {
                     isManagerUnlocked.value = false;
                     promoCredits.value = [];
                     masterBrands.value = [];
