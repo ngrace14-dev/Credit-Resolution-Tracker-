@@ -16,9 +16,9 @@
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-        <div id="app" class="h-full flex flex-col bg-gray-100" v-cloak>
+    <div id="app" class="h-full flex flex-col bg-gray-100" v-cloak>
         
-                <!-- HEADER (Obsidian & Gold) -->
+        <!-- HEADER (Obsidian & Gold) -->
         <header v-if="isManagerUnlocked" class="bg-gray-950 text-white px-4 md:px-5 py-3 flex flex-col md:flex-row justify-between items-center shrink-0 shadow-lg z-20 gap-3 md:gap-0 border-b border-gray-800">
             <div class="flex items-center gap-3 w-full md:w-auto justify-between md:justify-start">
                 <div class="flex items-center gap-3">
@@ -54,7 +54,7 @@
             </div>
         </header>
 
-                                <!-- SECURE FIREBASE LOGIN SCREEN -->
+        <!-- SECURE FIREBASE LOGIN SCREEN -->
         <main v-if="!isManagerUnlocked" class="flex-1 flex flex-col items-center justify-center bg-gray-100 p-4">
              <div class="bg-white rounded-2xl shadow-2xl p-8 md:p-10 max-w-md w-full text-center border border-gray-200">
 
@@ -74,7 +74,7 @@
              </div>
         </main>
 
-                <!-- APP TABS NAV (Obsidian Background) -->
+        <!-- APP TABS NAV (Obsidian Background) -->
         <div v-if="isManagerUnlocked" class="bg-gray-950 px-4 md:px-6 pt-2 flex gap-2 shrink-0 z-10 shadow-sm overflow-x-auto no-scrollbar border-b border-gray-800">
             <button @click="activeTab = 'Dashboard'" :class="activeTab === 'Dashboard' ? 'bg-gray-100 text-gray-900 font-extrabold border-t-4 border-emerald-500' : 'bg-gray-900/50 text-gray-400 hover:bg-gray-800 hover:text-white'" class="px-6 py-2 rounded-t-xl text-sm transition-colors tracking-wide whitespace-nowrap">Dashboard</button>
             <button @click="activeTab = 'Tracker'" :class="activeTab === 'Tracker' ? 'bg-gray-100 text-gray-900 font-extrabold border-t-4 border-emerald-500' : 'bg-gray-900/50 text-gray-400 hover:bg-gray-800 hover:text-white'" class="px-6 py-2 rounded-t-xl text-sm transition-colors tracking-wide whitespace-nowrap">Main Tracker</button>
@@ -84,7 +84,7 @@
             <button v-if="isSuperAdmin" @click="activeTab = 'Logs'" :class="activeTab === 'Logs' ? 'bg-gray-100 text-gray-900 font-extrabold border-t-4 border-amber-500' : 'bg-gray-900/50 text-gray-400 hover:bg-gray-800 hover:text-white'" class="px-6 py-2 rounded-t-xl text-sm transition-colors tracking-wide whitespace-nowrap"><i data-lucide="activity" class="w-3.5 h-3.5 inline mr-1 mb-0.5"></i>System Logs</button>
         </div>
 
-                <!-- SHARED GLOBAL FILTERS -->
+        <!-- SHARED GLOBAL FILTERS -->
         <div v-if="isManagerUnlocked && activeTab !== 'Logs'" class="bg-gray-100 px-4 md:px-6 pt-4 pb-2 flex flex-col lg:flex-row justify-between items-center shrink-0 gap-3 z-10 border-b border-gray-200">
             <div class="bg-white rounded-xl shadow-sm border border-gray-300 p-1.5 flex overflow-x-auto gap-1 w-full lg:flex-1 no-scrollbar">
                 <button @click="activeMonth = 'All'" :class="activeMonth === 'All' ? 'bg-gray-900 text-emerald-500 font-bold shadow' : 'text-gray-600 hover:bg-gray-100 font-medium'" class="px-4 py-1.5 rounded-lg text-sm transition-all whitespace-nowrap">All Year</button>
@@ -95,7 +95,7 @@
                     {{ month }}
                 </button>
             </div>
-                        <div class="relative w-full lg:w-80 shrink-0">
+            <div class="relative w-full lg:w-80 shrink-0">
                 <i data-lucide="search" class="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
                 <input type="text" v-model="searchQueryInput" placeholder="Search brands, types, records..." class="w-full bg-white border border-gray-300 rounded-xl py-2 pl-10 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 shadow-sm transition-shadow">
                 <button v-if="searchQueryInput" @click="searchQueryInput = ''" class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
@@ -126,7 +126,7 @@
                             </h3>
                             <p class="text-xs text-gray-300 mt-0.5">{{ monthGroup.brandList.length }} Brands • {{ monthGroup.count }} Total Entries</p>
                         </div>
-                                                <div class="flex items-center gap-3">
+                        <div class="flex items-center gap-3">
                             <span class="text-lg font-extrabold text-emerald-400 bg-white/10 px-3 py-1 rounded-lg border border-white/10">{{ formatCurrency(monthGroup.total) }}</span>
                             <button @click="regenerateMonthReports(monthGroup)" class="bg-gray-800 text-amber-500 hover:bg-gray-700 px-3 py-1.5 rounded-lg font-bold text-xs shadow transition-colors flex items-center gap-1.5 border border-gray-700">
                                 <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i> Regenerate Month
@@ -135,13 +135,12 @@
                                 <i data-lucide="download" class="w-3.5 h-3.5"></i> Full Month CSV
                             </button>
                         </div>
-
                     </div>
 
                     <!-- Brand Breakdown Grid -->
                     <div class="p-4 sm:p-6 grid grid-cols-1 lg:grid-cols-2 gap-4">
                         <div v-for="brand in monthGroup.brandList" :key="brand.vendor" class="bg-gray-50 border border-gray-200 rounded-xl p-4 flex flex-col justify-between hover:border-emerald-300 transition-all shadow-sm">
-                                                        <div class="flex justify-between items-start mb-3 border-b border-gray-200 pb-3">
+                            <div class="flex justify-between items-start mb-3 border-b border-gray-200 pb-3">
                                 <div>
                                     <h4 class="font-bold text-gray-900 text-base flex items-center gap-2">
                                         <i data-lucide="building" class="w-4 h-4 text-emerald-600"></i>
@@ -160,7 +159,6 @@
                                 </div>
                             </div>
 
-
                             <!-- Preview List of Credits for this brand -->
                             <div class="mb-4 text-xs text-gray-600 space-y-1 max-h-32 overflow-y-auto pr-1">
                                 <div v-for="c in brand.credits" :key="c.id" class="flex justify-between bg-white px-2 py-1.5 rounded border border-gray-100">
@@ -169,37 +167,33 @@
                                 </div>
                             </div>
 
-                                                        <!-- Action Buttons Attached to Each Brand -->
-                                                                                                                    <button v-if="brand.credits.some(c => c.status === 'Pending')" 
-                                                                    @click="draftEmail(brand)" :disabled="!brand.email" 
-                                                                    :class="!brand.email ? 'bg-gray-300 text-gray-500 cursor-not-allowed' : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm'" 
- 
-                                                                    class="flex-1 py-2 rounded-lg font-bold flex items-center justify-center gap-1.5 text-xs transition-colors">
-                                                                <i data-lucide="mail" class="w-3.5 h-3.5"></i> Draft Email
-                                                            </button>
-                                
-                                                            <button v-if="brand.credits.some(c => c.status === 'Pending')"
-                                                                    @click="markReportGroupAsSent(brand)"
-                                                                    class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg font-bold text-xs shadow-sm transition-colors flex items-center gap-1.5">
-                                                                <i data-lucide="send" class="w-3.5 h-3.5"></i> Mark Sent
-                                                            </button>
+                            <!-- Action Buttons Attached to Each Brand -->
+                            <button v-if="brand.credits.some(c => c.status === 'Pending')" 
+                                @click="draftEmail(brand)" :disabled="!brand.email" 
+                                :class="!brand.email ? 'bg-gray-300 text-gray-500 cursor-not-allowed' : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm'" 
+                                class="flex-1 py-2 rounded-lg font-bold flex items-center justify-center gap-1.5 text-xs transition-colors">
+                                <i data-lucide="mail" class="w-3.5 h-3.5"></i> Draft Email
+                            </button>
+                            
+                            <button v-if="brand.credits.some(c => c.status === 'Pending')"
+                                @click="markReportGroupAsSent(brand)"
+                                class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg font-bold text-xs shadow-sm transition-colors flex items-center gap-1.5">
+                                <i data-lucide="send" class="w-3.5 h-3.5"></i> Mark Sent
+                            </button>
 
-                                                            <button v-else-if="brand.credits.every(c => c.status === 'Report Sent')" 
-                                                                    class="flex-1 py-2 rounded-lg font-bold flex items-center justify-center gap-1.5 text-xs bg-blue-50 text-blue-700 border border-blue-200 cursor-default">
-                                                                <i data-lucide="clock" class="w-3.5 h-3.5"></i> Waiting for Resolution
-                                                            </button>
+                            <button v-else-if="brand.credits.every(c => c.status === 'Report Sent')" 
+                                class="flex-1 py-2 rounded-lg font-bold flex items-center justify-center gap-1.5 text-xs bg-blue-50 text-blue-700 border border-blue-200 cursor-default">
+                                <i data-lucide="clock" class="w-3.5 h-3.5"></i> Waiting for Resolution
+                            </button>
 
-                                                            <button v-else
-                                                                    class="flex-1 py-2 rounded-lg font-bold flex items-center justify-center gap-1.5 text-xs bg-gray-100 text-gray-600 border border-gray-200 cursor-default">
-                                                                <i data-lucide="check-circle" class="w-3.5 h-3.5"></i> All Resolved
-                                                            </button>
+                            <button v-else
+                                class="flex-1 py-2 rounded-lg font-bold flex items-center justify-center gap-1.5 text-xs bg-gray-100 text-gray-600 border border-gray-200 cursor-default">
+                                <i data-lucide="check-circle" class="w-3.5 h-3.5"></i> All Resolved
+                            </button>
 
-                                                            <button @click="downloadMonthlyReport(brand)" class="px-3 py-2 bg-white border border-gray-300 hover:bg-gray-100 text-gray-700 rounded-lg font-bold flex items-center gap-1.5 text-xs transition-colors shadow-sm" title="Download CSV Breakdown">
-                                                                <i data-lucide="file-spreadsheet" class="w-3.5 h-3.5 text-amber-500"></i>
-                                                            </button>
-                                                        </div>
-
-
+                            <button @click="downloadMonthlyReport(brand)" class="px-3 py-2 bg-white border border-gray-300 hover:bg-gray-100 text-gray-700 rounded-lg font-bold flex items-center gap-1.5 text-xs transition-colors shadow-sm" title="Download CSV Breakdown">
+                                <i data-lucide="file-spreadsheet" class="w-3.5 h-3.5 text-amber-500"></i>
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -288,7 +282,7 @@
                                 <th>Credit amount $$$</th>
                                 <th>Date requested</th>
                                 <th>Date received</th>
-                                                                <th>Invoice / Credit Memo</th>
+                                <th>Invoice / Credit Memo</th>
                                 <th>Proof</th>
                                 <th class="text-center">Status</th>
                                 <th class="text-center">Email Workflow</th>
@@ -357,7 +351,7 @@
             </div>
         </main>
 
-                <!-- OLD EMAIL REPORT DRAFTER MODAL (Kept as fallback in UI) -->
+        <!-- OLD EMAIL REPORT DRAFTER MODAL (Kept as fallback in UI) -->
         <div v-if="isManagerUnlocked && showReportModal" class="fixed inset-0 bg-black/60 flex items-center justify-center z-50 backdrop-blur-sm p-2" @click.self="showReportModal = false">
 
             <div class="bg-white rounded-2xl shadow-2xl w-full md:w-[800px] max-w-[95vw] flex flex-col overflow-hidden max-h-[95vh] md:max-h-[85vh]">
@@ -411,7 +405,7 @@
                     <h2 class="text-xl font-bold text-gray-900 leading-tight">Trees POS Sales (Global)</h2>
                     <p class="text-sm text-gray-500 mt-1">Showing ALL uploaded data. The aggregator automatically routes credits to Red Bluff or Redding.</p>
                 </div>
-                                <div class="flex flex-col sm:flex-row w-full md:w-auto gap-3">
+                <div class="flex flex-col sm:flex-row w-full md:w-auto gap-3">
                     <button v-if="isSuperAdmin && treesSalesData.length > 0" @click="clearAllSalesData" class="w-full sm:w-auto px-4 py-2 bg-red-50 border border-red-200 hover:bg-red-100 text-red-600 rounded-lg font-bold shadow-sm transition-colors flex items-center justify-center gap-2 text-sm">
                         <i data-lucide="trash-2" class="w-4 h-4"></i> Clear All Data
                     </button>
@@ -513,7 +507,7 @@
                             </tr>
                         </thead>
                         <tbody>
-                                                        <!-- INLINE EDITING ENABLED HERE -->
+                            <!-- INLINE EDITING ENABLED HERE -->
                             <tr v-for="(brand, index) in masterBrands" :key="brand.id" class="hover:bg-emerald-50/40" :class="{'bg-emerald-50/70': selectedBrands.includes(brand.id)}">
                                 <td class="font-bold text-gray-900 sticky left-0 bg-white shadow-[1px_0_0_#e5e7eb] z-10 whitespace-nowrap">
                                     <div class="flex items-center gap-2">
@@ -536,7 +530,7 @@
             </div>
         </main>
 
-                <!-- SYSTEM LOGS TAB (SUPER ADMIN ONLY) -->
+        <!-- SYSTEM LOGS TAB (SUPER ADMIN ONLY) -->
         <main v-if="isManagerUnlocked && isSuperAdmin && activeTab === 'Logs'" class="flex-1 flex flex-col p-4 md:p-6 bg-gray-100 overflow-hidden">
             <div class="mb-4 flex justify-between items-end shrink-0">
                 <div>
@@ -582,7 +576,7 @@
             </div>
         </main>
 
-                <!-- ADD/EDIT PROMO MODAL -->
+        <!-- ADD/EDIT PROMO MODAL -->
         <div v-if="isManagerUnlocked && showPromoModal" class="fixed inset-0 bg-black/60 flex items-center justify-center z-50 backdrop-blur-sm p-2" @click.self="closePromoModal">
 
             <div class="bg-white rounded-2xl shadow-2xl w-full md:w-[700px] max-w-[95vw] flex flex-col overflow-hidden max-h-[95vh] md:max-h-[80vh]">
@@ -647,7 +641,7 @@
             </div>
         </div>
 
-                <!-- EMAIL RESOLUTION MODAL -->
+        <!-- EMAIL RESOLUTION MODAL -->
         <div v-if="isManagerUnlocked && showResolutionModal" class="fixed inset-0 bg-black/60 flex items-center justify-center z-50 backdrop-blur-sm p-2" @click.self="showResolutionModal = false">
 
             <div class="bg-white rounded-2xl shadow-2xl w-full md:w-[500px] max-w-[95vw] flex flex-col overflow-hidden">
@@ -679,7 +673,7 @@
             </div>
         </div>
 
-                <!-- NEW VISUAL BRAND IMPORT MODAL -->
+        <!-- NEW VISUAL BRAND IMPORT MODAL -->
         <div v-if="isManagerUnlocked && showBrandImportModal" class="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-2 backdrop-blur-sm" @click.self="showBrandImportModal = false">
 
             <div class="bg-white rounded-2xl shadow-2xl w-full md:w-[95vw] max-w-7xl flex flex-col overflow-hidden max-h-[95vh] md:max-h-[90vh]">
@@ -707,6 +701,7 @@
                                         </select>
                                     </th>
                                 </tr>
+                                
                             </thead>
                             <tbody>
                                 <tr v-for="(row, rIndex) in brandPastedGrid.slice(0, 50)" :key="'brow-'+rIndex">
@@ -737,7 +732,7 @@
             </div>
         </div>
 
-                <!-- DYNAMIC GRID IMPORT MODAL (Promo Credits) -->
+        <!-- DYNAMIC GRID IMPORT MODAL (Promo Credits) -->
         <div v-if="isManagerUnlocked && showImportModal" class="fixed inset-0 bg-black/60 flex items-center justify-center z-50 backdrop-blur-sm p-2" @click.self="closeImportModal">
 
             <div class="bg-white rounded-2xl shadow-2xl w-full md:w-[95vw] max-w-7xl flex flex-col overflow-hidden max-h-[95vh] md:max-h-[90vh]">
