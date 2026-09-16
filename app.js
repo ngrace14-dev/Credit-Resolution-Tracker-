@@ -1094,6 +1094,14 @@ createApp({
                         }
                     }
 
+                    const getVal = (rowObj, ...keys) => {
+                        for (const key of keys) {
+                            const foundKey = Object.keys(rowObj).find(k => k.toLowerCase().trim() === key.toLowerCase().trim());
+                            if (foundKey && rowObj[foundKey] !== undefined) return rowObj[foundKey];
+                        }
+                        return '';
+                    };
+
                     const batch = writeBatch(db);
                     let count = 0;
 
@@ -1103,26 +1111,34 @@ createApp({
                         const rowObj = {};
                         headers.forEach((h, idx) => { rowObj[h] = cols[idx] ? cols[idx].replace(/["']/g, '') : ''; });
 
-                        if (!rowObj['Product Brand'] && !rowObj['State Tracking Id']) continue;
+                        const brandVal = getVal(rowObj, 'Product Brand', 'Brand');
+                        const trackingVal = getVal(rowObj, 'State Tracking Id', 'Tracking Id');
 
-                        const dateStr = rowObj['Date Closed'] || '';
+                        if (!brandVal && !trackingVal) continue;
+
+                        const dateStr = getVal(rowObj, 'Date Closed', 'Date');
                         const parsedMonth = detectMonthFromDate(dateStr) !== 'Unknown' ? detectMonthFromDate(dateStr) : 'August';
-                        const storeString = rowObj['Store Name'] || '';
+                        const storeString = getVal(rowObj, 'Store Name', 'Location');
                         const detectedSite = detectSiteFromName(storeString);
+
+                        const units = parseFloat(getVal(rowObj, 'Units Sold', 'Unit Sold', 'Qty', 'Quantity')) || 0;
+                        const unitPrice = parseFloat(String(getVal(rowObj, 'Cost Per Unit', 'Unit Price', 'Price')).replace(/[^0-9.-]+/g,"")) || 0;
+                        const discAmt = parseFloat(String(getVal(rowObj, 'Discounts', 'Discount Amount', 'Discount')).replace(/[^0-9.-]+/g,"")) || 0;
+                        const owedAmt = parseFloat(String(getVal(rowObj, 'Vendor Credit Owed', 'Credit Owed')).replace(/[^0-9.-]+/g,"")) || 0;
 
                         const newSale = {
                             month: parsedMonth, 
-                            brand: rowObj['Product Brand'] || 'Unknown Brand',
-                            discountTitle: rowObj['Discount Title'] || '',
-                            dateClosed: dateStr, 
+                            brand: brandVal || 'Unknown Brand',
+                            discountTitle: getVal(rowObj, 'Discount Title', 'Discount Name') || '',
+                            dateClosed: dateStr,
                             storeName: storeString,
                             detectedSite: detectedSite,
-                            productName: rowObj['Product Name'] || '',
-                            owed: parseFloat(String(rowObj['Vendor Credit Owed']).replace(/[^0-9.-]+/g,"")) || 0,
-                            trackingId: rowObj['State Tracking Id'] || '',
-                            unitsSold: parseFloat(rowObj['Units Sold']) || 0,
-                            unitPrice: parseFloat(String(rowObj['Cost Per Unit']).replace(/[^0-9.-]+/g,"")) || 0,
-                            discountAmount: parseFloat(String(rowObj['Discounts']).replace(/[^0-9.-]+/g,"")) || 0,
+                            productName: getVal(rowObj, 'Product Name', 'Product') || '',
+                            owed: owedAmt,
+                            trackingId: trackingVal || '',
+                            unitsSold: units,
+                            unitPrice: unitPrice,
+                            discountAmount: discAmt,
                             status: 'Unsynced',
                             uploadedAt: Date.now()
                         };
