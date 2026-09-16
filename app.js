@@ -737,17 +737,17 @@ createApp({
                                     systemLogs.value = logs;
                                 });
                             }
-                        }
-} else {
-                    isManagerUnlocked.value = false;
-                    promoCredits.value = [];
-                    masterBrands.value = [];
-                    if (unsubscribeSnapshot) unsubscribeSnapshot();
-                    if (unsubscribeBrands) unsubscribeBrands();
-                }
-            });
-        });
+                        }    } else {
+        isManagerUnlocked.value = false;
+        promoCredits.value = [];
+        masterBrands.value = [];
 
+        if (unsubscribeSnapshot) unsubscribeSnapshot();
+        if (unsubscribeBrands) unsubscribeBrands();
+    }
+
+});
+});
         const handleLogin = () => {
             authError.value = '';
             signInWithEmailAndPassword(auth, emailInput.value.trim(), passwordInput.value)
