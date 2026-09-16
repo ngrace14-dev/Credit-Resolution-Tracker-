@@ -271,45 +271,86 @@ createApp({
                 }));
         });
 
+        // REFACTORED FOR DIME REQUIREMENTS
         const downloadMonthlyReport = (report) => {
-            let csvContent = "Site,Date,Vendor,Distributor,Product/Description,Tracking ID,Credit Amount,Status\n";
+            let csvContent = "Location,Date & Time,Brand,Product Name,Transaction ID,Quantity Sold,Unit Price,Total Before Tax,Discount Title,Discount Amount,Credit Owed,Entry Type\n";
             let csvTotal = 0;
+            const reportMonth = report.month || activeMonth.value;
             const cleanStr = (str) => String(str || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
     
+            const matchedRawSales = treesSalesData.value.filter(sale => {
+                const brandMatch = cleanStr(sale.brand) === cleanStr(report.vendor);
+                const siteMatch = cleanStr(sale.detectedSite) === cleanStr(activeSite.value);
+                const monthMatch = cleanStr(sale.month) === cleanStr(reportMonth);
+                return brandMatch && siteMatch && monthMatch;
+            });
+
+            if (matchedRawSales.length > 0) {
+                matchedRawSales.forEach(sale => {
+                    const safeLoc = `"${String(sale.detectedSite || '').replace(/"/g, '""')}"`;
+                    const safeDate = `"${String(sale.dateClosed || '').replace(/"/g, '""')}"`;
+                    const safeBrand = `"${String(sale.brand || '').replace(/"/g, '""')}"`;
+                    const safeProd = `"${String(sale.productName || '').replace(/"/g, '""')}"`;
+                    const safeTrack = `"${String(sale.trackingId || '').replace(/"/g, '""')}"`;
+                    const safeQty = `"${sale.unitsSold || 0}"`;
+                    const safePrice = `"${formatCurrency(sale.unitPrice || 0)}"`;
+                    const safePreTax = `"${formatCurrency((sale.unitsSold || 0) * (sale.unitPrice || 0))}"`;
+                    const safeDiscTitle = `"${String(sale.discountTitle || '').replace(/"/g, '""')}"`;
+                    const safeDiscAmount = `"${formatCurrency(sale.discountAmount || 0)}"`;
+                    const safeOwed = `"${formatCurrency(sale.owed || 0)}"`;
+                    const safeType = `"POS Itemized"`;
+                    
+                    csvContent += `${safeLoc},${safeDate},${safeBrand},${safeProd},${safeTrack},${safeQty},${safePrice},${safePreTax},${safeDiscTitle},${safeDiscAmount},${safeOwed},${safeType}\n`;
+                    csvTotal += parseFloat(sale.owed) || 0;
+                });
+            }
+
             const creditsToExport = report.credits || [];
-    
             creditsToExport.forEach(c => {
                 const isAggregated = c.creditType && String(c.creditType).includes('Aggregated POS Sales');
-                let matchedRawSales = [];
-                
-                if (isAggregated) {
-                    matchedRawSales = treesSalesData.value.filter(sale => {
-                        const brandMatch = cleanStr(sale.brand) === cleanStr(c.vendor);
-                        const siteMatch = cleanStr(sale.detectedSite) === cleanStr(c.site);
-                        const monthMatch = cleanStr(sale.month) === cleanStr(c.trackingMonth);
-                        return brandMatch && siteMatch && monthMatch;
-                    });
-                }
-
-                if (isAggregated && matchedRawSales.length > 0) {
-                    matchedRawSales.forEach(sale => {
-                        csvContent += `"${sale.detectedSite}","${sale.dateClosed}","${sale.brand}","${c.distributor}","${sale.productName} (${sale.discountTitle})","${sale.trackingId}","${formatCurrency(sale.owed)}","Synced"\n`;
-                        csvTotal += parseFloat(sale.owed) || 0;
-                    });
-                } else {
-                    csvContent += `"${c.site}","${c.dates}","${c.vendor}","${c.distributor}","${c.creditType}","${c.invoice}","${formatCurrency(c.amount)}","${c.status}"\n`;
+                if (!isAggregated) {
+                    const safeLoc = `"${String(c.site || '').replace(/"/g, '""')}"`;
+                    const safeDate = `"${String(c.dates || '').replace(/"/g, '""')}"`;
+                    const safeBrand = `"${String(c.vendor || '').replace(/"/g, '""')}"`;
+                    const safeProd = `"${String(c.creditType || '').replace(/"/g, '""')}"`; 
+                    const safeTrack = `"${String(c.invoice || '').replace(/"/g, '""')}"`;
+                    const safeQty = `"-"`;
+                    const safePrice = `"-"`;
+                    const safePreTax = `"-"`;
+                    const safeDiscTitle = `"-"`;
+                    const safeDiscAmount = `"-"`;
+                    const safeOwed = `"${formatCurrency(c.amount)}"`;
+                    const safeType = `"Manual Entry"`; 
+                    
+                    csvContent += `${safeLoc},${safeDate},${safeBrand},${safeProd},${safeTrack},${safeQty},${safePrice},${safePreTax},${safeDiscTitle},${safeDiscAmount},${safeOwed},${safeType}\n`;
+                    csvTotal += parseFloat(c.amount) || 0;
+                } else if (matchedRawSales.length === 0) {
+                    const safeLoc = `"${String(c.site || '').replace(/"/g, '""')}"`;
+                    const safeDate = `"${String(c.dates || '').replace(/"/g, '""')}"`;
+                    const safeBrand = `"${String(c.vendor || '').replace(/"/g, '""')}"`;
+                    const safeProd = `"${String(c.creditType || '').replace(/"/g, '""')}"`; 
+                    const safeTrack = `"${String(c.invoice || '').replace(/"/g, '""')}"`;
+                    const safeQty = `"-"`;
+                    const safePrice = `"-"`;
+                    const safePreTax = `"-"`;
+                    const safeDiscTitle = `"-"`;
+                    const safeDiscAmount = `"-"`;
+                    const safeOwed = `"${formatCurrency(c.amount)}"`;
+                    const safeType = `"Summary (Raw Data Missing)"`; 
+                    
+                    csvContent += `${safeLoc},${safeDate},${safeBrand},${safeProd},${safeTrack},${safeQty},${safePrice},${safePreTax},${safeDiscTitle},${safeDiscAmount},${safeOwed},${safeType}\n`;
                     csvTotal += parseFloat(c.amount) || 0;
                 }
             });
 
-            csvContent += `,,,,,, "TOTAL:", "${formatCurrency(csvTotal)}"\n`;
+            csvContent += `,,,,,,,,,, "TOTAL:", "${formatCurrency(csvTotal)}"\n`;
 
             const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
             const url = URL.createObjectURL(blob);
             const link = document.createElement("a");
             link.setAttribute("href", url);
             const currentYear = new Date().getFullYear();
-            const reportName = report.vendor ? String(report.vendor).replace(/[^a-zA-Z0-9]/g, '_') : (report.month || 'Month');
+            const reportName = report.vendor ? String(report.vendor).replace(/[^a-zA-Z0-9]/g, '_') : (reportMonth || 'Month');
             link.setAttribute("download", `${activeSite.value.replace(/\s/g, '_')}_Breakdown_${reportName}_${currentYear}.csv`);
             document.body.appendChild(link);
             link.click();
@@ -483,7 +524,8 @@ createApp({
             return Object.values(groups).sort((a, b) => a.vendor.localeCompare(b.vendor));
         });
 
-      const draftEmail = (report) => {
+        // REFACTORED FOR DIME REQUIREMENTS
+        const draftEmail = (report) => {
             if (!report.email) {
                 alert(`No email mapped for ${report.vendor}. Please add one in the Brand Directory first.`);
                 return;
@@ -495,10 +537,9 @@ createApp({
             const periodStr = `${monthStr} ${currentYear}`;
             const cleanStr = (str) => String(str || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
 
-            let csvContent = "Date,Location,Brand,Product / Description,Discount Title,Tracking ID / Invoice,Entry Type,Credit Amount\n";
+            let csvContent = "Location,Date & Time,Brand,Product Name,Transaction ID,Quantity Sold,Unit Price,Total Before Tax,Discount Title,Discount Amount,Credit Owed,Entry Type\n";
             let csvTotal = 0;
 
-            // 1. Pull raw data directly by brand + month + site
             const matchedRawSales = treesSalesData.value.filter(sale => {
                 const brandMatch = cleanStr(sale.brand) === cleanStr(report.vendor);
                 const siteMatch = cleanStr(sale.detectedSite) === cleanStr(activeSite.value);
@@ -506,55 +547,64 @@ createApp({
                 return brandMatch && siteMatch && monthMatch;
             });
 
-            // 2. Output Itemized List
             if (matchedRawSales.length > 0) {
                 matchedRawSales.forEach(sale => {
+                    const safeLoc = `"${String(sale.detectedSite || '').replace(/"/g, '""')}"`;
                     const safeDate = `"${String(sale.dateClosed || '').replace(/"/g, '""')}"`;
-                    const safeLoc = `"${String(sale.storeName || '').replace(/"/g, '""')}"`;
                     const safeBrand = `"${String(sale.brand || '').replace(/"/g, '""')}"`;
                     const safeProd = `"${String(sale.productName || '').replace(/"/g, '""')}"`;
-                    const safeDisc = `"${String(sale.discountTitle || '').replace(/"/g, '""')}"`;
                     const safeTrack = `"${String(sale.trackingId || '').replace(/"/g, '""')}"`;
+                    const safeQty = `"${sale.unitsSold || 0}"`;
+                    const safePrice = `"${formatCurrency(sale.unitPrice || 0)}"`;
+                    const safePreTax = `"${formatCurrency((sale.unitsSold || 0) * (sale.unitPrice || 0))}"`;
+                    const safeDiscTitle = `"${String(sale.discountTitle || '').replace(/"/g, '""')}"`;
+                    const safeDiscAmount = `"${formatCurrency(sale.discountAmount || 0)}"`;
+                    const safeOwed = `"${formatCurrency(sale.owed || 0)}"`;
                     const safeType = `"POS Itemized"`;
-                    const safeAmount = `"${formatCurrency(sale.owed)}"`;
                     
-                    csvContent += `${safeDate},${safeLoc},${safeBrand},${safeProd},${safeDisc},${safeTrack},${safeType},${safeAmount}\n`;
+                    csvContent += `${safeLoc},${safeDate},${safeBrand},${safeProd},${safeTrack},${safeQty},${safePrice},${safePreTax},${safeDiscTitle},${safeDiscAmount},${safeOwed},${safeType}\n`;
                     csvTotal += parseFloat(sale.owed) || 0;
                 });
             }
 
-            // 3. Output Manual Entries & Fallbacks
             report.credits.forEach(c => {
                 const isAggregated = c.creditType && String(c.creditType).includes('Aggregated POS Sales');
                 if (!isAggregated) {
-                    const safeDate = `"${String(c.dates || '').replace(/"/g, '""')}"`;
                     const safeLoc = `"${String(c.site || '').replace(/"/g, '""')}"`;
+                    const safeDate = `"${String(c.dates || '').replace(/"/g, '""')}"`;
                     const safeBrand = `"${String(c.vendor || '').replace(/"/g, '""')}"`;
                     const safeProd = `"${String(c.creditType || '').replace(/"/g, '""')}"`; 
-                    const safeDisc = `"-"`;
                     const safeTrack = `"${String(c.invoice || '').replace(/"/g, '""')}"`;
+                    const safeQty = `"-"`;
+                    const safePrice = `"-"`;
+                    const safePreTax = `"-"`;
+                    const safeDiscTitle = `"-"`;
+                    const safeDiscAmount = `"-"`;
+                    const safeOwed = `"${formatCurrency(c.amount)}"`;
                     const safeType = `"Manual Entry"`; 
-                    const safeAmount = `"${formatCurrency(c.amount)}"`;
                     
-                    csvContent += `${safeDate},${safeLoc},${safeBrand},${safeProd},${safeDisc},${safeTrack},${safeType},${safeAmount}\n`;
+                    csvContent += `${safeLoc},${safeDate},${safeBrand},${safeProd},${safeTrack},${safeQty},${safePrice},${safePreTax},${safeDiscTitle},${safeDiscAmount},${safeOwed},${safeType}\n`;
                     csvTotal += parseFloat(c.amount) || 0;
                 } else if (matchedRawSales.length === 0) {
-                    // Fallback to summary if raw data fails to link
-                    const safeDate = `"${String(c.dates || '').replace(/"/g, '""')}"`;
                     const safeLoc = `"${String(c.site || '').replace(/"/g, '""')}"`;
+                    const safeDate = `"${String(c.dates || '').replace(/"/g, '""')}"`;
                     const safeBrand = `"${String(c.vendor || '').replace(/"/g, '""')}"`;
                     const safeProd = `"${String(c.creditType || '').replace(/"/g, '""')}"`; 
-                    const safeDisc = `"-"`;
                     const safeTrack = `"${String(c.invoice || '').replace(/"/g, '""')}"`;
+                    const safeQty = `"-"`;
+                    const safePrice = `"-"`;
+                    const safePreTax = `"-"`;
+                    const safeDiscTitle = `"-"`;
+                    const safeDiscAmount = `"-"`;
+                    const safeOwed = `"${formatCurrency(c.amount)}"`;
                     const safeType = `"Summary (Raw Data Missing)"`; 
-                    const safeAmount = `"${formatCurrency(c.amount)}"`;
                     
-                    csvContent += `${safeDate},${safeLoc},${safeBrand},${safeProd},${safeDisc},${safeTrack},${safeType},${safeAmount}\n`;
+                    csvContent += `${safeLoc},${safeDate},${safeBrand},${safeProd},${safeTrack},${safeQty},${safePrice},${safePreTax},${safeDiscTitle},${safeDiscAmount},${safeOwed},${safeType}\n`;
                     csvTotal += parseFloat(c.amount) || 0;
                 }
             });
 
-            csvContent += `,,,,,, "TOTAL:", "${formatCurrency(csvTotal)}"\n`;
+            csvContent += `,,,,,,,,,, "TOTAL:", "${formatCurrency(csvTotal)}"\n`;
 
             const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
             const url = URL.createObjectURL(blob);
@@ -1009,6 +1059,7 @@ createApp({
             }
         };
 
+        // REFACTORED TO CAPTURE DIME REQUIRED COLUMNS
         const handleTreesCsvUpload = async (e) => {
             const file = e.target.files[0];
             if (!file) return;
@@ -1064,12 +1115,15 @@ createApp({
                             month: parsedMonth, 
                             brand: rowObj['Product Brand'] || 'Unknown Brand',
                             discountTitle: rowObj['Discount Title'] || '',
-                            dateClosed: dateStr.split(' ')[0], 
+                            dateClosed: dateStr, // Preserving full date/time for DIME
                             storeName: storeString,
                             detectedSite: detectedSite,
                             productName: rowObj['Product Name'] || '',
                             owed: parseFloat(String(rowObj['Vendor Credit Owed']).replace(/[^0-9.-]+/g,"")) || 0,
                             trackingId: rowObj['State Tracking Id'] || '',
+                            unitsSold: parseFloat(rowObj['Units Sold']) || 0,
+                            unitPrice: parseFloat(String(rowObj['Cost Per Unit']).replace(/[^0-9.-]+/g,"")) || 0,
+                            discountAmount: parseFloat(String(rowObj['Discounts']).replace(/[^0-9.-]+/g,"")) || 0,
                             status: 'Unsynced',
                             uploadedAt: Date.now()
                         };
