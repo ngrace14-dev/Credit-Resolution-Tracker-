@@ -482,12 +482,16 @@
                     <h2 class="text-xl font-bold text-gray-900 leading-tight">Brand Directory & Contacts</h2>
                     <p class="text-sm text-gray-500 mt-1">Map vendor details here to enable automated location-based credit reports.</p>
                 </div>
-                <div class="flex gap-2">
+                <div class="flex gap-2 flex-wrap">
                     <button v-if="selectedBrands.length > 0" @click="deleteSelectedBrands" class="px-5 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg font-bold shadow-md transition-colors flex items-center gap-2 text-sm whitespace-nowrap">
                         <i data-lucide="trash-2" class="w-4 h-4"></i> Delete Selected ({{ selectedBrands.length }})
                     </button>
                     <button @click="resetBrandImport(); showBrandImportModal = true;" class="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold shadow-md transition-colors flex items-center gap-2 text-sm whitespace-nowrap">
                         <i data-lucide="clipboard-paste" class="w-4 h-4"></i> Paste Contact Roster
+                    </button>
+                    <!-- NEW EXPORT CSV BUTTON -->
+                    <button @click="exportVendorsAndBrandsCSV" class="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold shadow-md transition-colors flex items-center gap-2 text-sm whitespace-nowrap">
+                        <i data-lucide="download" class="w-4 h-4"></i> Export CSV
                     </button>
                 </div>
             </div>
