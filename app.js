@@ -707,6 +707,57 @@ createApp({
             }
         };
 
+        const exportVendorsAndBrandsCSV = () => {
+            if (!masterBrands.value || masterBrands.value.length === 0) {
+                alert("No brands available to export.");
+                return;
+            }
+
+            // Group brands by distributor (Vendor)
+            const grouped = {};
+            masterBrands.value.forEach(b => {
+                const distro = b.distributor ? b.distributor.trim() : 'Unassigned Vendor';
+                const brand = b.vendor ? b.vendor.trim() : 'Unknown Brand';
+
+                if (!grouped[distro]) {
+                    grouped[distro] = [];
+                }
+                grouped[distro].push(brand);
+            });
+
+            // Sort the distributors alphabetically
+            const sortedDistros = Object.keys(grouped).sort((a, b) => a.localeCompare(b));
+
+            // Create CSV headers
+            let csvContent = "Vendor/Distributor,Attached Brand\n";
+
+            // Populate rows
+            sortedDistros.forEach(distro => {
+                const sortedBrands = grouped[distro].sort((a, b) => a.localeCompare(b));
+                
+                sortedBrands.forEach(brand => {
+                    const safeDistro = `"${distro.replace(/"/g, '""')}"`;
+                    const safeBrand = `"${brand.replace(/"/g, '""')}"`;
+                    csvContent += `${safeDistro},${safeBrand}\n`;
+                });
+            });
+
+            // Trigger download
+            const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.setAttribute("href", url);
+            const currentYear = new Date().getFullYear();
+            link.setAttribute("download", `Vendors_and_Brands_Directory_${currentYear}.csv`);
+            
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            setTimeout(() => URL.revokeObjectURL(url), 150);
+
+            logSystemAction("EXPORT", "Downloaded Vendors and Brands Directory CSV");
+        };
+
         const showImportModal = ref(false);
         const rawPasteData = ref('');
         const pastedGrid = ref([]);
@@ -1388,7 +1439,7 @@ createApp({
             closeImportModal, resetImport, displayGrid, processRawPaste, processImport, regenerateBrandSummary,
             regenerateMonthReports, handleTreesCsvUpload, pushToMainTracker, resetBrandImport,
             processBrandRawPaste, processBrandImport, systemLogs, refreshIcons, clearAllSalesData,
-            detectMonthInString, drawCharts, openDimeHelper
+            detectMonthInString, drawCharts, openDimeHelper, exportVendorsAndBrandsCSV
         };
     }
 }).mount('#app');
