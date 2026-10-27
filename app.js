@@ -1345,8 +1345,15 @@ createApp({
                                             }
                                         });
 
-                                        // 3. Optimized Sales Listener (Discovery Intake)
+                                                                                // 3. Optimized Sales Listener (Discovery Intake)
                                         setupFilteredListeners();
+
+                                        // 4. Brand Directory Listener
+                                        onSnapshot(collection(db, "brands"), (snapshot) => {
+                                            const fetchedBrands = [];
+                                            snapshot.forEach(docSnap => { fetchedBrands.push({ id: docSnap.id, ...docSnap.data() }); });
+                                            masterBrands.value = fetchedBrands;
+                                        }, (err) => console.error("Brands Listener Failed:", err));
 
 
 
