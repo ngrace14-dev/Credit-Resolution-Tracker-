@@ -480,7 +480,90 @@ createApp({
                             ...group,
                             brandList: Object.values(group.brands).sort((a, b) => a.vendor.localeCompare(b.vendor))
                         }));
-                });
+        });
+
+        // REFACTORED FOR DIME REQUIREMENTS (RESTORED CSV DOWNLOAD)
+        const downloadMonthlyReport = (brand) => {
+                    let csvContent = "Location,Date & Time,Brand,Product Name,Transaction ID,Quantity Sold,Unit Price,Total Before Tax,Discount Title,Discount Amount,Credit Owed,Entry Type\n";
+                    let csvTotal = 0;
+            
+                    // If they clicked the 'Full Month' button, brand is actually the monthGroup
+                    const isFullMonth = !!brand.brandList; 
+                    const reportMonth = brand.month || activeMonth.value;
+                    const cleanStr = (str) => String(str || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+    
+                    const itemizedSales = [];
+
+                    // 1. Check Raw Trees Sales
+                    treesSalesData.value.forEach(sale => {
+                        const matchBrand = isFullMonth ? true : (cleanStr(sale.brand) === cleanStr(brand.vendor));
+                
+                        if (matchBrand && 
+                            cleanStr(sale.detectedSite) === cleanStr(activeSite.value) && 
+                            cleanStr(sale.month) === cleanStr(reportMonth)) {
+                            itemizedSales.push({
+                                loc: sale.detectedSite,
+                                date: sale.dateClosed,
+                                brand: sale.brand,
+                                prod: sale.productName,
+                                track: sale.trackingId,
+                                qty: sale.unitsSold,
+                                price: sale.unitPrice,
+                                preTax: (sale.unitsSold || 0) * (sale.unitPrice || 0),
+                                discTitle: sale.discountTitle,
+                                discAmt: sale.discountAmount,
+                                owed: sale.owed,
+                                type: "POS Itemized"
+                            });
+                        }
+                    });
+
+                    // 2. Add manual credits from promoCredits collection
+                    const processManualCredits = (credits) => {
+                        credits.forEach(c => {
+                            if (String(c.creditType).includes('Aggregated POS Sales')) return; 
+                    
+                            const safeLoc = `"${String(c.site || '').replace(/"/g, '""')}"`;
+                            const safeDate = `"${String(c.dates || '').replace(/"/g, '""')}"`;
+                            const safeBrand = `"${String(c.vendor || '').replace(/"/g, '""')}"`;
+                            const safeProd = `"${String(c.creditType || '').replace(/"/g, '""')}"`; 
+                            const safeTrack = `"${String(c.invoice || '').replace(/"/g, '""')}"`;
+                    
+                            csvContent += `${safeLoc},${safeDate},${safeBrand},${safeProd},${safeTrack},"-","-","-","-","-","${formatCurrency(c.amount)}","Manual Entry"\n`;
+                            csvTotal += parseFloat(c.amount) || 0;
+                        });
+                    };
+
+                    if (isFullMonth) {
+                        brand.brandList.forEach(b => {
+                            if (b.credits) processManualCredits(b.credits);
+                        });
+                    } else if (brand.credits) {
+                        processManualCredits(brand.credits);
+                    }
+
+                    // Build CSV
+                    itemizedSales.forEach(s => {
+                        csvContent += `"${s.loc}","${s.date}","${s.brand}","${s.prod}","${s.track}","${s.qty}","${formatCurrency(s.price)}","${formatCurrency(s.preTax)}","${s.discTitle}","${formatCurrency(s.discAmt)}","${formatCurrency(s.owed)}","${s.type}"\n`;
+                        csvTotal += parseFloat(s.owed) || 0;
+                    });
+
+                    csvContent += `,,,,,,,,,, "TOTAL:", "${formatCurrency(csvTotal)}"\n`;
+
+                    const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
+                    const url = URL.createObjectURL(blob);
+                    const link = document.createElement("a");
+                    link.setAttribute("href", url);
+                    const currentYear = new Date().getFullYear();
+                    const reportName = isFullMonth ? `${reportMonth}_All_Brands` : String(brand.vendor).replace(/[^a-zA-Z0-9]/g, '_');
+                    link.setAttribute("download", `${activeSite.value.replace(/\s/g, '_')}_Report_${reportName}_${currentYear}.csv`);
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    setTimeout(() => URL.revokeObjectURL(url), 150);
+
+                    logSystemAction("EXPORT", `Downloaded Detailed Report for ${reportName}`);
+        };
 
         // EMAIL DRAFTER WITH ITEMIZATION & PROMO DATES
         const draftEmail = (brand) => {
