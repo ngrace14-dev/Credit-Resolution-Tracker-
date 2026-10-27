@@ -11,6 +11,9 @@
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf.plugin.autotable.min.js"></script>
+
     <link href="https://fonts.googleapis.com/css2?family=Calibri:wght@400;700&display=swap" rel="stylesheet">
     
     <!-- External CSS -->
@@ -990,11 +993,17 @@
         </main>
 
         <!-- SAGE QUARTERLY AUDIT TAB -->
-        <main v-if="isManagerUnlocked && activeTab === 'QuarterlyAudit'" class="flex-1 flex flex-col p-4 md:p-6 bg-gray-100 overflow-hidden">
-            <div class="mb-4">
-                <h2 class="text-xl font-bold text-gray-900 leading-tight">Sage Quarterly Audit</h2>
-                <p class="text-sm text-gray-500 mt-1">Cross-reference Sage Applied Credits (GL Raw) against Workbook Discovery.</p>
+                <main v-if="isManagerUnlocked && activeTab === 'QuarterlyAudit'" class="flex-1 flex flex-col p-4 md:p-6 bg-gray-100 overflow-hidden">
+            <div class="mb-4 flex justify-between items-center">
+                <div>
+                    <h2 class="text-xl font-bold text-gray-900 leading-tight">Sage Quarterly Audit</h2>
+                    <p class="text-sm text-gray-500 mt-1">Cross-reference Sage Applied Credits (GL Raw) against Workbook Discovery.</p>
+                </div>
+                <button @click="exportYTDVariancePDF" class="bg-gray-900 hover:bg-gray-800 text-amber-500 px-5 py-2.5 rounded-xl font-bold shadow-lg flex items-center gap-2 transition-all border border-amber-500/20">
+                    <i data-lucide="file-text" class="w-4 h-4"></i> Export YTD Variance PDF
+                </button>
             </div>
+
 
             <!-- AUDIT SUMMARY -->
             <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
@@ -1022,10 +1031,12 @@
             <div class="bg-white rounded-xl border border-gray-300 shadow-sm flex-1 flex flex-col min-h-0 overflow-hidden">
                 <div class="overflow-auto flex-1">
                     <table class="excel-table min-w-max">
-                        <thead class="sticky top-0 z-10 shadow-sm bg-gray-50">
+                                                <thead class="sticky top-0 z-10 shadow-sm bg-gray-50">
                             <tr>
                                 <th>Mapped Brand</th>
+                                <th class="text-right">Total Generated (POS)</th>
                                 <th class="text-right">Total Applied (Sage)</th>
+                                <th class="text-right bg-amber-50/30">Variance</th>
                                 <th class="text-right">Redding (Sundial)</th>
                                 <th class="text-right">Red Bluff</th>
                                 <th>Transaction Count</th>
@@ -1035,9 +1046,14 @@
                         <tbody>
                             <tr v-for="brand in sageAuditData" :key="'sage-'+brand.brand" class="hover:bg-gray-50 transition-colors">
                                 <td class="font-bold text-gray-900">{{ brand.brand }}</td>
+                                <td class="text-right font-medium text-gray-900">{{ formatCurrency(brand.totalGenerated) }}</td>
                                 <td class="text-right font-black text-emerald-600">{{ formatCurrency(brand.totalApplied) }}</td>
+                                <td class="text-right font-bold bg-amber-50/30" :class="brand.totalGenerated - brand.totalApplied > 0 ? 'text-red-600' : 'text-emerald-600'">
+                                    {{ formatCurrency(brand.totalGenerated - brand.totalApplied) }}
+                                </td>
                                 <td class="text-right text-gray-600">{{ formatCurrency(brand.sites['Redding']) }}</td>
                                 <td class="text-right text-gray-600">{{ formatCurrency(brand.sites['Red Bluff']) }}</td>
+
                                 <td class="text-center">
                                     <span class="bg-blue-50 text-blue-700 px-2.5 py-1 rounded-full text-[10px] font-bold border border-blue-100">
                                         {{ brand.transactions.length }} Events

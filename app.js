@@ -820,7 +820,127 @@ createApp({
         let chartBrandsInstance = null;
         let chartStoresInstance = null;
 
+                const exportYTDVariancePDF = () => {
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF('l', 'mm', 'a4');
+            const currentYear = new Date().getFullYear();
+            
+            // PDF Header
+            doc.setFontSize(20);
+            doc.setTextColor(16, 185, 129); // Emerald-500
+            doc.text(`YTD VENDOR VARIANCE AUDIT - ${currentYear}`, 14, 20);
+            
+            doc.setFontSize(10);
+            doc.setTextColor(100);
+            doc.text(`Generated on: ${new Date().toLocaleString()}`, 14, 26);
+            doc.text(`Store Location: ${activeSite.value}`, 14, 31);
+
+            // Column Setup
+            const tableHeaders = [
+                ['Brand/Vendor', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec', 'YTD Total']
+            ];
+
+            const tableData = [];
+            const brands = {};
+
+            // 1. Accumulate Data (POS Generated vs GL Collected)
+            promoCredits.value.filter(c => c.site === activeSite.value).forEach(c => {
+                const brand = c.vendor || 'Unknown';
+                if (!brands[brand]) {
+                    brands[brand] = { name: brand, months: Array(12).fill(0), collections: Array(12).fill(0) };
+                }
+                const monthIdx = calendarMonths.indexOf(c.trackingMonth);
+                if (monthIdx !== -1) {
+                    brands[brand].months[monthIdx] += (parseFloat(c.amount) || 0);
+                    if (c.status === 'Applied') {
+                        brands[brand].collections[monthIdx] += (parseFloat(c.amount) || 0);
+                    }
+                }
+            });
+
+            // 2. Add Sage GL Activity for definitive collections
+            const sageRows = masterWorkbook.value.data["GL Raw by Store"] || [];
+            sageRows.forEach(row => {
+                const site = detectSiteFromName(row["Store"] || row["Location"]);
+                if (site !== activeSite.value) return;
+
+                const dateStr = row["Posted dt."] || '';
+                const month = detectMonthFromDate(dateStr);
+                const monthIdx = calendarMonths.indexOf(month);
+                const brand = row["Mapped Brand"] || 'Unmapped';
+                
+                                if (monthIdx !== -1) {
+                    // FIX: Initialize the brand if they only appear in the Sage GL
+                    if (!brands[brand]) {
+                        brands[brand] = { name: brand, months: Array(12).fill(0), collections: Array(12).fill(0) };
+                    }
+                    const amt = parseFloat(String(row["Credit"] || 0).replace(/[^0-9.-]+/g,"")) || 0;
+                    brands[brand].collections[monthIdx] += amt;
+                }
+            });
+
+            // 3. Format rows for jsPDF AutoTable
+            Object.values(brands).sort((a, b) => a.name.localeCompare(b.name)).forEach(b => {
+                const row = [b.name];
+                let ytdTotal = 0;
+                
+                for(let i=0; i<12; i++) {
+                    const variance = b.months[i] - b.collections[i];
+                    row.push(formatCurrency(b.months[i])); // Monthly Generated
+                    ytdTotal += b.months[i];
+                }
+                row.push(formatCurrency(ytdTotal));
+                tableData.push(row);
+
+                // Add Sub-row for Collections
+                const collRow = ['   ↳ Collected (GL)'];
+                let ytdColl = 0;
+                for(let i=0; i<12; i++) {
+                    collRow.push(formatCurrency(b.collections[i]));
+                    ytdColl += b.collections[i];
+                }
+                collRow.push(formatCurrency(ytdColl));
+                tableData.push(collRow);
+
+                // Add Sub-row for Variance
+                const varRow = ['   ↳ Balance Owed'];
+                for(let i=0; i<12; i++) {
+                    const diff = b.months[i] - b.collections[i];
+                    varRow.push(formatCurrency(diff));
+                }
+                varRow.push(formatCurrency(ytdTotal - ytdColl));
+                tableData.push(varRow);
+                
+                // Spacer row
+                tableData.push(['', '', '', '', '', '', '', '', '', '', '', '', '', '']);
+            });
+
+            doc.autoTable({
+                head: tableHeaders,
+                body: tableData,
+                startY: 40,
+                theme: 'striped',
+                headStyles: { fillColor: [17, 24, 39], textColor: [245, 158, 11], fontSize: 8 },
+                bodyStyles: { fontSize: 7 },
+                columnStyles: { 
+                    0: { fontStyle: 'bold', cellWidth: 35 },
+                    13: { fontStyle: 'bold', fillColor: [243, 244, 246] }
+                },
+                didParseCell: function(data) {
+                    if (data.row.index % 4 === 1) data.cell.styles.textColor = [16, 185, 129]; // Collections Green
+                    if (data.row.index % 4 === 2) {
+                        const val = parseFloat(data.cell.text[0].replace(/[^0-9.-]+/g,""));
+                        if (val > 0) data.cell.styles.textColor = [239, 68, 68]; // Owed Red
+                    }
+                }
+            });
+
+            doc.save(`YTD_Variance_Report_${activeSite.value}_${currentYear}.pdf`);
+            logSystemAction("EXPORT", `Generated YTD Variance PDF for ${activeSite.value}`);
+        };
+
         const drawCharts = () => {
+
             const activeCredits = promoCredits.value.filter(c => !c.archived);
             const currencyFormatter = (val) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(val);
             
@@ -2360,7 +2480,7 @@ const handleSageCsvUpload = async (e) => {
                     }
                 };
 
-        const sageAuditData = computed(() => {
+                const sageAuditData = computed(() => {
             if (!masterWorkbook.value || !masterWorkbook.value.data) return [];
             
             const rawSageRows = masterWorkbook.value.data["GL Raw by Store"] || [];
@@ -2376,6 +2496,7 @@ const handleSageCsvUpload = async (e) => {
                     sageMap[brand] = {
                         brand: brand,
                         totalApplied: 0,
+                        totalGenerated: 0,
                         transactions: [],
                         sites: { "Redding": 0, "Red Bluff": 0 }
                     };
@@ -2396,8 +2517,25 @@ const handleSageCsvUpload = async (e) => {
                 });
             });
 
+                        // Integrate Generated Promos (POS) for comparison in the grid
+            promoCredits.value.forEach(c => {
+                const brand = c.vendor || 'Unknown';
+                // FIX: Ensure brand exists in the map so we capture unpaid debts
+                if (!sageMap[brand]) {
+                    sageMap[brand] = {
+                        brand: brand,
+                        totalApplied: 0,
+                        totalGenerated: 0,
+                        transactions: [],
+                        sites: { "Redding": 0, "Red Bluff": 0 }
+                    };
+                }
+                sageMap[brand].totalGenerated += (parseFloat(c.amount) || 0);
+            });
+
             return Object.values(sageMap).sort((a, b) => b.totalApplied - a.totalApplied);
         });
+
 
         return {
             isManagerUnlocked, isSuperAdmin, loggedInUser, emailInput, passwordInput, authError, activeSite, activeTab,
@@ -2418,12 +2556,14 @@ const handleSageCsvUpload = async (e) => {
             processBrandRawPaste, processBrandImport, systemLogs, refreshIcons, clearAllSalesData,
             detectMonthInString, drawCharts, openDimeHelper, exportVendorsAndBrandsCSV,
             masterLedgerData, selectedLedgerVendor, refreshLedger, openLegacyVerification, ledgerTotals,
-            masterWorkbook, showWorkspaceMenu, showAdminMenu, workspaceTabs, selectWorkspace, activeWorkspaceInfo,
+                        masterWorkbook, showWorkspaceMenu, showAdminMenu, workspaceTabs, selectWorkspace, activeWorkspaceInfo,
                         scrollMonths, scrollWorkbookTabs, workbookSchema, activeWorkbookSheet, isWorkbookLoaded,
             auditRange, brandAuditData, draftAuditEmail, sageAuditData, activeWorkbookHeaders,
             showWorkbookSyncModal, workbookPasteData, openWorkbookSyncModal, processWorkbookSync,
-                        repopulateFromMasterWorkbook, updateWorkbookFromSales, loadWorkbookFromStorage
+                        repopulateFromMasterWorkbook, updateWorkbookFromSales, loadWorkbookFromStorage,
+            exportYTDVariancePDF
         };
+
 
     }
 }).mount('#app');
