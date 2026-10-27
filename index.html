@@ -77,9 +77,11 @@
                 <!-- APP TABS NAV (Obsidian Background) -->
         <div v-if="isManagerUnlocked" class="bg-gray-950 px-4 md:px-6 pt-2 flex gap-2 shrink-0 z-10 shadow-sm overflow-x-auto no-scrollbar border-b border-gray-800">
             <div class="text-[10px] uppercase font-bold text-gray-500 tracking-widest self-center mr-2 hidden md:block">Workbook</div>
-            <button @click="activeTab = 'Dashboard'" :class="activeTab === 'Dashboard' ? 'bg-gray-100 text-gray-900 font-extrabold border-t-4 border-emerald-500' : 'bg-gray-900/50 text-gray-400 hover:bg-gray-800 hover:text-white'" class="px-5 py-2 rounded-t-xl text-sm transition-colors tracking-wide whitespace-nowrap"><i data-lucide="bar-chart-2" class="w-3.5 h-3.5 inline mr-1.5 mb-0.5"></i>Exec Dash</button>
+                        <button @click="activeTab = 'Dashboard'" :class="activeTab === 'Dashboard' ? 'bg-gray-100 text-gray-900 font-extrabold border-t-4 border-emerald-500' : 'bg-gray-900/50 text-gray-400 hover:bg-gray-800 hover:text-white'" class="px-5 py-2 rounded-t-xl text-sm transition-colors tracking-wide whitespace-nowrap"><i data-lucide="bar-chart-2" class="w-3.5 h-3.5 inline mr-1.5 mb-0.5"></i>Exec Dash</button>
             <button @click="activeTab = 'Sales'" :class="activeTab === 'Sales' ? 'bg-gray-100 text-gray-900 font-extrabold border-t-4 border-emerald-500' : 'bg-gray-900/50 text-gray-400 hover:bg-gray-800 hover:text-white'" class="px-5 py-2 rounded-t-xl text-sm transition-colors tracking-wide flex items-center gap-2 whitespace-nowrap"><i data-lucide="inbox" class="w-3.5 h-3.5 inline"></i>Discovery Intake <span v-if="filteredTreesSalesData.length > 0 && activeTab !== 'Sales'" class="bg-amber-500 text-gray-950 text-[10px] px-1.5 py-0.5 rounded-full">{{ filteredTreesSalesData.length }}</span></button>
+            <button @click="activeTab = 'Recovery'" :class="activeTab === 'Recovery' ? 'bg-gray-100 text-gray-900 font-extrabold border-t-4 border-emerald-500' : 'bg-gray-900/50 text-gray-400 hover:bg-gray-800 hover:text-white'" class="px-5 py-2 rounded-t-xl text-sm transition-colors tracking-wide whitespace-nowrap"><i data-lucide="dollar-sign" class="w-3.5 h-3.5 inline mr-1.5 mb-0.5"></i>Recovery Log</button>
             <button @click="activeTab = 'Ledger'" :class="activeTab === 'Ledger' ? 'bg-gray-100 text-gray-900 font-extrabold border-t-4 border-emerald-500' : 'bg-gray-900/50 text-gray-400 hover:bg-gray-800 hover:text-white'" class="px-5 py-2 rounded-t-xl text-sm transition-colors tracking-wide whitespace-nowrap"><i data-lucide="book-open" class="w-3.5 h-3.5 inline mr-1.5 mb-0.5"></i>Master Ledger</button>
+
             <button @click="activeTab = 'Reports'" :class="activeTab === 'Reports' ? 'bg-gray-100 text-gray-900 font-extrabold border-t-4 border-emerald-500' : 'bg-gray-900/50 text-gray-400 hover:bg-gray-800 hover:text-white'" class="px-5 py-2 rounded-t-xl text-sm transition-colors tracking-wide whitespace-nowrap"><i data-lucide="building" class="w-3.5 h-3.5 inline mr-1.5 mb-0.5"></i>Store Rec</button>
             <button @click="activeTab = 'Tracker'" :class="activeTab === 'Tracker' ? 'bg-gray-100 text-gray-900 font-extrabold border-t-4 border-emerald-500' : 'bg-gray-900/50 text-gray-400 hover:bg-gray-800 hover:text-white'" class="px-5 py-2 rounded-t-xl text-sm transition-colors tracking-wide whitespace-nowrap"><i data-lucide="clock" class="w-3.5 h-3.5 inline mr-1.5 mb-0.5"></i>Legacy Tracker</button>
             
@@ -248,7 +250,86 @@
             </div>
         </main>
 
-                <!-- MASTER LEDGER TAB (NEW WORKSPACE) -->
+                <!-- RECOVERY LOG TAB (NEW WORKSPACE) -->
+        <main v-if="isManagerUnlocked && activeTab === 'Recovery'" class="flex-1 flex flex-col p-4 md:p-6 bg-gray-100 overflow-hidden">
+            <div class="flex justify-between items-end mb-4 shrink-0">
+                <div>
+                    <h2 class="text-xl font-bold text-gray-900 leading-tight">Recovery Log</h2>
+                    <p class="text-sm text-gray-500 mt-1">Record money arriving from vendors via Check, ACH, or Credit Memo.</p>
+                </div>
+            </div>
+
+            <!-- RECOVERY KPI -->
+            <div class="flex flex-col sm:flex-row gap-4 mb-4 shrink-0">
+                <div class="bg-white border-l-4 border-emerald-500 rounded-xl p-4 md:p-5 flex-1 shadow-sm flex flex-col justify-center">
+                    <div class="text-[10px] md:text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Total Recoveries (YTD)</div>
+                    <div class="text-2xl font-extrabold text-emerald-700">{{ formatCurrency(ledgerTotals.recovered) }}</div>
+                </div>
+                <div class="bg-white border-l-4 border-red-500 rounded-xl p-4 md:p-5 flex-1 shadow-sm flex flex-col justify-center">
+                    <div class="text-[10px] md:text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Unmatched Recoveries</div>
+                    <div class="text-2xl font-extrabold text-red-600">$0.00</div>
+                </div>
+            </div>
+
+            <!-- QUICK FILTERS & ACTIONS -->
+            <div class="flex flex-col sm:flex-row justify-between items-center mb-4 shrink-0 gap-3">
+                <div class="flex gap-2">
+                    <button class="bg-gray-900 text-emerald-500 px-4 py-1.5 rounded-lg text-sm font-bold shadow">All</button>
+                    <button class="bg-white border border-gray-300 text-gray-600 hover:bg-gray-50 px-4 py-1.5 rounded-lg text-sm font-medium shadow-sm transition-colors">Checks</button>
+                    <button class="bg-white border border-gray-300 text-gray-600 hover:bg-gray-50 px-4 py-1.5 rounded-lg text-sm font-medium shadow-sm transition-colors">ACH</button>
+                    <button class="bg-white border border-gray-300 text-gray-600 hover:bg-gray-50 px-4 py-1.5 rounded-lg text-sm font-medium shadow-sm transition-colors">Memos</button>
+                    <button class="bg-white border border-gray-300 text-red-600 hover:bg-gray-50 px-4 py-1.5 rounded-lg text-sm font-medium shadow-sm transition-colors">Unmatched</button>
+                </div>
+                <button class="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2 rounded-lg font-bold shadow-md transition-colors flex items-center justify-center gap-2 text-sm">
+                    <i data-lucide="plus" class="w-4 h-4"></i> Log Recovery
+                </button>
+            </div>
+
+            <!-- RECOVERY GRID -->
+            <div class="bg-white rounded-xl border border-gray-300 shadow-sm flex-1 flex flex-col min-h-0 overflow-hidden">
+                <div class="overflow-auto flex-1">
+                    <table class="excel-table relative min-w-max">
+                        <thead class="sticky top-0 z-10 shadow-sm bg-gray-50">
+                            <tr>
+                                <th>Date Received</th>
+                                <th>Vendor</th>
+                                <th>Reference Number</th>
+                                <th>Recovery Type</th>
+                                <th class="text-right">Amount</th>
+                                <th class="text-center">Status</th>
+                                <th class="text-center">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <!-- WIREFRAME MOCK DATA -->
+                            <tr class="hover:bg-gray-50">
+                                <td>2024-10-15</td>
+                                <td class="font-bold text-gray-900">Jeeter</td>
+                                <td class="font-mono text-gray-600">ACH-99482</td>
+                                <td>ACH</td>
+                                <td class="text-right font-bold text-emerald-600">$9,500.00</td>
+                                <td class="text-center"><span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-emerald-100 text-emerald-800">Matched</span></td>
+                                <td class="text-center">
+                                    <button class="text-gray-400 hover:text-amber-500 transition-colors"><i data-lucide="edit-2" class="w-4 h-4"></i></button>
+                                </td>
+                            </tr>
+                            <tr class="hover:bg-gray-50">
+                                <td>2024-10-14</td>
+                                <td class="font-bold text-gray-900">Wyld</td>
+                                <td class="font-mono text-gray-600">CHK-1002</td>
+                                <td>Check</td>
+                                <td class="text-right font-bold text-emerald-600">$4,200.00</td>
+                                <td class="text-center"><span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-emerald-100 text-emerald-800">Matched</span></td>
+                                <td class="text-center">
+                                    <button class="text-gray-400 hover:text-amber-500 transition-colors"><i data-lucide="edit-2" class="w-4 h-4"></i></button>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+
         <main v-if="isManagerUnlocked && activeTab === 'Ledger'" class="flex-1 flex flex-col p-4 md:p-6 bg-gray-100 overflow-hidden">
             <div class="flex justify-between items-end mb-4 shrink-0">
                 <div>
