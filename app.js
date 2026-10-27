@@ -2054,8 +2054,79 @@ const handleSageCsvUpload = async (e) => {
         };
 
                 const updateWorkbookFromSales = async () => {
-            // ... existing code ...
-        };
+                    if (!masterWorkbook.value || !masterWorkbook.value.data) {
+                        return alert("Master Workbook not loaded. Please go to the Workbook Viewer tab and click 'Load Complete Workbook' first.");
+                    }
+            
+                    const unsynced = treesSalesData.value.filter(s => s.status === 'Unsynced');
+                    if (unsynced.length === 0) return alert("No unsynced sales found to push to workbook.");
+
+                    if (!confirm(`This will merge ${unsynced.length} sales items into the Master Workbook V9 (Cloud Document). New brand totals will be ADDED to existing values. Continue?`)) return;
+
+                    try {
+                        // Clone the workbook data
+                        const updatedData = JSON.parse(JSON.stringify(masterWorkbook.value.data));
+                        const currentYear = "2026"; 
+                        let updatesCount = 0;
+
+                        unsynced.forEach(sale => {
+                            const sheetName = `${sale.month} ${currentYear}`;
+                            if (!updatedData[sheetName]) return; 
+
+                            const rows = updatedData[sheetName];
+                            const cleanBrand = (sale.brand || '').toLowerCase().trim();
+                    
+                            let brandRow = rows.find(r => {
+                                const rowBrand = (r["Brand"] || r[0] || '').toLowerCase().trim();
+                                return rowBrand === cleanBrand;
+                            });
+
+                            if (!brandRow) {
+                                // Create new row object with correct schema if brand missing
+                                brandRow = { 
+                                    "Brand": sale.brand, 
+                                    "Redding": 0, 
+                                    "Red-Bluff": 0, 
+                                    "Promo Credits ": 0,
+                                    "Treez Total": 0 
+                                };
+                                rows.push(brandRow);
+                            }
+
+                            const siteKey = sale.detectedSite === "Redding" ? "Redding" : "Red-Bluff";
+                    
+                            // "Without changing existing data" -> Sum the new sales into the existing cells
+                            const currentSiteVal = parseFloat(String(brandRow[siteKey] || 0).replace(/[^0-9.-]+/g,"")) || 0;
+                            brandRow[siteKey] = currentSiteVal + (sale.owed || 0);
+
+                            const currentTreezTotal = parseFloat(String(brandRow["Treez Total"] || 0).replace(/[^0-9.-]+/g,"")) || 0;
+                            brandRow["Treez Total"] = currentTreezTotal + (sale.owed || 0);
+                    
+                            updatesCount++;
+                        });
+
+                        // Update the Master Document in Firestore
+                        await setDoc(doc(db, "promo tracker", "Master_Workbook_V9_Board_Report"), {
+                            ...masterWorkbook.value,
+                            data: updatedData,
+                            lastModified: Date.now(),
+                            modifiedBy: loggedInUser.value
+                        });
+
+                        // Mark sales as Synced in the raw collection
+                        const batch = writeBatch(db);
+                        unsynced.forEach(sale => {
+                            batch.update(doc(db, "treesSales", sale.id), { status: 'Synced' });
+                        });
+                        await batch.commit();
+
+                        logSystemAction("UPDATE", `Merged ${unsynced.length} sales items into Master Workbook Document`);
+                        alert(`Success! Updated ${updatesCount} line items in the Master Workbook. All sales marked as synced.`);
+                    } catch (err) {
+                        console.error("Workbook Update Error:", err);
+                        alert("Failed to update workbook document: " + err.message);
+                    }
+                };
 
         const sageAuditData = computed(() => {
             if (!masterWorkbook.value || !masterWorkbook.value.data) return [];
@@ -2119,7 +2190,7 @@ const handleSageCsvUpload = async (e) => {
             scrollMonths, workbookSchema, activeWorkbookSheet, isWorkbookLoaded,
                         auditRange, brandAuditData, draftAuditEmail, sageAuditData,
                         showWorkbookSyncModal, workbookPasteData, openWorkbookSyncModal, processWorkbookSync,
-                        repopulateFromMasterWorkbook, updateWorkbookFromSales
+                        repopulateFromMasterWorkbook, updateWorkbookFromSales, loadWorkbookFromStorage
         };
 
     }
