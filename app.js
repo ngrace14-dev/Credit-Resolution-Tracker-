@@ -49,6 +49,8 @@ createApp({
         const calendarMonths = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
         const activeMonth = ref('August');
         const masterBrands = ref([]);
+        const selectedBrands = ref([]);
+
         const treesSalesData = ref(JSON.parse(localStorage.getItem('treesSalesData')) || []);
         const auditRange = ref({ start: '', end: '' });
 
