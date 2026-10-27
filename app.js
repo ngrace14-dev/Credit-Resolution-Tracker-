@@ -1252,7 +1252,7 @@ createApp({
                     
                                         // 1. Permanent Sheet Listeners (The Source of Truth)
                                         console.log("Listening to workbook_v9_sheets...");
-                                        onSnapshot(collection(db, "workbook_v9_sheets"), (snapshot) => {
+                                                                                onSnapshot(collection(db, "workbook_v9_sheets"), (snapshot) => {
                                             console.log(`Snapshot received: ${snapshot.size} sheets found.`);
                                             snapshot.forEach(docSnap => {
                                                 const sheet = docSnap.data();
@@ -1263,6 +1263,37 @@ createApp({
                                                 isWorkbookLoaded.value = true;
                                                 // Recalculate Ledger
                                                 nextTick(() => { refreshLedger(); });
+
+                                                // --- DIAGNOSTIC LOGS (TEMPORARY) ---
+                                                setTimeout(() => {
+                                                    console.log("=== DIAGNOSTIC LOGS ===");
+                                                    const sheets = Object.keys(masterWorkbook.value.data);
+                                                    console.log("1. Workbook Sheet Names:", sheets);
+                                                    
+                                                    const testSheetName = sheets.find(s => s.includes('August')) || sheets[0];
+                                                    const testSheet = masterWorkbook.value.data[testSheetName];
+                                                    
+                                                    if (testSheet && testSheet.length > 0) {
+                                                        console.log(`--- Analyzing Sheet: ${testSheetName} ---`);
+                                                        console.log("2. Exact Column Headers (Row 0 Keys):", Object.keys(testSheet[0]));
+                                                        console.log("3. First 3 Parsed Rows:", testSheet.slice(0, 3));
+                                                        
+                                                        const firstBrandRow = testSheet.find(row => row["Brand"] && row["Brand"] !== "Brand" && !String(row["Brand"]).toLowerCase().includes("total"));
+                                                        if (firstBrandRow) {
+                                                            console.log("4. Raw value being read for Brand:", firstBrandRow["Brand"]);
+                                                            console.log("   - Raw Redding value:", firstBrandRow["Redding"], "| Type:", typeof firstBrandRow["Redding"]);
+                                                            console.log("   - Raw Red-Bluff value:", firstBrandRow["Red-Bluff"], "| Type:", typeof firstBrandRow["Red-Bluff"]);
+                                                            console.log("   - Raw Credits Approved value:", firstBrandRow["Credits Approved"], "| Type:", typeof firstBrandRow["Credits Approved"]);
+                                                            console.log("   - Raw Treez Total value:", firstBrandRow["Treez Total"], "| Type:", typeof firstBrandRow["Treez Total"]);
+                                                            console.log("   - Full Row Object:", JSON.parse(JSON.stringify(firstBrandRow)));
+                                                        } else {
+                                                            console.log("4. Could not find a valid Brand row to analyze.");
+                                                        }
+                                                    } else {
+                                                        console.log("Could not find test sheet or sheet is empty.");
+                                                    }
+                                                    console.log("=======================");
+                                                }, 1500);
                                             }
                                         }, (err) => console.error("Sheets Listener Error:", err));
 
