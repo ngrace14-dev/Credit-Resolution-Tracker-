@@ -467,6 +467,7 @@
             </div>
         </main>
 
+                    <main v-if="isManagerUnlocked && activeTab === 'Tracker'" class="flex-1 flex flex-col p-4 md:p-6 bg-gray-100 overflow-hidden">
             <div class="flex flex-col sm:flex-row gap-4 md:gap-6 mb-4 shrink-0">
                 <div class="bg-white border-l-4 border-amber-500 rounded-xl p-4 md:p-5 flex-1 shadow-sm flex items-center justify-between">
                     <div>
@@ -486,7 +487,7 @@
 
             <!-- ACTION BAR -->
             <div class="flex justify-between items-end mb-4 shrink-0">
-                <h3 class="text-lg font-bold text-gray-900">Tracking Records</h3>
+                <h3 class="text-lg font-bold text-gray-900">Legacy Tracking Records</h3>
                 <div class="flex gap-2">
                     <!-- EXPORT & CLEAR BUTTON -->
                     <button @click="archiveAndExportAnnualReport" class="bg-gray-900 hover:bg-gray-800 text-amber-500 px-4 py-2 rounded-lg flex items-center gap-2 text-sm font-bold shadow-md transition-colors">
@@ -579,6 +580,8 @@
                     </table>
                 </div>
             </div>
+        </main>
+
         </main>
 
         <!-- OLD EMAIL REPORT DRAFTER MODAL (Kept as fallback in UI) -->
