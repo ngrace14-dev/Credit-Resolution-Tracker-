@@ -59,18 +59,60 @@ createApp({
                 const activeTab = ref('Ledger');
         const promoCredits = ref([]); 
         const calendarMonths = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-        const activeMonth = ref('August');
+                const activeMonth = ref('August');
         const masterBrands = ref([]);
         const selectedBrands = ref([]);
 
-        // Removed localStorage fallback to prevent "Old Data" confusion
+        // 1. DATA SOURCE: Master Workbook Fragments
+        const masterWorkbook = ref({ data: {} });
+
+        // 2. COMPUTED: Promo Credits (Mirrors Workbook Sheets exactly)
+        const promoCredits = computed(() => {
+            const allCredits = [];
+            if (!masterWorkbook.value || !masterWorkbook.value.data) return [];
+
+            Object.keys(masterWorkbook.value.data).forEach(sheetName => {
+                // Look for monthly sheets
+                if (!sheetName.includes('2026')) return;
+                const monthName = sheetName.split(' ')[0];
+                const rows = masterWorkbook.value.data[sheetName] || [];
+
+                rows.forEach((row, idx) => {
+                    const vendor = row["Brand"] || row[0];
+                    if (!vendor || vendor === "Brand" || vendor.toLowerCase().includes('total')) return;
+
+                    ["Redding", "Red-Bluff"].forEach(siteKey => {
+                        const siteName = siteKey === "Red-Bluff" ? "Red Bluff" : "Redding";
+                        const rawAmt = row[siteKey] || row[2]; // Use site column or index
+                        const amt = parseFloat(String(rawAmt || 0).replace(/[^0-9.-]+/g,"")) || 0;
+
+                        if (amt > 0) {
+                            const approvedAmt = parseFloat(String(row["Credits Approved"] || 0).replace(/[^0-9.-]+/g,"")) || 0;
+                            const isApplied = (approvedAmt > 0) || (!!row["Date Applied"] && row["Date Applied"] !== 'N/A');
+                            
+                            allCredits.push({
+                                id: `${sheetName}-${idx}-${siteKey}`, // Synthetic ID based on workbook location
+                                site: siteName,
+                                trackingMonth: monthName,
+                                vendor: vendor,
+                                amount: amt,
+                                creditType: row["Promo Credits "] || 'Promo',
+                                dateRequested: row["Date Requested"] || '',
+                                dateReceived: row["Date Applied"] || '',
+                                status: isApplied ? "Applied" : "Pending",
+                                archived: false,
+                                workbookRef: { sheet: sheetName, rowIdx: idx }
+                            });
+                        }
+                    });
+                });
+            });
+            return allCredits;
+        });
+
+        // 3. DASHBOARD & LEDGER (Now strictly powered by Workbook)
         const treesSalesData = ref([]); 
         const auditRange = ref({ start: '', end: '' });
-
-
-        const selectedLedgerVendor = ref(null);
-        const masterLedgerData = ref([]);
-        const ledgerTotals = ref({ generated: 0, recovered: 0, outstanding: 0, variance: 0 });
 
 
         const refreshLedger = async () => {
@@ -341,119 +383,174 @@ createApp({
             }
         };
 
-        const monthlyReportSummaries = computed(() => {
-            const groups = {};
-            let baseCredits = promoCredits.value.filter(c => c && c.site === activeSite.value);
+                const monthlyReportSummaries = computed(() => {
+                    const groups = {};
             
-            if (activeMonth.value !== 'All') {
-                baseCredits = baseCredits.filter(c => c.trackingMonth === activeMonth.value);
+                    // Helper to ensure group and brand structure exists
+                    const ensureStructure = (m, v) => {
+                        if (!groups[m]) {
+                            groups[m] = { month: m, total: 0, count: 0, credits: [], brands: {} };
+                        }
+                        const vendorName = v || 'Unmapped Brand';
+                        if (!groups[m].brands[vendorName]) {
+                            const brandInfo = masterBrands.value.find(b => (b.vendor || '').toLowerCase() === vendorName.toLowerCase()) || {};
+                            groups[m].brands[vendorName] = {
+                                vendor: vendorName,
+                                month: m,
+                                email: brandInfo.email || '',
+                                rep: brandInfo.rep || '',
+                                credits: [],
+                                total: 0,
+                                workbookTotal: 0,
+                                posTotal: 0
+                            };
+                        }
+                        return groups[m].brands[vendorName];
+                    };
+
+                    const targetMonth = activeMonth.value;
+                    const targetSite = activeSite.value;
+
+                    // 1. SOURCE FROM WORKBOOK SHEETS (The Source of Truth)
+                    if (masterWorkbook.value && masterWorkbook.value.data) {
+                        Object.keys(masterWorkbook.value.data).forEach(sheetName => {
+                            if (!sheetName.includes('2026')) return;
+                            const mName = sheetName.split(' ')[0];
+                            if (targetMonth !== 'All' && mName !== targetMonth) return;
+
+                            const rows = masterWorkbook.value.data[sheetName] || [];
+                            rows.forEach(row => {
+                                const vendor = row["Brand"] || row[0];
+                                if (!vendor || vendor === "Brand" || vendor.toLowerCase().includes('total')) return;
+
+                                const siteKey = targetSite === "Redding" ? "Redding" : "Red-Bluff";
+                                const amt = parseFloat(String(row[siteKey] || 0).replace(/[^0-9.-]+/g,"")) || 0;
+
+                                if (amt > 0) {
+                                    const brand = ensureStructure(mName, vendor);
+                                    brand.workbookTotal += amt;
+                                    brand.total += amt;
+                                    groups[mName].total += amt;
+                                }
+                            });
+                        });
+                    }
+
+                    // 2. SOURCE FROM TRACKER (For manual entries not in workbook yet)
+                    promoCredits.value.forEach(c => {
+                        if (!c || c.site !== targetSite) return;
+                        if (targetMonth !== 'All' && c.trackingMonth !== targetMonth) return;
+                        if (c.invoice === 'WB-V9-SYNC') return; // Avoid double-counting workbook data
+
+                        const brand = ensureStructure(c.trackingMonth, c.vendor);
+                        brand.credits.push(c);
+                        brand.total += (parseFloat(c.amount) || 0);
+                        groups[c.trackingMonth].total += (parseFloat(c.amount) || 0);
+                        groups[c.trackingMonth].count += 1;
+                    });
+
+                    // 3. SOURCE FROM RAW POS (To catch brands that have sales but aren't in workbook/tracker yet)
+                    treesSalesData.value.forEach(s => {
+                        if (!s || s.detectedSite !== targetSite) return;
+                        if (targetMonth !== 'All' && s.month !== targetMonth) return;
+                
+                        const brand = ensureStructure(s.month, s.brand);
+                        brand.posTotal += (parseFloat(s.owed) || 0);
+                    });
+
+                    return Object.values(groups)
+                        .sort((a, b) => calendarMonths.indexOf(a.month) - calendarMonths.indexOf(b.month))
+                        .map(group => ({
+                            ...group,
+                            brandList: Object.values(group.brands).sort((a, b) => a.vendor.localeCompare(b.vendor))
+                        }));
+                });
+
+        // EMAIL DRAFTER WITH ITEMIZATION & PROMO DATES
+        const draftEmail = (brand) => {
+            if (!brand.email) {
+                alert(`No email mapped for ${brand.vendor}. Please add one in the Brand Directory first.`);
+                return;
             }
 
-            baseCredits.forEach(c => {
-                const m = c.trackingMonth || 'Unknown';
-                const vendorName = c.vendor || 'Unmapped Brand';
-                
-                if (!groups[m]) {
-                    groups[m] = { month: m, total: 0, count: 0, credits: [], brands: {} };
-                }
-                
-                if (!groups[m].brands[vendorName]) {
-                    const brandInfo = masterBrands.value.find(b => (b.vendor || '').toLowerCase() === vendorName.toLowerCase()) || {};
-                    groups[m].brands[vendorName] = {
-                        vendor: vendorName,
-                        month: m,
-                        email: brandInfo.email || '',
-                        rep: brandInfo.rep || '',
-                        credits: [],
-                        total: 0
-                    };
-                }
-                
-                groups[m].brands[vendorName].credits.push(c);
-                groups[m].brands[vendorName].total += (parseFloat(c.amount) || 0);
-                groups[m].credits.push(c);
-                groups[m].total += (parseFloat(c.amount) || 0);
-                groups[m].count += 1;
-            });
+            const storeName = activeSite.value === 'Redding' ? 'Sundial' : activeSite.value;
+            const currentYear = new Date().getFullYear();
+            const monthStr = brand.month || activeMonth.value;
+            const periodStr = `${monthStr} ${currentYear}`;
+            const cleanStr = (str) => String(str || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
 
-            return Object.values(groups)
-                .sort((a, b) => calendarMonths.indexOf(a.month) - calendarMonths.indexOf(b.month))
-                .map(group => ({
-                    ...group,
-                    brandList: Object.values(group.brands).sort((a, b) => a.vendor.localeCompare(b.vendor))
-                }));
-        });
-
-                // REFACTORED FOR DIME REQUIREMENTS
-        const downloadMonthlyReport = (brand) => {
+            // GENERATE DETAILED CSV FIRST (Stage 1)
             let csvContent = "Location,Date & Time,Brand,Product Name,Transaction ID,Quantity Sold,Unit Price,Total Before Tax,Discount Title,Discount Amount,Credit Owed,Entry Type\n";
             let csvTotal = 0;
-            const reportMonth = brand.month || activeMonth.value;
-            const cleanStr = (str) => String(str || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
-    
-            // NEW: Source itemized data from BOTH Trees Sales and Workbook Sheets
-            const itemizedSales = [];
+            const promoDates = new Set();
 
-            // 1. Check Raw Trees Sales
+            // 1. Pull POS Itemized Data
             treesSalesData.value.forEach(sale => {
                 if (cleanStr(sale.brand) === cleanStr(brand.vendor) && 
                     cleanStr(sale.detectedSite) === cleanStr(activeSite.value) && 
-                    cleanStr(sale.month) === cleanStr(reportMonth)) {
-                    itemizedSales.push({
-                        loc: sale.detectedSite,
-                        date: sale.dateClosed,
-                        brand: sale.brand,
-                        prod: sale.productName,
-                        track: sale.trackingId,
-                        qty: sale.unitsSold,
-                        price: sale.unitPrice,
-                        preTax: (sale.unitsSold || 0) * (sale.unitPrice || 0),
-                        discTitle: sale.discountTitle,
-                        discAmt: sale.discountAmount,
-                        owed: sale.owed,
-                        type: "POS Itemized"
-                    });
+                    cleanStr(sale.month) === cleanStr(monthStr)) {
+                    
+                    const safeLoc = `"${String(sale.detectedSite || '').replace(/"/g, '""')}"`;
+                    const safeDate = `"${String(sale.dateClosed || '').replace(/"/g, '""')}"`;
+                    const safeBrand = `"${String(sale.brand || '').replace(/"/g, '""')}"`;
+                    const safeProd = `"${String(sale.productName || '').replace(/"/g, '""')}"`;
+                    const safeTrack = `"${String(sale.trackingId || '').replace(/"/g, '""')}"`;
+                    const safeQty = `"${sale.unitsSold || 0}"`;
+                    const safePrice = `"${formatCurrency(sale.unitPrice || 0)}"`;
+                    const safePreTax = `"${formatCurrency((sale.unitsSold || 0) * (sale.unitPrice || 0))}"`;
+                    const safeDiscTitle = `"${String(sale.discountTitle || '').replace(/"/g, '""')}"`;
+                    const safeDiscAmount = `"${formatCurrency(sale.discountAmount || 0)}"`;
+                    const safeOwed = `"${formatCurrency(sale.owed || 0)}"`;
+                    
+                    csvContent += `${safeLoc},${safeDate},${safeBrand},${safeProd},${safeTrack},${safeQty},${safePrice},${safePreTax},${safeDiscTitle},${safeDiscAmount},${safeOwed},"POS Itemized"\n`;
+                    csvTotal += parseFloat(sale.owed) || 0;
+
+                    // Track promo dates for the email body
+                    if (sale.dateClosed) promoDates.add(sale.dateClosed.split(' ')[0]);
                 }
             });
 
-            // 2. Add manual credits from promoCredits collection
+            // 2. Pull Manual Entry Data
             brand.credits.forEach(c => {
-                const isAggregated = c.creditType && String(c.creditType).includes('Aggregated POS Sales');
-                if (!isAggregated) {
-                    itemizedSales.push({
-                        loc: c.site,
-                        date: c.dates,
-                        brand: c.vendor,
-                        prod: c.creditType,
-                        track: c.invoice,
-                        qty: "-", price: "-", preTax: "-", discTitle: "-", discAmt: "-",
-                        owed: c.amount,
-                        type: "Manual Entry"
-                    });
-                }
-            });
-
-            // Build CSV
-            itemizedSales.forEach(s => {
-                csvContent += `"${s.loc}","${s.date}","${s.brand}","${s.prod}","${s.track}","${s.qty}","${formatCurrency(s.price)}","${formatCurrency(s.preTax)}","${s.discTitle}","${formatCurrency(s.discAmt)}","${formatCurrency(s.owed)}","${s.type}"\n`;
-                csvTotal += parseFloat(s.owed) || 0;
+                if (String(c.creditType).includes('Aggregated POS Sales')) return; 
+                
+                const safeLoc = `"${String(c.site || '').replace(/"/g, '""')}"`;
+                const safeDate = `"${String(c.dates || '').replace(/"/g, '""')}"`;
+                const safeBrand = `"${String(c.vendor || '').replace(/"/g, '""')}"`;
+                const safeProd = `"${String(c.creditType || '').replace(/"/g, '""')}"`; 
+                const safeTrack = `"${String(c.invoice || '').replace(/"/g, '""')}"`;
+                
+                csvContent += `${safeLoc},${safeDate},${safeBrand},${safeProd},${safeTrack},"-","-","-","-","-","${formatCurrency(c.amount)}","Manual Entry"\n`;
+                csvTotal += parseFloat(c.amount) || 0;
+                if (c.dates) promoDates.add(c.dates);
             });
 
             csvContent += `,,,,,,,,,, "TOTAL:", "${formatCurrency(csvTotal)}"\n`;
 
+            // Download Trigger
             const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
             const url = URL.createObjectURL(blob);
             const link = document.createElement("a");
             link.setAttribute("href", url);
-            const currentYear = new Date().getFullYear();
-            const reportName = String(brand.vendor).replace(/[^a-zA-Z0-9]/g, '_');
-            link.setAttribute("download", `${activeSite.value.replace(/\s/g, '_')}_Report_${reportName}_${reportMonth}_${currentYear}.csv`);
+            link.setAttribute("download", `${brand.vendor.replace(/\s/g, '_')}_${storeName}_Credits_${monthStr}.csv`);
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
-            setTimeout(() => URL.revokeObjectURL(url), 150);
 
-            logSystemAction("EXPORT", `Downloaded Detailed Report for ${reportName}`);
+            // OPEN OUTLOOK (Stage 2)
+            const cleanEmails = String(brand.email || '').split(/[,;\s]+/).map(e => e.trim()).filter(Boolean).join(',');
+            const subject = `Credit Report - ${storeName} Promotions - ${periodStr}`;
+            
+            let body = `Hello ${brand.vendor},\n\n`;
+            body += `Please find the attached itemized breakdown for vendor credits owed to ${storeName} for the period of ${periodStr}.\n\n`;
+            body += `Total Credit Requested: ${formatCurrency(csvTotal)}\n`;
+            body += `Promos were active on the following dates: ${Array.from(promoDates).sort().join(', ')}\n\n`;
+            body += `Please let us know if you have any questions or once this credit has been applied to our account.\n\n`;
+            body += `Best regards,\n\n${storeName} Accounting Team\n`;
+
+            window.location.href = `mailto:${cleanEmails}?cc=accounting@rredco.com&subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+            
+            logSystemAction("EXPORT", `Generated Monthly Report for ${brand.vendor}`);
         };
 
         let chartMonthlyInstance = null;
@@ -890,22 +987,17 @@ createApp({
         let unsubscribeSales = null;
         let unsubscribeCredits = null;
 
-        const setupFilteredListeners = () => {
-            // Kill old listeners to prevent memory leaks/timeouts
+                const setupFilteredListeners = () => {
+            // Kill old listeners
             if (unsubscribeSales) unsubscribeSales();
-            if (unsubscribeCredits) unsubscribeCredits();
-
-            // 1. Target exactly what you are looking at (Site + Month)
+            
+            // We only need raw sales intake, as credits now come from workbook computed
             let salesQ = query(collection(db, "treesSales"), where("detectedSite", "==", activeSite.value));
-            let creditsQ = query(collection(db, "promoCredits"), where("site", "==", activeSite.value));
 
-            // Only pull the month you need (Huge performance boost!)
             if (activeMonth.value !== 'All') {
                 salesQ = query(salesQ, where("month", "==", activeMonth.value));
-                creditsQ = query(creditsQ, where("trackingMonth", "==", activeMonth.value));
             }
 
-            // Limit the pull to 2000 records to prevent browser crash
             salesQ = query(salesQ, limit(2000));
 
             unsubscribeSales = onSnapshot(salesQ, (snapshot) => {
@@ -913,12 +1005,6 @@ createApp({
                 snapshot.forEach(docSnap => { fetchedSales.push({ id: docSnap.id, ...docSnap.data() }); });
                 treesSalesData.value = fetchedSales;
             }, (err) => console.error("Sales Pull Failed:", err));
-
-            unsubscribeCredits = onSnapshot(creditsQ, (snapshot) => {
-                const fetchedCredits = [];
-                snapshot.forEach(docSnap => { fetchedCredits.push({ id: docSnap.id, ...docSnap.data() }); });
-                promoCredits.value = fetchedCredits;
-            }, (err) => console.error("Credits Pull Failed:", err));
         };
 
         // Re-run the pull whenever you change the Month or Site
@@ -1165,35 +1251,28 @@ createApp({
                     isSuperAdmin.value = !!managerData.superAdmin;
 
                     
-                                        // 1. Permanent Sheet Listeners
+                                        // 1. Permanent Sheet Listeners (The Source of Truth)
                                         onSnapshot(collection(db, "workbook_v9_sheets"), (snapshot) => {
                                             snapshot.forEach(docSnap => {
                                                 const sheet = docSnap.data();
                                                 masterWorkbook.value.data[sheet.sheetName] = sheet.rows;
                                             });
-                                            if (snapshot.size > 0) isWorkbookLoaded.value = true;
-                                        });
-
-                                        // 2. Master Workbook Summary Listener
-                                        onSnapshot(doc(db, "promo tracker", "Master_Workbook_V9_Board_Report"), (docSnap) => {
-                                            if (docSnap.exists()) {
-                                                const summary = docSnap.data();
-                                                masterWorkbook.value.summary = summary;
+                                            if (snapshot.size > 0) {
+                                                isWorkbookLoaded.value = true;
+                                                // Trigger Ledger & Dashboard recalculation
+                                                refreshLedger();
                                             }
                                         });
 
-                                        // 3. Brands Listener
-                    onSnapshot(collection(db, "brands"), (snapshot) => {
-                        const fetchedBrands = [];
-                        snapshot.forEach(docSnap => { fetchedBrands.push({ id: docSnap.id, ...docSnap.data() }); });
-                        fetchedBrands.sort((a, b) => (a.vendor || '').localeCompare(b.vendor || ''));
-                        masterBrands.value = fetchedBrands;
-                    }, (error) => {
-                        console.error("Brands Snapshot Error:", error);
-                    });
+                                        // 2. Master Workbook Metadata
+                                        onSnapshot(doc(db, "promo tracker", "Master_Workbook_V9_Board_Report"), (docSnap) => {
+                                            if (docSnap.exists()) {
+                                                masterWorkbook.value.summary = docSnap.data();
+                                            }
+                                        });
 
-                    // 3. Optimized Sales & Credits Listeners
-                    setupFilteredListeners();
+                                        // 3. Optimized Sales Listener (Discovery Intake)
+                                        setupFilteredListeners();
 
 
 
