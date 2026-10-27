@@ -77,24 +77,33 @@ createApp({
                         const monthName = sheetName.split(' ')[0];
                         const rows = masterWorkbook.value.data[sheetName] || [];
 
-                        rows.forEach((row, idx) => {
+                                                rows.forEach((row, idx) => {
                             const vendor = row["Brand"] || row[0];
                             if (!vendor || vendor === "Brand" || vendor.toLowerCase().includes('total')) return;
 
                             ["Redding", "Red-Bluff"].forEach(siteKey => {
                                 const siteName = siteKey === "Red-Bluff" ? "Red Bluff" : "Redding";
                         
-                                // Look for site-specific amount in column header
+                                // Fuzzy match for the specific site amount
                                 let rawAmt = 0;
-                                if (row[siteKey] !== undefined) rawAmt = row[siteKey];
-                                else if (siteKey === "Redding" && row["Redding"] !== undefined) rawAmt = row["Redding"];
-                                else if (siteKey === "Red-Bluff" && row["Red-Bluff"] !== undefined) rawAmt = row["Red-Bluff"];
+                                const rowKeys = Object.keys(row);
+                                const exactKey = rowKeys.find(k => k.trim().toLowerCase() === siteName.toLowerCase() || k.trim().toLowerCase() === siteKey.toLowerCase());
+                                
+                                if (exactKey) {
+                                    rawAmt = row[exactKey];
+                                } else if (siteKey === "Redding" && row[1] !== undefined) {
+                                    rawAmt = row[1];
+                                } else if (siteKey === "Red-Bluff" && row[2] !== undefined) {
+                                    rawAmt = row[2];
+                                }
 
                                 const amt = parseFloat(String(rawAmt || 0).replace(/[^0-9.-]+/g,"")) || 0;
 
                                 if (amt > 0) {
-                                    const approvedAmt = parseFloat(String(row["Credits Approved"] || 0).replace(/[^0-9.-]+/g,"")) || 0;
-                                    const isApplied = (approvedAmt > 0) || (!!row["Date Applied"] && row["Date Applied"] !== 'N/A');
+                                    const approvedKey = rowKeys.find(k => k.toLowerCase().includes('approved') || k.toLowerCase().includes('applied') || k.toLowerCase().includes('collected'));
+                                    const approvedAmt = parseFloat(String(row[approvedKey] || 0).replace(/[^0-9.-]+/g,"")) || 0;
+                                    const dateKey = rowKeys.find(k => k.toLowerCase().includes('date') && (k.toLowerCase().includes('applied') || k.toLowerCase().includes('received')));
+                                    const isApplied = (approvedAmt > 0) || (!!row[dateKey] && row[dateKey] !== 'N/A');
                             
                                     allCredits.push({
                                         id: `${sheetName}-${idx}-${siteKey}`, 
@@ -104,7 +113,7 @@ createApp({
                                         amount: amt,
                                         creditType: row["Promo Credits "] || 'Promo',
                                         dateRequested: row["Date Requested"] || '',
-                                        dateReceived: row["Date Applied"] || '',
+                                        dateReceived: row[dateKey] || '',
                                         status: isApplied ? "Applied" : "Pending",
                                         archived: false,
                                         workbookRef: { sheet: sheetName, rowIdx: idx }
@@ -435,40 +444,49 @@ createApp({
                             if (targetMonth !== 'All' && mName !== targetMonth) return;
 
                                                         const rows = masterWorkbook.value.data[sheetName] || [];
-                            rows.forEach(row => {
-                                const vendor = row["Brand"] || row[0];
-                                if (!vendor || vendor === "Brand" || vendor.toLowerCase().includes('total')) return;
+                                                        rows.forEach(row => {
+                                                            const vendor = row["Brand"] || row[0];
+                                                            if (!vendor || vendor === "Brand" || vendor.toLowerCase().includes('total')) return;
 
-                                // DEFINE SITE KEY BASED ON DROPDOWN (Fixing the undefined error)
-                                const siteKey = targetSite === "Redding" ? "Redding" : "Red-Bluff";
+                                                            // DEFINE SITE KEY BASED ON DROPDOWN (Fixing the undefined error)
+                                                            const siteKey = targetSite === "Redding" ? "Redding" : "Red-Bluff";
 
-                                let rawAmt = 0;
-                                if (row[siteKey] !== undefined) rawAmt = row[siteKey];
-                                else if (siteKey === "Redding" && row["Redding"] !== undefined) rawAmt = row["Redding"];
-                                else if (siteKey === "Red-Bluff" && row["Red-Bluff"] !== undefined) rawAmt = row["Red-Bluff"];
+                                                            let rawAmt = 0;
+                                                            const rowKeys = Object.keys(row);
+                                                            const exactKey = rowKeys.find(k => k.trim().toLowerCase() === targetSite.toLowerCase() || k.trim().toLowerCase() === siteKey.toLowerCase());
+                                
+                                                            if (exactKey) {
+                                                                rawAmt = row[exactKey];
+                                                            } else if (siteKey === "Redding" && row[1] !== undefined) {
+                                                                rawAmt = row[1];
+                                                            } else if (siteKey === "Red-Bluff" && row[2] !== undefined) {
+                                                                rawAmt = row[2];
+                                                            }
 
-                                const amt = parseFloat(String(rawAmt || 0).replace(/[^0-9.-]+/g,"")) || 0;
+                                                            const amt = parseFloat(String(rawAmt || 0).replace(/[^0-9.-]+/g,"")) || 0;
 
-                                if (amt > 0) {
-                                    const brand = ensureStructure(mName, vendor);
-                                    brand.workbookTotal += amt;
-                                    brand.total += amt;
-                                    groups[mName].total += amt;
-                                    groups[mName].count += 1;
+                                                            if (amt > 0) {
+                                                                const brand = ensureStructure(mName, vendor);
+                                                                brand.workbookTotal += amt;
+                                                                brand.total += amt;
+                                                                groups[mName].total += amt;
+                                                                groups[mName].count += 1;
                                     
-                                    // Add a simulated credit record for the UI list
-                                    brand.credits.push({
-                                        id: `sim-${mName}-${vendor}`,
-                                        site: targetSite,
-                                        trackingMonth: mName,
-                                        vendor: vendor,
-                                        amount: amt,
-                                        creditType: row["Promo Credits "] || 'Aggregated POS Sales',
-                                        dates: row["Date Requested"] || 'Workbook Sync',
-                                        status: (parseFloat(String(row["Credits Approved"] || 0).replace(/[^0-9.-]+/g,"")) > 0) ? 'Applied' : 'Pending'
-                                    });
-                                }
-                            });
+                                                                const approvedKey = rowKeys.find(k => k.toLowerCase().includes('approved') || k.toLowerCase().includes('applied') || k.toLowerCase().includes('collected'));
+                                    
+                                                                // Add a simulated credit record for the UI list
+                                                                brand.credits.push({
+                                                                    id: `sim-${mName}-${vendor}`,
+                                                                    site: targetSite,
+                                                                    trackingMonth: mName,
+                                                                    vendor: vendor,
+                                                                    amount: amt,
+                                                                    creditType: row["Promo Credits "] || 'Aggregated POS Sales',
+                                                                    dates: row["Date Requested"] || 'Workbook Sync',
+                                                                    status: (parseFloat(String(row[approvedKey] || 0).replace(/[^0-9.-]+/g,"")) > 0) ? 'Applied' : 'Pending'
+                                                                });
+                                                            }
+                                                        });
                         });
                     }
 
@@ -1020,7 +1038,7 @@ createApp({
                         if (start && sheetDate < new Date(start.getFullYear(), start.getMonth(), 1)) return;
                         if (end && sheetDate > new Date(end.getFullYear(), end.getMonth(), 1)) return;
 
-                        const rows = masterWorkbook.value.data[sheetName] || [];
+                                                const rows = masterWorkbook.value.data[sheetName] || [];
                 
                         rows.forEach(row => {
                             const vendor = row["Brand"] || row[0]; 
@@ -1039,26 +1057,25 @@ createApp({
                                 };
                             }
                     
-                                                        // Column mapping based on Workbook V9 Master Schema
+                            // Column mapping based on Workbook V9 Master Schema with Fuzzy Match
+                            const rowKeys = Object.keys(row);
                             
-                            // Safe fetching for Redding
-                            let rawRedding = 0;
-                            if (row["Redding"] !== undefined) rawRedding = row["Redding"];
-                            else if (row[1] !== undefined) rawRedding = row[1]; // Fallback to index if column header missing
+                            const redKey = rowKeys.find(k => k.trim().toLowerCase() === 'redding');
+                            const bluffKey = rowKeys.find(k => k.trim().toLowerCase() === 'red-bluff' || k.trim().toLowerCase() === 'red bluff');
                             
-                            // Safe fetching for Red Bluff
-                            let rawRedBluff = 0;
-                            if (row["Red-Bluff"] !== undefined) rawRedBluff = row["Red-Bluff"];
-                            else if (row["Red Bluff"] !== undefined) rawRedBluff = row["Red Bluff"];
-                            else if (row[2] !== undefined) rawRedBluff = row[2]; // Fallback to index
+                            let rawRedding = redKey ? row[redKey] : row[1];
+                            let rawRedBluff = bluffKey ? row[bluffKey] : row[2];
 
-                            const amtRedding = parseFloat(String(rawRedding).replace(/[^0-9.-]+/g,"")) || 0;
-                            const amtRedBluff = parseFloat(String(rawRedBluff).replace(/[^0-9.-]+/g,"")) || 0;
+                            const amtRedding = parseFloat(String(rawRedding || 0).replace(/[^0-9.-]+/g,"")) || 0;
+                            const amtRedBluff = parseFloat(String(rawRedBluff || 0).replace(/[^0-9.-]+/g,"")) || 0;
                             
                             // Only add if there is actual activity for this site/brand combo
                             if (amtRedding > 0 || amtRedBluff > 0) {
-                                const amtCollected = parseFloat(String(row["Credits Approved"] || 0).replace(/[^0-9.-]+/g,"")) || 0;
-                                const amtTreezRaw = parseFloat(String(row["Treez Total"] || 0).replace(/[^0-9.-]+/g,"")) || 0;
+                                const approvedKey = rowKeys.find(k => k.toLowerCase().includes('approved') || k.toLowerCase().includes('applied') || k.toLowerCase().includes('collected'));
+                                const amtCollected = parseFloat(String(row[approvedKey] || 0).replace(/[^0-9.-]+/g,"")) || 0;
+                                
+                                const treezKey = rowKeys.find(k => k.toLowerCase().includes('treez'));
+                                const amtTreezRaw = parseFloat(String(row[treezKey] || 0).replace(/[^0-9.-]+/g,"")) || 0;
                         
                                 brandMap[vendor].generated += (amtRedding + amtRedBluff);
                                 brandMap[vendor].collected += amtCollected;
@@ -1253,49 +1270,17 @@ createApp({
                                         // 1. Permanent Sheet Listeners (The Source of Truth)
                                         console.log("Listening to workbook_v9_sheets...");
                                                                                 onSnapshot(collection(db, "workbook_v9_sheets"), (snapshot) => {
-                                            console.log(`Snapshot received: ${snapshot.size} sheets found.`);
-                                            snapshot.forEach(docSnap => {
-                                                const sheet = docSnap.data();
-                                                masterWorkbook.value.data[sheet.sheetName] = sheet.rows;
-                                                console.log(`- Loaded sheet: ${sheet.sheetName} (${sheet.rows.length} rows)`);
-                                            });
-                                            if (snapshot.size > 0) {
-                                                isWorkbookLoaded.value = true;
-                                                // Recalculate Ledger
-                                                nextTick(() => { refreshLedger(); });
-
-                                                // --- DIAGNOSTIC LOGS (TEMPORARY) ---
-                                                setTimeout(() => {
-                                                    console.log("=== DIAGNOSTIC LOGS ===");
-                                                    const sheets = Object.keys(masterWorkbook.value.data);
-                                                    console.log("1. Workbook Sheet Names:", sheets);
-                                                    
-                                                    const testSheetName = sheets.find(s => s.includes('August')) || sheets[0];
-                                                    const testSheet = masterWorkbook.value.data[testSheetName];
-                                                    
-                                                    if (testSheet && testSheet.length > 0) {
-                                                        console.log(`--- Analyzing Sheet: ${testSheetName} ---`);
-                                                        console.log("2. Exact Column Headers (Row 0 Keys):", Object.keys(testSheet[0]));
-                                                        console.log("3. First 3 Parsed Rows:", testSheet.slice(0, 3));
-                                                        
-                                                        const firstBrandRow = testSheet.find(row => row["Brand"] && row["Brand"] !== "Brand" && !String(row["Brand"]).toLowerCase().includes("total"));
-                                                        if (firstBrandRow) {
-                                                            console.log("4. Raw value being read for Brand:", firstBrandRow["Brand"]);
-                                                            console.log("   - Raw Redding value:", firstBrandRow["Redding"], "| Type:", typeof firstBrandRow["Redding"]);
-                                                            console.log("   - Raw Red-Bluff value:", firstBrandRow["Red-Bluff"], "| Type:", typeof firstBrandRow["Red-Bluff"]);
-                                                            console.log("   - Raw Credits Approved value:", firstBrandRow["Credits Approved"], "| Type:", typeof firstBrandRow["Credits Approved"]);
-                                                            console.log("   - Raw Treez Total value:", firstBrandRow["Treez Total"], "| Type:", typeof firstBrandRow["Treez Total"]);
-                                                            console.log("   - Full Row Object:", JSON.parse(JSON.stringify(firstBrandRow)));
-                                                        } else {
-                                                            console.log("4. Could not find a valid Brand row to analyze.");
-                                                        }
-                                                    } else {
-                                                        console.log("Could not find test sheet or sheet is empty.");
-                                                    }
-                                                    console.log("=======================");
-                                                }, 1500);
-                                            }
-                                        }, (err) => console.error("Sheets Listener Error:", err));
+                                                                                    console.log(`Snapshot received: ${snapshot.size} sheets found.`);
+                                                                                    snapshot.forEach(docSnap => {
+                                                                                        const sheet = docSnap.data();
+                                                                                        masterWorkbook.value.data[sheet.sheetName] = sheet.rows;
+                                                                                    });
+                                                                                    if (snapshot.size > 0) {
+                                                                                        isWorkbookLoaded.value = true;
+                                                                                        // Recalculate Ledger
+                                                                                        nextTick(() => { refreshLedger(); });
+                                                                                    }
+                                                                                }, (err) => console.error("Sheets Listener Error:", err));
 
                                         // 2. Master Workbook Metadata
                                         onSnapshot(doc(db, "promo tracker", "Master_Workbook_V9_Board_Report"), (docSnap) => {
