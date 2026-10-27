@@ -87,9 +87,15 @@
             <button @click="activeTab = 'Tracker'" :class="activeTab === 'Tracker' ? 'bg-gray-100 text-gray-900 font-extrabold border-t-4 border-emerald-500' : 'bg-gray-900/50 text-gray-400 hover:bg-gray-800 hover:text-white'" class="px-5 py-2 rounded-t-xl text-sm transition-colors tracking-wide whitespace-nowrap"><i data-lucide="clock" class="w-3.5 h-3.5 inline mr-1.5 mb-0.5"></i>Legacy Tracker</button>
 
             
+                        <div class="w-px bg-gray-800 mx-2 self-stretch my-2"></div>
+            <div class="text-[10px] uppercase font-bold text-gray-500 tracking-widest self-center mr-2 hidden md:block">Identity & Contacts</div>
+            <button @click="activeTab = 'VendorMapping'" :class="activeTab === 'VendorMapping' ? 'bg-gray-100 text-gray-900 font-extrabold border-t-4 border-emerald-500' : 'bg-gray-900/50 text-gray-400 hover:bg-gray-800 hover:text-white'" class="px-5 py-2 rounded-t-xl text-sm transition-colors tracking-wide whitespace-nowrap"><i data-lucide="network" class="w-3.5 h-3.5 inline mr-1.5 mb-0.5"></i>Vendor Mapping</button>
+            <button @click="activeTab = 'Brands'" :class="activeTab === 'Brands' ? 'bg-gray-100 text-gray-900 font-extrabold border-t-4 border-emerald-500' : 'bg-gray-900/50 text-gray-400 hover:bg-gray-800 hover:text-white'" class="px-5 py-2 rounded-t-xl text-sm transition-colors tracking-wide whitespace-nowrap"><i data-lucide="book-user" class="w-3.5 h-3.5 inline mr-1.5 mb-0.5"></i>Brand Directory</button>
+            <button @click="activeTab = 'RepTracker'" :class="activeTab === 'RepTracker' ? 'bg-gray-100 text-gray-900 font-extrabold border-t-4 border-emerald-500' : 'bg-gray-900/50 text-gray-400 hover:bg-gray-800 hover:text-white'" class="px-5 py-2 rounded-t-xl text-sm transition-colors tracking-wide whitespace-nowrap"><i data-lucide="contact" class="w-3.5 h-3.5 inline mr-1.5 mb-0.5"></i>Rep Tracker</button>
+            <button @click="activeTab = 'MappingQueue'" :class="activeTab === 'MappingQueue' ? 'bg-gray-100 text-gray-900 font-extrabold border-t-4 border-emerald-500' : 'bg-gray-900/50 text-gray-400 hover:bg-gray-800 hover:text-white'" class="px-5 py-2 rounded-t-xl text-sm transition-colors tracking-wide whitespace-nowrap"><i data-lucide="list-todo" class="w-3.5 h-3.5 inline mr-1.5 mb-0.5"></i>Mapping Queue</button>
+
             <div class="w-px bg-gray-800 mx-2 self-stretch my-2"></div>
             <div class="text-[10px] uppercase font-bold text-gray-500 tracking-widest self-center mr-2 hidden md:block">Admin</div>
-            <button @click="activeTab = 'Brands'" :class="activeTab === 'Brands' ? 'bg-gray-100 text-gray-900 font-extrabold border-t-4 border-emerald-500' : 'bg-gray-900/50 text-gray-400 hover:bg-gray-800 hover:text-white'" class="px-5 py-2 rounded-t-xl text-sm transition-colors tracking-wide whitespace-nowrap"><i data-lucide="contact" class="w-3.5 h-3.5 inline mr-1.5 mb-0.5"></i>Identity Mgmt</button>
             <button v-if="isSuperAdmin" @click="activeTab = 'Logs'" :class="activeTab === 'Logs' ? 'bg-gray-100 text-gray-900 font-extrabold border-t-4 border-amber-500' : 'bg-gray-900/50 text-gray-400 hover:bg-gray-800 hover:text-white'" class="px-5 py-2 rounded-t-xl text-sm transition-colors tracking-wide whitespace-nowrap"><i data-lucide="activity" class="w-3.5 h-3.5 inline mr-1.5 mb-0.5"></i>Logs</button>
         </div>
 
