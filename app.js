@@ -434,12 +434,15 @@ createApp({
                             const mName = sheetName.split(' ')[0];
                             if (targetMonth !== 'All' && mName !== targetMonth) return;
 
-                            const rows = masterWorkbook.value.data[sheetName] || [];
+                                                        const rows = masterWorkbook.value.data[sheetName] || [];
                             rows.forEach(row => {
                                 const vendor = row["Brand"] || row[0];
                                 if (!vendor || vendor === "Brand" || vendor.toLowerCase().includes('total')) return;
 
-                                                                let rawAmt = 0;
+                                // DEFINE SITE KEY BASED ON DROPDOWN (Fixing the undefined error)
+                                const siteKey = targetSite === "Redding" ? "Redding" : "Red-Bluff";
+
+                                let rawAmt = 0;
                                 if (row[siteKey] !== undefined) rawAmt = row[siteKey];
                                 else if (siteKey === "Redding" && row["Redding"] !== undefined) rawAmt = row["Redding"];
                                 else if (siteKey === "Red-Bluff" && row["Red-Bluff"] !== undefined) rawAmt = row["Red-Bluff"];
