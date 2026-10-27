@@ -1230,10 +1230,17 @@ createApp({
             showBrandDropdown.value = false;
         };
 
-        const formatCurrency = (val) => {
+                const formatCurrency = (val) => {
             const num = parseFloat(val);
-            if (isNaN(num)) return '$0.00';
-            return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(num);
+            if (isNaN(num)) return '$0';
+            // Rounding to 2 decimal places to ensure no floating point errors (e.g. .000000001)
+            const rounded = Math.round(num * 100) / 100;
+            return new Intl.NumberFormat('en-US', { 
+                style: 'currency', 
+                currency: 'USD',
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2
+            }).format(rounded);
         };
         
         const detectMonthFromDate = (dateString) => {
