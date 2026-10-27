@@ -74,17 +74,21 @@
              </div>
         </main>
 
-        <!-- APP TABS NAV (Obsidian Background) -->
+                <!-- APP TABS NAV (Obsidian Background) -->
         <div v-if="isManagerUnlocked" class="bg-gray-950 px-4 md:px-6 pt-2 flex gap-2 shrink-0 z-10 shadow-sm overflow-x-auto no-scrollbar border-b border-gray-800">
-                        <button @click="activeTab = 'Dashboard'" :class="activeTab === 'Dashboard' ? 'bg-gray-100 text-gray-900 font-extrabold border-t-4 border-emerald-500' : 'bg-gray-900/50 text-gray-400 hover:bg-gray-800 hover:text-white'" class="px-6 py-2 rounded-t-xl text-sm transition-colors tracking-wide whitespace-nowrap">Dashboard</button>
-            <button @click="activeTab = 'Ledger'" :class="activeTab === 'Ledger' ? 'bg-gray-100 text-gray-900 font-extrabold border-t-4 border-emerald-500' : 'bg-gray-900/50 text-gray-400 hover:bg-gray-800 hover:text-white'" class="px-6 py-2 rounded-t-xl text-sm transition-colors tracking-wide whitespace-nowrap">Master Ledger</button>
-            <button @click="activeTab = 'Tracker'" :class="activeTab === 'Tracker' ? 'bg-gray-100 text-gray-900 font-extrabold border-t-4 border-emerald-500' : 'bg-gray-900/50 text-gray-400 hover:bg-gray-800 hover:text-white'" class="px-6 py-2 rounded-t-xl text-sm transition-colors tracking-wide whitespace-nowrap">Legacy Tracker</button>
-
-            <button @click="activeTab = 'Reports'" :class="activeTab === 'Reports' ? 'bg-gray-100 text-gray-900 font-extrabold border-t-4 border-emerald-500' : 'bg-gray-900/50 text-gray-400 hover:bg-gray-800 hover:text-white'" class="px-6 py-2 rounded-t-xl text-sm transition-colors tracking-wide whitespace-nowrap">Monthly Reports</button>
-            <button @click="activeTab = 'Sales'" :class="activeTab === 'Sales' ? 'bg-gray-100 text-gray-900 font-extrabold border-t-4 border-emerald-500' : 'bg-gray-900/50 text-gray-400 hover:bg-gray-800 hover:text-white'" class="px-6 py-2 rounded-t-xl text-sm transition-colors tracking-wide flex items-center gap-2 whitespace-nowrap">Trees Sales CSV <span v-if="filteredTreesSalesData.length > 0 && activeTab !== 'Sales'" class="bg-amber-500 text-gray-950 text-[10px] px-1.5 py-0.5 rounded-full">{{ filteredTreesSalesData.length }}</span></button>
-            <button @click="activeTab = 'Brands'" :class="activeTab === 'Brands' ? 'bg-gray-100 text-gray-900 font-extrabold border-t-4 border-emerald-500' : 'bg-gray-900/50 text-gray-400 hover:bg-gray-800 hover:text-white'" class="px-6 py-2 rounded-t-xl text-sm transition-colors tracking-wide whitespace-nowrap">Brand Directory</button>
-            <button v-if="isSuperAdmin" @click="activeTab = 'Logs'" :class="activeTab === 'Logs' ? 'bg-gray-100 text-gray-900 font-extrabold border-t-4 border-amber-500' : 'bg-gray-900/50 text-gray-400 hover:bg-gray-800 hover:text-white'" class="px-6 py-2 rounded-t-xl text-sm transition-colors tracking-wide whitespace-nowrap"><i data-lucide="activity" class="w-3.5 h-3.5 inline mr-1 mb-0.5"></i>System Logs</button>
+            <div class="text-[10px] uppercase font-bold text-gray-500 tracking-widest self-center mr-2 hidden md:block">Workbook</div>
+            <button @click="activeTab = 'Dashboard'" :class="activeTab === 'Dashboard' ? 'bg-gray-100 text-gray-900 font-extrabold border-t-4 border-emerald-500' : 'bg-gray-900/50 text-gray-400 hover:bg-gray-800 hover:text-white'" class="px-5 py-2 rounded-t-xl text-sm transition-colors tracking-wide whitespace-nowrap"><i data-lucide="bar-chart-2" class="w-3.5 h-3.5 inline mr-1.5 mb-0.5"></i>Exec Dash</button>
+            <button @click="activeTab = 'Sales'" :class="activeTab === 'Sales' ? 'bg-gray-100 text-gray-900 font-extrabold border-t-4 border-emerald-500' : 'bg-gray-900/50 text-gray-400 hover:bg-gray-800 hover:text-white'" class="px-5 py-2 rounded-t-xl text-sm transition-colors tracking-wide flex items-center gap-2 whitespace-nowrap"><i data-lucide="inbox" class="w-3.5 h-3.5 inline"></i>Discovery Intake <span v-if="filteredTreesSalesData.length > 0 && activeTab !== 'Sales'" class="bg-amber-500 text-gray-950 text-[10px] px-1.5 py-0.5 rounded-full">{{ filteredTreesSalesData.length }}</span></button>
+            <button @click="activeTab = 'Ledger'" :class="activeTab === 'Ledger' ? 'bg-gray-100 text-gray-900 font-extrabold border-t-4 border-emerald-500' : 'bg-gray-900/50 text-gray-400 hover:bg-gray-800 hover:text-white'" class="px-5 py-2 rounded-t-xl text-sm transition-colors tracking-wide whitespace-nowrap"><i data-lucide="book-open" class="w-3.5 h-3.5 inline mr-1.5 mb-0.5"></i>Master Ledger</button>
+            <button @click="activeTab = 'Reports'" :class="activeTab === 'Reports' ? 'bg-gray-100 text-gray-900 font-extrabold border-t-4 border-emerald-500' : 'bg-gray-900/50 text-gray-400 hover:bg-gray-800 hover:text-white'" class="px-5 py-2 rounded-t-xl text-sm transition-colors tracking-wide whitespace-nowrap"><i data-lucide="building" class="w-3.5 h-3.5 inline mr-1.5 mb-0.5"></i>Store Rec</button>
+            <button @click="activeTab = 'Tracker'" :class="activeTab === 'Tracker' ? 'bg-gray-100 text-gray-900 font-extrabold border-t-4 border-emerald-500' : 'bg-gray-900/50 text-gray-400 hover:bg-gray-800 hover:text-white'" class="px-5 py-2 rounded-t-xl text-sm transition-colors tracking-wide whitespace-nowrap"><i data-lucide="clock" class="w-3.5 h-3.5 inline mr-1.5 mb-0.5"></i>Legacy Tracker</button>
+            
+            <div class="w-px bg-gray-800 mx-2 self-stretch my-2"></div>
+            <div class="text-[10px] uppercase font-bold text-gray-500 tracking-widest self-center mr-2 hidden md:block">Admin</div>
+            <button @click="activeTab = 'Brands'" :class="activeTab === 'Brands' ? 'bg-gray-100 text-gray-900 font-extrabold border-t-4 border-emerald-500' : 'bg-gray-900/50 text-gray-400 hover:bg-gray-800 hover:text-white'" class="px-5 py-2 rounded-t-xl text-sm transition-colors tracking-wide whitespace-nowrap"><i data-lucide="contact" class="w-3.5 h-3.5 inline mr-1.5 mb-0.5"></i>Identity Mgmt</button>
+            <button v-if="isSuperAdmin" @click="activeTab = 'Logs'" :class="activeTab === 'Logs' ? 'bg-gray-100 text-gray-900 font-extrabold border-t-4 border-amber-500' : 'bg-gray-900/50 text-gray-400 hover:bg-gray-800 hover:text-white'" class="px-5 py-2 rounded-t-xl text-sm transition-colors tracking-wide whitespace-nowrap"><i data-lucide="activity" class="w-3.5 h-3.5 inline mr-1.5 mb-0.5"></i>Logs</button>
         </div>
+
 
         <!-- SHARED GLOBAL FILTERS -->
         <div v-if="isManagerUnlocked && activeTab !== 'Logs'" class="bg-gray-100 px-4 md:px-6 pt-4 pb-2 flex flex-col lg:flex-row justify-between items-center shrink-0 gap-3 z-10 border-b border-gray-200">
@@ -280,7 +284,7 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                <tr v-for="item in masterLedgerData" :key="item.vendor + item.site" @click="selectedLedgerVendor = item" :class="{'bg-emerald-50/50 ring-1 ring-inset ring-emerald-500': selectedLedgerVendor?.vendor === item.vendor}" class="hover:bg-gray-50 cursor-pointer transition-all">
+                                                                <tr v-for="item in masterLedgerData" :key="item.vendor + item.site" @click="selectedLedgerVendor = item" :class="{'bg-emerald-50/50 ring-1 ring-inset ring-emerald-500': selectedLedgerVendor?.vendor === item.vendor}" class="hover:bg-gray-50 cursor-pointer transition-all">
                                     <td class="font-bold text-gray-900">{{ item.vendor }}</td>
                                     <td class="text-gray-600">{{ item.site }}</td>
                                     <td class="text-right font-medium">{{ formatCurrency(item.generated) }}</td>
@@ -300,7 +304,18 @@
                                     </td>
                                 </tr>
                             </tbody>
+                            <tfoot class="bg-gray-900 text-white font-bold sticky bottom-0 shadow-[0_-2px_4px_rgba(0,0,0,0.1)]">
+                                <tr>
+                                    <td colspan="2" class="text-right uppercase tracking-wider text-xs text-gray-400 pr-4 py-3">Total Ledger Balance:</td>
+                                    <td class="text-right text-emerald-400">{{ formatCurrency(ledgerTotals.generated) }}</td>
+                                    <td class="text-right text-emerald-400">{{ formatCurrency(ledgerTotals.recovered) }}</td>
+                                    <td class="text-right text-amber-400">{{ formatCurrency(ledgerTotals.outstanding) }}</td>
+                                    <td class="text-right text-amber-400 bg-black/20">{{ formatCurrency(ledgerTotals.variance) }}</td>
+                                    <td colspan="5"></td>
+                                </tr>
+                            </tfoot>
                         </table>
+
                     </div>
                 </div>
 
@@ -530,27 +545,50 @@
             </div>
         </div>
 
-        <!-- TREES SALES REPORTS TAB -->
+                <!-- TREES SALES REPORTS TAB (DISCOVERY INTAKE) -->
         <main v-if="isManagerUnlocked && activeTab === 'Sales'" class="flex-1 flex flex-col p-4 md:p-6 pt-4 bg-gray-100 overflow-hidden">
-            <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 shrink-0 gap-4">
+            <div class="flex justify-between items-end mb-4 shrink-0">
                 <div>
-                    <h2 class="text-xl font-bold text-gray-900 leading-tight">Trees POS Sales (Global)</h2>
-                    <p class="text-sm text-gray-500 mt-1">Showing ALL uploaded data. The aggregator automatically routes credits to Red Bluff or Redding.</p>
+                    <h2 class="text-xl font-bold text-gray-900 leading-tight">Discovery Intake</h2>
+                    <p class="text-sm text-gray-500 mt-1">Upload Treez POS Sales to automatically generate claims and populate the workbook.</p>
                 </div>
-                <div class="flex flex-col sm:flex-row w-full md:w-auto gap-3">
+            </div>
+            
+            <div class="flex flex-col md:flex-row gap-4 mb-4 shrink-0">
+                <div class="bg-white border-l-4 border-emerald-500 rounded-xl p-4 md:p-5 flex-1 shadow-sm flex flex-col justify-center">
+                    <div class="text-[10px] md:text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Total Discovery (YTD)</div>
+                    <div class="text-2xl font-extrabold text-emerald-700">{{ formatCurrency(totalTreesOwedYTD) }}</div>
+                </div>
+                <div class="bg-white border-l-4 border-amber-500 rounded-xl p-4 md:p-5 flex-1 shadow-sm flex flex-col justify-center">
+                    <div class="text-[10px] md:text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Pending Sync to Workbook</div>
+                    <div class="text-2xl font-extrabold text-gray-900">{{ formatCurrency(totalTreesPending) }}</div>
+                </div>
+                <div class="bg-gray-900 rounded-xl p-4 md:p-5 flex-1 shadow-sm flex flex-col justify-center border border-gray-800 text-white">
+                    <div class="text-[10px] md:text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 flex items-center justify-between">
+                        Workbook Status
+                        <i data-lucide="check-circle" v-if="unsyncedSalesCount === 0" class="w-4 h-4 text-emerald-500"></i>
+                        <i data-lucide="alert-circle" v-else class="w-4 h-4 text-amber-500"></i>
+                    </div>
+                    <div class="text-sm font-bold text-emerald-400" v-if="unsyncedSalesCount === 0">Up to date</div>
+                    <div class="text-sm font-bold text-amber-400" v-else>{{ unsyncedSalesCount }} claims require action</div>
+                    <button v-if="unsyncedSalesCount > 0" @click="pushToMainTracker" class="mt-2 w-full py-1.5 bg-amber-500 hover:bg-amber-600 text-gray-950 rounded font-bold text-xs shadow-sm transition-colors flex items-center justify-center gap-1.5">
+                        <i data-lucide="git-merge" class="w-3 h-3"></i> Sync Now
+                    </button>
+                </div>
+            </div>
+
+            <div class="flex flex-col sm:flex-row justify-between items-center mb-4 shrink-0 gap-3">
+                <div class="flex-1"></div>
+                <div class="flex flex-col sm:flex-row w-full sm:w-auto gap-3">
                     <button v-if="isSuperAdmin && treesSalesData.length > 0" @click="clearAllSalesData" class="w-full sm:w-auto px-4 py-2 bg-red-50 border border-red-200 hover:bg-red-100 text-red-600 rounded-lg font-bold shadow-sm transition-colors flex items-center justify-center gap-2 text-sm">
                         <i data-lucide="trash-2" class="w-4 h-4"></i> Clear All Data
                     </button>
                     <div class="relative overflow-hidden inline-block w-full sm:w-auto">
-
-                        <button class="w-full px-4 py-2 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 rounded-lg font-bold shadow-sm transition-colors flex items-center justify-center gap-2 text-sm">
-                            <i data-lucide="file-up" class="w-4 h-4 text-emerald-600"></i> Upload CSV
+                        <button class="w-full px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold shadow-md transition-colors flex items-center justify-center gap-2 text-sm">
+                            <i data-lucide="file-up" class="w-4 h-4"></i> Upload Treez CSV
                         </button>
                         <input type="file" @change="handleTreesCsvUpload" accept=".csv" class="absolute left-0 top-0 w-full h-full opacity-0 cursor-pointer">
                     </div>
-                    <button v-if="unsyncedSalesCount > 0" @click="pushToMainTracker" class="w-full sm:w-auto px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold shadow-md transition-colors flex items-center justify-center gap-2 text-sm">
-                        <i data-lucide="git-merge" class="w-4 h-4"></i> Auto-Sort & Sync
-                    </button>
                 </div>
             </div>
 
@@ -567,7 +605,7 @@
                                 <th>Product Name</th>
                                 <th>Discount Title</th>
                                 <th>Tracking ID</th>
-                                <th>Vendor Credit Owed</th>
+                                <th>Claim Value ($)</th>
                                 <th>Date Closed</th>
                             </tr>
                         </thead>
@@ -575,8 +613,8 @@
                             <tr v-if="filteredTreesSalesData.length === 0">
                                 <td :colspan="activeMonth === 'All' ? 10 : 9" class="text-center py-16 text-gray-500 bg-gray-50">
                                     <i data-lucide="file-spreadsheet" class="w-12 h-12 mx-auto text-gray-300 mb-3"></i>
-                                    <div class="font-bold text-gray-700">No Sales Data Found</div>
-                                    <div class="text-sm mt-1">Upload a Trees CSV to view raw sales and generate aggregate promo credits.</div>
+                                    <div class="font-bold text-gray-700">No Discovery Claims Found</div>
+                                    <div class="text-sm mt-1">Upload a Treez POS CSV to generate claims.</div>
                                 </td>
                             </tr>
                             <tr v-for="sale in displayTreesSalesData" :key="sale.id" class="hover:bg-gray-50" :class="{'opacity-60 bg-gray-50': sale.status === 'Synced'}">
@@ -599,6 +637,7 @@
                 </div>
             </div>
         </main>
+
 
         <!-- BRAND DIRECTORY TAB -->
         <main v-if="isManagerUnlocked && activeTab === 'Brands'" class="flex-1 flex flex-col p-4 md:p-6 pt-4 bg-gray-100 overflow-hidden">

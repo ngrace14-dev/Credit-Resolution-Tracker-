@@ -46,10 +46,11 @@ createApp({
         const promoCredits = ref([]); // MOVED UP
 
         const selectedLedgerVendor = ref(null);
-
         const masterLedgerData = ref([]);
+        const ledgerTotals = ref({ generated: 0, recovered: 0, outstanding: 0, variance: 0 });
 
         const refreshLedger = async () => {
+
             if (!promoCredits.value) return; // Prevent execution against undefined/null
 
             // Computed ledger simulation for UI wireframe
@@ -100,7 +101,9 @@ createApp({
             });
 
 
-            // 2. Finalize Calculations
+                        // 2. Finalize Calculations
+            const totals = { generated: 0, recovered: 0, outstanding: 0, variance: 0 };
+            
             Object.values(ledger).forEach(item => {
                 item.outstanding = item.generated - item.recovered;
                 // Variance simulation: random mock variance if outstanding > 0
@@ -113,10 +116,17 @@ createApp({
                     item.aging['31-60'] = item.outstanding * 0.4;
                     item.aging['0-30'] = item.outstanding * 0.6;
                 }
+                
+                totals.generated += item.generated;
+                totals.recovered += item.recovered;
+                totals.outstanding += item.outstanding;
+                totals.variance += item.variance;
             });
 
+            ledgerTotals.value = totals;
             masterLedgerData.value = Object.values(ledger).sort((a, b) => b.outstanding - a.outstanding);
         };
+
 
         watch([promoCredits, activeSite], () => {
             if (activeTab.value === 'Ledger') refreshLedger();
@@ -1002,9 +1012,13 @@ createApp({
             return base;
         });
 
-        const displayTreesSalesData = computed(() => filteredTreesSalesData.value.slice(0, 100));
+                const displayTreesSalesData = computed(() => filteredTreesSalesData.value.slice(0, 100));
+        
+        const totalTreesOwedYTD = computed(() => treesSalesData.value.filter(s => s.detectedSite === activeSite.value).reduce((sum, s) => sum + (parseFloat(s.owed) || 0), 0));
+        const totalTreesPending = computed(() => treesSalesData.value.filter(s => s.detectedSite === activeSite.value && s.status === 'Unsynced').reduce((sum, s) => sum + (parseFloat(s.owed) || 0), 0));
         
         const totalPending = computed(() => filteredCredits.value.filter(c => c.status === 'Pending').reduce((sum, c) => sum + (parseFloat(c.amount) || 0), 0));
+
         const totalApplied = computed(() => filteredCredits.value.filter(c => c.status === 'Applied').reduce((sum, c) => sum + (parseFloat(c.amount) || 0), 0));
         
         const unsyncedSalesCount = computed(() => filteredTreesSalesData.value.filter(s => s.status === 'Unsynced').length);
@@ -1521,13 +1535,15 @@ createApp({
             rawPasteData, pastedGrid, mappedHeaders, showBrandImportModal, brandPasteData, brandPastedGrid,
             brandMappedHeaders, brandAvailableHeaders, availableHeaders, form, handleLogin, forceLock,
                         filteredBrands, selectBrand, formatCurrency, filteredCredits, filteredTreesSalesData,
-            displayTreesSalesData, totalPending, totalApplied, unsyncedSalesCount, openPromoModal,
-            closePromoModal, handleFileUpload, saveCredit, editCredit, deleteCredit, openImportModal,
+                        displayTreesSalesData, totalPending, totalApplied, unsyncedSalesCount, openPromoModal,
+                        totalTreesOwedYTD, totalTreesPending,
+                        closePromoModal, handleFileUpload, saveCredit, editCredit, deleteCredit, openImportModal,
+
             closeImportModal, resetImport, displayGrid, processRawPaste, processImport, regenerateBrandSummary,
             regenerateMonthReports, handleTreesCsvUpload, pushToMainTracker, resetBrandImport,
             processBrandRawPaste, processBrandImport, systemLogs, refreshIcons, clearAllSalesData,
-            detectMonthInString, drawCharts, openDimeHelper, exportVendorsAndBrandsCSV,
-            masterLedgerData, selectedLedgerVendor, refreshLedger, openLegacyVerification
+                        detectMonthInString, drawCharts, openDimeHelper, exportVendorsAndBrandsCSV,
+            masterLedgerData, selectedLedgerVendor, refreshLedger, openLegacyVerification, ledgerTotals
 
         };
     }
