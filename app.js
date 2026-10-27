@@ -72,55 +72,91 @@ createApp({
                     if (!masterWorkbook.value || !masterWorkbook.value.data) return [];
 
                     Object.keys(masterWorkbook.value.data).forEach(sheetName => {
-                        // Look for monthly sheets
-                        if (!sheetName.includes('2026')) return;
-                        const monthName = sheetName.split(' ')[0];
-                        const rows = masterWorkbook.value.data[sheetName] || [];
+                                            // Look for monthly sheets
+                        if (sheetName.includes('2026')) {
+                            const monthName = sheetName.split(' ')[0];
+                            const rows = masterWorkbook.value.data[sheetName] || [];
 
-                                                rows.forEach((row, idx) => {
-                            const vendor = row["Brand"] || row[0];
-                            if (!vendor || vendor === "Brand" || vendor.toLowerCase().includes('total')) return;
+                            rows.forEach((row, idx) => {
+                                const vendor = row["Brand"] || row[0];
+                                if (!vendor || vendor === "Brand" || vendor.toLowerCase().includes('total')) return;
 
-                            ["Redding", "Red-Bluff"].forEach(siteKey => {
-                                const siteName = siteKey === "Red-Bluff" ? "Red Bluff" : "Redding";
-                        
-                                // Fuzzy match for the specific site amount
-                                let rawAmt = 0;
-                                const rowKeys = Object.keys(row);
-                                const exactKey = rowKeys.find(k => k.trim().toLowerCase() === siteName.toLowerCase() || k.trim().toLowerCase() === siteKey.toLowerCase());
-                                
-                                if (exactKey) {
-                                    rawAmt = row[exactKey];
-                                } else if (siteKey === "Redding" && row[1] !== undefined) {
-                                    rawAmt = row[1];
-                                } else if (siteKey === "Red-Bluff" && row[2] !== undefined) {
-                                    rawAmt = row[2];
-                                }
-
-                                const amt = parseFloat(String(rawAmt || 0).replace(/[^0-9.-]+/g,"")) || 0;
-
-                                if (amt > 0) {
-                                    const approvedKey = rowKeys.find(k => k.toLowerCase().includes('approved') || k.toLowerCase().includes('applied') || k.toLowerCase().includes('collected'));
-                                    const approvedAmt = parseFloat(String(row[approvedKey] || 0).replace(/[^0-9.-]+/g,"")) || 0;
-                                    const dateKey = rowKeys.find(k => k.toLowerCase().includes('date') && (k.toLowerCase().includes('applied') || k.toLowerCase().includes('received')));
-                                    const isApplied = (approvedAmt > 0) || (!!row[dateKey] && row[dateKey] !== 'N/A');
+                                ["Redding", "Red-Bluff"].forEach(siteKey => {
+                                    const siteName = siteKey === "Red-Bluff" ? "Red Bluff" : "Redding";
                             
-                                    allCredits.push({
-                                    id: `${sheetName}-${idx}-${siteKey}`, 
-                                    site: siteName,
-                                    trackingMonth: monthName,
-                                    vendor: vendor,
-                                    amount: amt,
-                                    creditType: row["Promo Credits"] || 'Promo',
-                                    dateRequested: row["Date Requested"] || '',
-                                    dateReceived: row[dateKey] || '',
-                                    status: isApplied ? "Applied" : "Pending",
-                                    archived: false,
-                                    workbookRef: { sheet: sheetName, rowIdx: idx }
-                                    });
-                                }
+                                    // NEW LOGIC: Check for "x" marker or direct amount
+                                    let rawAmt = 0;
+                                    const rowKeys = Object.keys(row);
+                                    const exactKey = rowKeys.find(k => k.trim().toLowerCase() === siteName.toLowerCase() || k.trim().toLowerCase() === siteKey.toLowerCase());
+                                    
+                                    if (exactKey) {
+                                        const val = String(row[exactKey]).trim().toLowerCase();
+                                        if (val === 'x') {
+                                            const promoKey = rowKeys.find(k => k.toLowerCase().includes('promo credits'));
+                                            rawAmt = row[promoKey] || 0;
+                                        } else {
+                                            rawAmt = row[exactKey];
+                                        }
+                                    }
+
+                                    const amt = parseFloat(String(rawAmt || 0).replace(/[^0-9.-]+/g,"")) || 0;
+
+                                    if (amt > 0) {
+                                        const approvedKey = rowKeys.find(k => k.toLowerCase().includes('approved') || k.toLowerCase().includes('applied') || k.toLowerCase().includes('collected'));
+                                        const approvedAmt = parseFloat(String(row[approvedKey] || 0).replace(/[^0-9.-]+/g,"")) || 0;
+                                        const dateKey = rowKeys.find(k => k.toLowerCase().includes('date') && (k.toLowerCase().includes('applied') || k.toLowerCase().includes('received')));
+                                        const isApplied = (approvedAmt > 0) || (!!row[dateKey] && row[dateKey] !== 'N/A');
+                                
+                                        allCredits.push({
+                                            id: `${sheetName}-${idx}-${siteKey}`, 
+                                            site: siteName,
+                                            trackingMonth: monthName,
+                                            vendor: vendor,
+                                            amount: amt,
+                                            creditType: row["Promo Credits"] || 'Promo',
+                                            dateRequested: row["Date Requested"] || '',
+                                            dateReceived: row[dateKey] || '',
+                                            status: isApplied ? "Applied" : "Pending",
+                                            archived: false,
+                                            workbookRef: { sheet: sheetName, rowIdx: idx }
+                                        });
+                                    }
+                                });
                             });
-                        });
+                        }
+
+                        // NEW: Process "Monthly Vendor Variance Report"
+                        if (sheetName === "Monthly Vendor Variance Report") {
+                            const rows = masterWorkbook.value.data[sheetName] || [];
+                            rows.forEach((row, idx) => {
+                                const vendor = row["Brand"];
+                                if (!vendor || vendor.toLowerCase().includes('total')) return;
+
+                                calendarMonths.forEach(m => {
+                                    const genKey = `${m} Generated`;
+                                    const colKey = `${m} Collected`;
+                                    
+                                    const genAmt = parseFloat(String(row[genKey] || 0).replace(/[^0-9.-]+/g,"")) || 0;
+                                    const colAmt = parseFloat(String(row[colKey] || 0).replace(/[^0-9.-]+/g,"")) || 0;
+
+                                    if (genAmt > 0) {
+                                        // We only add this if it's NOT already covered by the site-specific logs
+                                        // But for reporting, we can use this to fill gaps
+                                        allCredits.push({
+                                            id: `variance-${idx}-${m}`,
+                                            site: "Corporate (Variance)",
+                                            trackingMonth: m,
+                                            vendor: vendor,
+                                            amount: genAmt,
+                                            creditType: "Variance Record",
+                                            status: (colAmt >= genAmt) ? "Applied" : "Pending",
+                                            archived: false,
+                                            isVarianceOnly: true
+                                        });
+                                    }
+                                });
+                            });
+                        }
                     });
                     
                     // Also include any manual credits from Firestore that aren't synced to workbook
@@ -448,7 +484,7 @@ createApp({
                                                             const vendor = row["Brand"] || row[0];
                                                             if (!vendor || vendor === "Brand" || vendor.toLowerCase().includes('total')) return;
 
-                                                            // DEFINE SITE KEY BASED ON DROPDOWN (Fixing the undefined error)
+                                                                                                                        // DEFINE SITE KEY BASED ON DROPDOWN
                                                             const siteKey = targetSite === "Redding" ? "Redding" : "Red-Bluff";
 
                                                             let rawAmt = 0;
@@ -456,7 +492,13 @@ createApp({
                                                             const exactKey = rowKeys.find(k => k.trim().toLowerCase() === targetSite.toLowerCase() || k.trim().toLowerCase() === siteKey.toLowerCase());
                                 
                                                             if (exactKey) {
-                                                                rawAmt = row[exactKey];
+                                                                const val = String(row[exactKey]).trim().toLowerCase();
+                                                                if (val === 'x') {
+                                                                    const promoKey = rowKeys.find(k => k.toLowerCase().includes('promo credits'));
+                                                                    rawAmt = row[promoKey] || 0;
+                                                                } else {
+                                                                    rawAmt = row[exactKey];
+                                                                }
                                                             } else if (siteKey === "Redding" && row[1] !== undefined) {
                                                                 rawAmt = row[1];
                                                             } else if (siteKey === "Red-Bluff" && row[2] !== undefined) {
@@ -1060,14 +1102,23 @@ createApp({
                             // Column mapping based on Workbook V9 Master Schema with Fuzzy Match
                             const rowKeys = Object.keys(row);
                             
-                            const redKey = rowKeys.find(k => k.trim().toLowerCase() === 'redding');
+                                                        const redKey = rowKeys.find(k => k.trim().toLowerCase() === 'redding');
                             const bluffKey = rowKeys.find(k => k.trim().toLowerCase() === 'red-bluff' || k.trim().toLowerCase() === 'red bluff');
                             
-                            let rawRedding = redKey ? row[redKey] : row[1];
-                            let rawRedBluff = bluffKey ? row[bluffKey] : row[2];
+                            const promoKey = rowKeys.find(k => k.toLowerCase().includes('promo credits'));
+                            const commonPromoAmt = promoKey ? parseFloat(String(row[promoKey] || 0).replace(/[^0-9.-]+/g,"")) : 0;
 
-                            const amtRedding = parseFloat(String(rawRedding || 0).replace(/[^0-9.-]+/g,"")) || 0;
-                            const amtRedBluff = parseFloat(String(rawRedBluff || 0).replace(/[^0-9.-]+/g,"")) || 0;
+                            let amtRedding = 0;
+                            if (redKey) {
+                                const val = String(row[redKey]).trim().toLowerCase();
+                                amtRedding = (val === 'x') ? commonPromoAmt : (parseFloat(val.replace(/[^0-9.-]+/g,"")) || 0);
+                            }
+                            
+                            let amtRedBluff = 0;
+                            if (bluffKey) {
+                                const val = String(row[bluffKey]).trim().toLowerCase();
+                                amtRedBluff = (val === 'x') ? commonPromoAmt : (parseFloat(val.replace(/[^0-9.-]+/g,"")) || 0);
+                            }
                             
                             // Only add if there is actual activity for this site/brand combo
                             if (amtRedding > 0 || amtRedBluff > 0) {
