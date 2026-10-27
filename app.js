@@ -1029,14 +1029,14 @@ createApp({
 
 
                 const workspaceTabs = [
-                    { name: 'Dashboard', icon: 'bar-chart-2', group: 'Workbook' },
+                                        { name: 'Dashboard', icon: 'bar-chart-2', group: 'Workbook' },
                     { name: 'WorkbookViewer', icon: 'file-spreadsheet', label: 'Complete Workbook', group: 'Workbook' },
                     { name: 'Sales', icon: 'inbox', label: 'Discovery Intake', group: 'Workbook' },
                     { name: 'Recovery', icon: 'dollar-sign', group: 'Workbook' },
                     { name: 'Ledger', icon: 'book-open', group: 'Workbook' },
-                                        { name: 'Reports', icon: 'mail-open', label: 'Monthly Reports', group: 'Workbook' },
-                    { name: 'BrandAudit', icon: 'clipboard-check', label: 'Brand Audit', group: 'Workbook' },
                     { name: 'Validation', icon: 'check-square', label: 'Workbook Validation', group: 'Workbook' },
+                    { name: 'BrandAudit', icon: 'clipboard-check', label: 'Brand Audit', group: 'Workbook' },
+                    { name: 'Reports', icon: 'mail-open', label: 'Monthly Reports', group: 'Workbook' },
                     { name: 'Tracker', icon: 'clock', label: 'Legacy Tracker', group: 'Workbook' },
                     { name: 'VendorMapping', icon: 'network', group: 'Identity' },
                     { name: 'Brands', icon: 'book-user', label: 'Brand Directory', group: 'Identity' },
