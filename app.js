@@ -1099,8 +1099,22 @@ createApp({
             "Monthly Vendor Variance Report": ["Brand", "January Generated", "January Collected", "January Left on Table", "February Generated", "February Collected", "February Left on Table", "March Generated", "March Collected", "March Left on Table", "April Generated", "April Collected", "April Left on Table", "May Generated", "May Collected", "May Left on Table", "June Generated", "June Collected", "June Left on Table", "July Generated", "July Collected", "July Left on Table", "August Generated", "August Collected", "August Left on Table", "September Generated", "September Collected", "September Left on Table", "October Generated", "October Collected", "October Left on Table", "November Generated", "November Collected", "November Left on Table", "December Generated", "December Collected", "December Left on Table", "YTD Generated", "YTD Collected", "YTD Left on Table"],
             "Sheet1": ["Vendor", "Distributor", "Credit Type", "Dates", "Credit amount $$$"]
         };
-        const activeWorkbookSheet = ref(Object.keys(workbookSchema)[0]);
+                const activeWorkbookSheet = ref(Object.keys(workbookSchema)[0]);
         const isWorkbookLoaded = ref(false);
+
+        const activeWorkbookHeaders = computed(() => {
+            const rows = masterWorkbook.value?.data?.[activeWorkbookSheet.value] || [];
+            if (rows.length === 0) return workbookSchema[activeWorkbookSheet.value] || [];
+            
+            // Get all keys from all rows to ensure we don't miss anything
+            const keys = new Set();
+            rows.slice(0, 10).forEach(row => {
+                Object.keys(row).forEach(k => {
+                    if (k !== '__rowNum__' && !k.startsWith('EMPTY')) keys.add(k);
+                });
+            });
+            return Array.from(keys);
+        });
 
         const loadWorkbookFromStorage = async () => {
             try {
@@ -2219,9 +2233,9 @@ const handleSageCsvUpload = async (e) => {
             detectMonthInString, drawCharts, openDimeHelper, exportVendorsAndBrandsCSV,
             masterLedgerData, selectedLedgerVendor, refreshLedger, openLegacyVerification, ledgerTotals,
             masterWorkbook, showWorkspaceMenu, showAdminMenu, workspaceTabs, selectWorkspace, activeWorkspaceInfo,
-            scrollMonths, scrollWorkbookTabs, workbookSchema, activeWorkbookSheet, isWorkbookLoaded,
-                        auditRange, brandAuditData, draftAuditEmail, sageAuditData,
-                        showWorkbookSyncModal, workbookPasteData, openWorkbookSyncModal, processWorkbookSync,
+                        scrollMonths, scrollWorkbookTabs, workbookSchema, activeWorkbookSheet, isWorkbookLoaded,
+            auditRange, brandAuditData, draftAuditEmail, sageAuditData, activeWorkbookHeaders,
+            showWorkbookSyncModal, workbookPasteData, openWorkbookSyncModal, processWorkbookSync,
                         repopulateFromMasterWorkbook, updateWorkbookFromSales, loadWorkbookFromStorage
         };
 

@@ -351,33 +351,33 @@
                     </button>
                 </div>
 
-                <!-- Sheet Data Grid (With Internal Scrolling) -->
+                                <!-- Sheet Data Grid (With Internal Scrolling) -->
                 <div class="flex-1 overflow-auto bg-gray-200 p-1">
                     <div class="bg-white shadow-inner rounded border border-gray-300 min-w-full inline-block">
                         <table class="excel-table min-w-full">
-                        <thead>
-                            <tr class="bg-gray-50">
-                                <th v-for="header in workbookSchema[activeWorkbookSheet]" :key="header" class="text-left py-3 px-4 font-bold text-gray-700 uppercase tracking-wider text-[11px]">
-                                    {{ header }}
-                                </th>
-                            </tr>
-                        </thead>
-                                                <tbody>
-                            <!-- REAL DATA FROM WORKBOOK -->
-                            <tr v-if="!masterWorkbook || !masterWorkbook.data || !masterWorkbook.data[activeWorkbookSheet]" v-for="i in 5" :key="'empty-'+i">
-                                <td v-for="header in workbookSchema[activeWorkbookSheet]" :key="header" class="py-3 px-4 text-gray-300 italic text-xs">
-                                    No data in sheet...
-                                </td>
-                            </tr>
-                            <tr v-for="(row, rIdx) in (masterWorkbook?.data?.[activeWorkbookSheet] || [])" :key="rIdx" class="border-b border-gray-100 hover:bg-gray-50 text-xs">
-                                <td v-for="header in workbookSchema[activeWorkbookSheet]" :key="header" class="py-2 px-4 text-gray-700 whitespace-nowrap">
-                                    {{ row[header] || row[workbookSchema[activeWorkbookSheet].indexOf(header)] || '-' }}
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
+                            <thead>
+                                <tr class="bg-gray-50 sticky top-0 z-10 shadow-sm">
+                                    <th v-for="header in activeWorkbookHeaders" :key="header" class="text-left py-3 px-4 font-bold text-gray-700 uppercase tracking-wider text-[11px] border-b border-gray-200 bg-gray-50">
+                                        {{ header }}
+                                    </th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <!-- REAL DATA FROM WORKBOOK -->
+                                <tr v-if="!masterWorkbook || !masterWorkbook.data || !masterWorkbook.data[activeWorkbookSheet]" v-for="i in 5" :key="'empty-'+i">
+                                    <td v-for="header in activeWorkbookHeaders" :key="header" class="py-3 px-4 text-gray-300 italic text-xs">
+                                        No data in sheet...
+                                    </td>
+                                </tr>
+                                <tr v-for="(row, rIdx) in (masterWorkbook?.data?.[activeWorkbookSheet] || [])" :key="rIdx" class="border-b border-gray-100 hover:bg-gray-50 text-xs">
+                                    <td v-for="header in activeWorkbookHeaders" :key="header" class="py-2 px-4 text-gray-700 whitespace-nowrap">
+                                        {{ row[header] || '-' }}
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
-            </div>
 
             <div v-else class="flex-1 flex items-center justify-center bg-white rounded-xl border border-gray-300 shadow-sm">
                 <div class="text-center">
