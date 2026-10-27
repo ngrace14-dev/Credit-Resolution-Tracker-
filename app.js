@@ -1587,6 +1587,14 @@ createApp({
             }
         };
 
+                const scrollMonths = (direction) => {
+            const container = document.getElementById('monthScrollContainer');
+            if (container) {
+                const scrollAmount = direction === 'left' ? -200 : 200;
+                container.scrollBy({ left: scrollAmount, behavior: 'smooth' });
+            }
+        };
+
         return {
             isManagerUnlocked, isSuperAdmin, loggedInUser, emailInput, passwordInput, authError, activeSite, activeTab,
             treesSalesData, masterBrands, selectedBrands, allBrandsSelected, toggleAllBrands,
@@ -1606,8 +1614,9 @@ createApp({
             regenerateMonthReports, handleTreesCsvUpload, pushToMainTracker, resetBrandImport,
             processBrandRawPaste, processBrandImport, systemLogs, refreshIcons, clearAllSalesData,
                         detectMonthInString, drawCharts, openDimeHelper, exportVendorsAndBrandsCSV,
-                        masterLedgerData, selectedLedgerVendor, refreshLedger, openLegacyVerification, ledgerTotals,
-            masterWorkbook, showWorkspaceMenu, showAdminMenu, workspaceTabs, selectWorkspace, activeWorkspaceInfo
+            masterLedgerData, selectedLedgerVendor, refreshLedger, openLegacyVerification, ledgerTotals,
+            masterWorkbook, showWorkspaceMenu, showAdminMenu, workspaceTabs, selectWorkspace, activeWorkspaceInfo,
+            scrollMonths
 
         };
     }
