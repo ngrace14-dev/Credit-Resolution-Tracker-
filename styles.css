@@ -2,10 +2,23 @@
 /* Mobile viewport height fix */
 body { font-family: 'Calibri', sans-serif; background-color: #f3f4f6; margin: 0; height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
 
-.excel-table { border-collapse: separate; border-spacing: 0; font-size: 13px; background-color: white; width: 100%; text-align: left; }
-.excel-table th, .excel-table td { border-bottom: 1px solid #d1d5db; border-right: 1px solid #d1d5db; padding: 8px 12px; white-space: nowrap; }
-.excel-table th { font-weight: 700; background-color: #f8f9fa; color: #374151; border-top: 1px solid #d1d5db; }
-.excel-table th:first-child, .excel-table td:first-child { border-left: 1px solid #d1d5db; }
+.excel-table { border-collapse: separate; border-spacing: 0; font-size: 12px; background-color: white; min-width: 100%; text-align: left; }
+.excel-table th, .excel-table td { border-bottom: 1px solid #e5e7eb; border-right: 1px solid #e5e7eb; padding: 10px 14px; white-space: nowrap; }
+.excel-table th { 
+    font-weight: 800; 
+    background-color: #f9fafb; 
+    color: #374151; 
+    border-top: 1px solid #e5e7eb; 
+    text-transform: uppercase; 
+    letter-spacing: 0.1em; 
+    font-size: 10px;
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    box-shadow: inset 0 -1px 0 #e5e7eb;
+}
+.excel-table th:first-child, .excel-table td:first-child { border-left: 1px solid #e5e7eb; }
+
 [v-cloak] { display: none; }
 
 ::-webkit-scrollbar { height: 8px; width: 8px; }
