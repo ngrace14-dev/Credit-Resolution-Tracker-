@@ -50,10 +50,7 @@
                         <i data-lucide="settings" class="w-4 h-4"></i> System <i data-lucide="chevron-down" class="w-3 h-3"></i>
                     </button>
                     <div v-if="showAdminMenu" class="absolute right-0 mt-2 w-48 bg-gray-900 border border-gray-800 rounded-xl shadow-2xl z-50 py-2 overflow-hidden animate-in fade-in zoom-in duration-200" @click.outside="showAdminMenu = false">
-                        <button @click="openImportModal(); showAdminMenu = false" class="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-emerald-600 hover:text-white transition-colors flex items-center gap-2">
-                            <i data-lucide="grid" class="w-4 h-4 text-amber-500"></i> Paste Excel
-                        </button>
-                        <button v-if="isSuperAdmin" @click="activeTab = 'Logs'; showAdminMenu = false" class="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-emerald-600 hover:text-white transition-colors flex items-center gap-2">
+                                                <button v-if="isSuperAdmin" @click="activeTab = 'Logs'; showAdminMenu = false" class="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-emerald-600 hover:text-white transition-colors flex items-center gap-2">
                             <i data-lucide="activity" class="w-4 h-4 text-emerald-500"></i> View Logs
                         </button>
                         <div class="border-t border-gray-800 my-1"></div>
@@ -63,12 +60,6 @@
                     </div>
                 </div>
 
-                <button @click="openPromoModal()" class="bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 rounded flex items-center gap-1.5 text-sm font-bold shadow transition-colors"><i data-lucide="plus" class="w-4 h-4"></i> New Promo</button>
-            </div>
-            
-            <div class="md:hidden flex w-full gap-2" v-if="isManagerUnlocked">
-                <button @click="openImportModal" class="flex-1 bg-gray-800 border border-gray-700 text-amber-500 px-3 py-2 rounded flex justify-center items-center gap-1.5 text-sm font-bold shadow"><i data-lucide="grid" class="w-4 h-4"></i> Excel</button>
-                <button @click="openPromoModal()" class="flex-1 bg-emerald-600 text-white px-3 py-2 rounded flex justify-center items-center gap-1.5 text-sm font-bold shadow"><i data-lucide="plus" class="w-4 h-4"></i> Promo</button>
             </div>
         </header>
 
@@ -412,7 +403,7 @@
                 </div>
             </div>
 
-            <!-- QUICK FILTERS & ACTIONS -->
+                        <!-- QUICK FILTERS & ACTIONS -->
             <div class="flex flex-col sm:flex-row justify-between items-center mb-4 shrink-0 gap-3">
                 <div class="flex gap-2">
                     <button class="bg-gray-900 text-emerald-500 px-4 py-1.5 rounded-lg text-sm font-bold shadow">All</button>
@@ -421,9 +412,6 @@
                     <button class="bg-white border border-gray-300 text-gray-600 hover:bg-gray-50 px-4 py-1.5 rounded-lg text-sm font-medium shadow-sm transition-colors">Memos</button>
                     <button class="bg-white border border-gray-300 text-red-600 hover:bg-gray-50 px-4 py-1.5 rounded-lg text-sm font-medium shadow-sm transition-colors">Unmatched</button>
                 </div>
-                <button class="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2 rounded-lg font-bold shadow-md transition-colors flex items-center justify-center gap-2 text-sm">
-                    <i data-lucide="plus" class="w-4 h-4"></i> Log Recovery
-                </button>
             </div>
 
             <!-- RECOVERY GRID -->
@@ -438,12 +426,11 @@
                                 <th>Recovery Type</th>
                                 <th class="text-right">Amount</th>
                                 <th class="text-center">Status</th>
-                                <th class="text-center">Actions</th>
                             </tr>
                         </thead>
                                                 <tbody>
                             <tr v-if="masterLedgerData.length === 0">
-                                <td colspan="7" class="text-center py-10 text-gray-500 font-medium bg-gray-50">No recovery records found.</td>
+                                <td colspan="6" class="text-center py-10 text-gray-500 font-medium bg-gray-50">No recovery records found.</td>
                             </tr>
                             <tr v-for="recovery in masterLedgerData.filter(i => i.recovered > 0)" :key="'rec-'+recovery.vendor" class="hover:bg-gray-50">
                                 <td>{{ recovery.recoveryEvents[0]?.date || '-' }}</td>
@@ -452,9 +439,6 @@
                                 <td>-</td>
                                 <td class="text-right font-bold text-emerald-600">{{ formatCurrency(recovery.recovered) }}</td>
                                 <td class="text-center"><span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-emerald-100 text-emerald-800">Matched</span></td>
-                                <td class="text-center">
-                                    <button class="text-gray-400 hover:text-amber-500 transition-colors"><i data-lucide="edit-2" class="w-4 h-4"></i></button>
-                                </td>
                             </tr>
                         </tbody>
                     </table>
@@ -615,19 +599,9 @@
                 </div>
             </div>
 
-            <!-- ACTION BAR -->
+                        <!-- ACTION BAR -->
             <div class="flex justify-between items-end mb-4 shrink-0">
-                <h3 class="text-lg font-bold text-gray-900">Legacy Tracking Records</h3>
-                <div class="flex gap-2">
-                    <!-- EXPORT & CLEAR BUTTON -->
-                    <button @click="archiveAndExportAnnualReport" class="bg-gray-900 hover:bg-gray-800 text-amber-500 px-4 py-2 rounded-lg flex items-center gap-2 text-sm font-bold shadow-md transition-colors">
-                        <i data-lucide="archive" class="w-4 h-4"></i> Export & Clear
-                    </button>
-                    <!-- Keep email generic draft as fallback just in case -->
-                    <button @click="showReportModal = true; refreshIcons()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm font-bold shadow-md transition-colors">
-                        <i data-lucide="mail-plus" class="w-4 h-4"></i> Draft Email Reports
-                    </button>
-                </div>
+                <h3 class="text-lg font-bold text-gray-900">Digital Record of Workbook Entries</h3>
             </div>
 
             <div class="bg-white rounded-xl border border-gray-300 shadow-sm flex-1 flex flex-col min-h-0 overflow-hidden">
@@ -644,15 +618,12 @@
                                 <th>Date requested</th>
                                 <th>Date received</th>
                                 <th>Invoice / Credit Memo</th>
-                                <th>Proof</th>
                                 <th class="text-center">Status</th>
-                                <th class="text-center">Email Workflow</th>
-                                <th class="text-center sticky-head">Actions</th>
                             </tr>
                         </thead>
                         <tbody>
                             <tr v-if="filteredCredits.length === 0">
-                                <td :colspan="activeMonth === 'All' ? 13 : 12" class="text-center py-10 text-gray-500 font-medium bg-gray-50">
+                                <td :colspan="activeMonth === 'All' ? 10 : 9" class="text-center py-10 text-gray-500 font-medium bg-gray-50">
                                     <span v-if="searchQuery">No results found for "{{ searchQuery }}".</span>
                                     <span v-else>No promo credits found for {{ activeSite }} in {{ activeMonth }}.</span>
                                 </td>
@@ -675,12 +646,6 @@
                                 <td>{{ credit.dateReceived }}</td>
                                 <td class="font-mono text-xs text-gray-600">{{ credit.invoice }}</td>
                                 <td class="text-center">
-                                    <button v-if="credit.attachmentName" class="text-emerald-600 hover:text-emerald-800 bg-emerald-50 p-1 rounded border border-emerald-200" title="View Attachment">
-                                        <i data-lucide="paperclip" class="w-4 h-4"></i>
-                                    </button>
-                                    <span v-else class="text-gray-300">-</span>
-                                </td>
-                                <td class="text-center">
                                     <span class="px-2.5 py-1 rounded shadow-sm text-[11px] font-bold uppercase tracking-wider" 
                                           :class="{
                                               'bg-emerald-100 text-emerald-800 border border-emerald-200': credit.status === 'Applied',
@@ -690,20 +655,6 @@
                                           }">
                                         {{ credit.status }}
                                     </span>
-                                </td>
-                                <td class="text-center">
-                                    <button v-if="credit.status === 'Pending'" @click="markAsSent(credit)" class="text-blue-600 hover:bg-blue-50 px-2 py-1 rounded border border-blue-200 text-[10px] font-bold uppercase tracking-wider transition-colors shadow-sm whitespace-nowrap">
-                                        Mark Sent
-                                    </button>
-                                    <button v-else-if="credit.status === 'Report Sent'" @click="openResolutionModal(credit)" class="text-emerald-600 hover:bg-emerald-50 px-2 py-1 rounded border border-emerald-200 text-[10px] font-bold uppercase tracking-wider transition-colors shadow-sm whitespace-nowrap">
-                                        Resolve
-                                    </button>
-                                    <span v-else class="text-gray-300">-</span>
-                                </td>
-                                <td class="text-center sticky-col">
-                                    <button @click="editCredit(credit)" class="text-gray-900 hover:text-amber-500 hover:bg-gray-900 px-3 py-1.5 rounded shadow-sm border border-gray-300 text-xs font-bold transition-all bg-white flex items-center gap-1 mx-auto">
-                                        <i data-lucide="pencil" class="w-3 h-3"></i> Edit
-                                    </button>
                                 </td>
                             </tr>
                         </tbody>

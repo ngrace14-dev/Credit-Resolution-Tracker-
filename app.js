@@ -863,21 +863,8 @@ createApp({
             document.body.removeChild(link);
             setTimeout(() => URL.revokeObjectURL(url), 150);
 
-            try {
-                const batch = writeBatch(db);
-                creditsToArchive.forEach(c => {
-                    const docRef = doc(db, "promoCredits", c.id);
-                    batch.update(docRef, { archived: true, archivedAt: Date.now() });
-                });
-                await batch.commit();
-                
-                logSystemAction("ARCHIVE", `Archived & Exported ${creditsToArchive.length} records totaling ${formatCurrency(csvTotal)}`);
-                
-                alert(`Success! Master spreadsheet downloaded and ${creditsToArchive.length} records safely archived.`);
-            } catch (error) {
-                console.error("Archive Error:", error);
-                alert("Failed to archive records in the cloud.");
-            }
+                        // Archive logic disabled as it is now managed via Workbook V9
+            alert("Export complete. Archiving is now managed directly through the Master Workbook process.");
         };
 
         const exportVendorsAndBrandsCSV = () => {
@@ -1094,7 +1081,7 @@ createApp({
                     { name: 'Validation', icon: 'check-square', label: 'Workbook Validation', group: 'Workbook' },
                     { name: 'BrandAudit', icon: 'clipboard-check', label: 'Brand Audit', group: 'Workbook' },
                     { name: 'Reports', icon: 'mail-open', label: 'Monthly Reports', group: 'Workbook' },
-                    { name: 'Tracker', icon: 'clock', label: 'Legacy Tracker', group: 'Workbook' },
+                    { name: 'Tracker', icon: 'list', label: 'Master Credit List', group: 'Workbook' },
                     { name: 'VendorMapping', icon: 'network', group: 'Identity' },
                     { name: 'Brands', icon: 'book-user', label: 'Brand Directory', group: 'Identity' },
                     { name: 'RepTracker', icon: 'contact', group: 'Identity' },
