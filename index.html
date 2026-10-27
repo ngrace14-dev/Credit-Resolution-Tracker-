@@ -1005,12 +1005,12 @@
                                 <div class="overflow-auto flex-1">
                     <table class="excel-table min-w-max">
                         <thead class="sticky top-0 z-10 shadow-sm bg-gray-50">
-                            <tr>
+                                                        <tr>
                                 <th>Brand / Vendor</th>
                                 <th>Contact Rep</th>
-                                <th class="text-right">Generated</th>
-                                <th class="text-right">Recovered</th>
-                                <th class="text-right">Outstanding</th>
+                                <th class="text-right">Total Generated</th>
+                                <th class="text-right">Total Collected</th>
+                                <th class="text-right">Net Outstanding</th>
                                 <th class="text-center">Workflow Items</th>
                                 <th class="text-center">Actions</th>
                             </tr>
@@ -1023,9 +1023,9 @@
                                     <div class="text-[10px] text-emerald-600 font-mono">{{ brand.email || 'No Email' }}</div>
                                 </td>
                                 <td class="text-right font-medium">{{ formatCurrency(brand.generated) }}</td>
-                                <td class="text-right font-medium text-emerald-600">{{ formatCurrency(brand.recovered) }}</td>
-                                <td class="text-right font-extrabold" :class="brand.generated - brand.recovered > 0 ? 'text-red-600' : 'text-gray-400'">
-                                    {{ formatCurrency(brand.generated - brand.recovered) }}
+                                <td class="text-right font-medium text-emerald-600">{{ formatCurrency(brand.collected) }}</td>
+                                <td class="text-right font-extrabold" :class="brand.generated - brand.collected > 0 ? 'text-red-600' : 'text-gray-400'">
+                                    {{ formatCurrency(brand.generated - brand.collected) }}
                                 </td>
                                 <td class="text-center">
                                     <span class="bg-gray-100 text-gray-600 px-2 py-0.5 rounded text-[10px] font-bold uppercase">{{ brand.credits.length }} Credits</span>

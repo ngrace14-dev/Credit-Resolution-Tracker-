@@ -932,7 +932,7 @@ createApp({
                 const showAdminMenu = ref(false);
 
 
-                const brandAuditData = computed(() => {
+                                const brandAuditData = computed(() => {
                     if (!masterWorkbook.value || !masterWorkbook.value.data) return [];
             
                     const start = auditRange.value.start ? new Date(auditRange.value.start) : null;
@@ -940,26 +940,22 @@ createApp({
             
                     const brandMap = {};
             
-                    // Define columns based on Workbook V9 Schema
-                    // Headers: ["Brand", "Redding", "Red-Bluff", "Promo Credits ", "Date Requested", "Date Applied", "Credits Approved", "Credits Rejected", "Treez Total", "Month promo credits were generated"]
-            
-                    // Loop through all sheets that look like a month (e.g., "January 2026")
+                    // Loop through all monthly sheets
                     Object.keys(masterWorkbook.value.data).forEach(sheetName => {
-                        if (!sheetName.includes('2026')) return; // Filter for monthly sheets
+                        if (!sheetName.includes('2026')) return; 
                 
                         const sheetMonth = sheetName.split(' ')[0];
                         const sheetYear = sheetName.split(' ')[1];
                         const sheetDate = new Date(`${sheetMonth} 1, ${sheetYear}`);
                 
-                        // Only process sheets within the date range (approximate by month)
                         if (start && sheetDate < new Date(start.getFullYear(), start.getMonth(), 1)) return;
                         if (end && sheetDate > new Date(end.getFullYear(), end.getMonth(), 1)) return;
 
                         const rows = masterWorkbook.value.data[sheetName] || [];
                 
                         rows.forEach(row => {
-                            const vendor = row["Brand"] || row[0]; // Handle object or array formats
-                            if (!vendor || vendor === "Brand") return; // Skip header/empty
+                            const vendor = row["Brand"] || row[0]; 
+                            if (!vendor || vendor === "Brand" || vendor.toLowerCase().includes('total')) return; 
                     
                             if (!brandMap[vendor]) {
                                 const brandInfo = masterBrands.value.find(b => (b.vendor || '').toLowerCase() === vendor.toLowerCase()) || {};
@@ -968,32 +964,31 @@ createApp({
                                     email: brandInfo.email || '',
                                     rep: brandInfo.rep || '',
                                     generated: 0,
-                                    recovered: 0,
-                                    rejected: 0,
+                                    collected: 0,
+                                    treezTotal: 0,
                                     credits: []
                                 };
                             }
                     
-                            // Column mapping from Workbook V9
-                            const amtGenerated = parseFloat(String(row["Promo Credits "] || row[3]).replace(/[^0-9.-]+/g,"")) || 0;
-                            const amtRecovered = parseFloat(String(row["Credits Approved"] || row[6]).replace(/[^0-9.-]+/g,"")) || 0;
-                            const amtRejected = parseFloat(String(row["Credits Rejected"] || row[7]).replace(/[^0-9.-]+/g,"")) || 0;
+                            // Column mapping based on Workbook V9 Master Schema
+                            const amtRedding = parseFloat(String(row["Redding"] || 0).replace(/[^0-9.-]+/g,"")) || 0;
+                            const amtRedBluff = parseFloat(String(row["Red-Bluff"] || 0).replace(/[^0-9.-]+/g,"")) || 0;
+                            const amtCollected = parseFloat(String(row["Credits Approved"] || 0).replace(/[^0-9.-]+/g,"")) || 0;
+                            const amtTreezRaw = parseFloat(String(row["Treez Total"] || 0).replace(/[^0-9.-]+/g,"")) || 0;
                     
-                            brandMap[vendor].generated += amtGenerated;
-                            brandMap[vendor].recovered += amtRecovered;
-                            brandMap[vendor].rejected += amtRejected;
+                            brandMap[vendor].generated += (amtRedding + amtRedBluff);
+                            brandMap[vendor].collected += amtCollected;
+                            brandMap[vendor].treezTotal += amtTreezRaw;
                     
                             brandMap[vendor].credits.push({
                                 month: sheetName,
-                                type: row["Promo Credits "] ? "Promo" : "N/A",
-                                dates: row["Date Requested"] || row[4] || "N/A",
-                                amount: amtGenerated,
-                                status: amtRecovered > 0 ? "Approved" : (amtRejected > 0 ? "Rejected" : "Pending")
+                                amount: (amtRedding + amtRedBluff),
+                                status: amtCollected > 0 ? "Collected" : "Pending"
                             });
                         });
                     });
             
-                    return Object.values(brandMap).sort((a, b) => (b.generated - b.recovered) - (a.generated - a.recovered));
+                    return Object.values(brandMap).sort((a, b) => (b.generated - b.collected) - (a.generated - a.collected));
                 });
 
 
