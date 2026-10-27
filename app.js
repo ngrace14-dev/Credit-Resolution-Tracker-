@@ -709,7 +709,41 @@ createApp({
             logSystemAction("EXPORT", `Downloaded Detailed Report for ${reportName}`);
         };
 
+                const draftAuditEmail = (brand) => {
+            if (!brand.email) {
+                alert(`No email mapped for ${brand.vendor}. Please add one in the Brand Directory first.`);
+                return;
+            }
+
+            const cleanEmails = String(brand.email || '').split(/[,;\s]+/).map(e => e.trim()).filter(Boolean).join(',');
+            const subject = `YTD Credit Audit Statement - ${brand.vendor}`;
+            
+            let body = `Hello ${brand.vendor},\n\n`;
+            body += `This is a year-to-date audit statement of the promotions run for your brand. This summary helps ensure our records for generated and collected credits are in alignment.\n\n`;
+            body += `Summary for ${brand.vendor}:\n`;
+            body += `--------------------------------\n`;
+            body += `Total Generated (POS): ${formatCurrency(brand.generated)}\n`;
+            body += `Total Collected (GL):  ${formatCurrency(brand.collected)}\n`;
+            body += `Net Outstanding:       ${formatCurrency(brand.generated - brand.collected)}\n\n`;
+            
+            if (brand.credits && brand.credits.length > 0) {
+                body += `Recent Activity:\n`;
+                brand.credits.slice(0, 10).forEach(c => {
+                    body += `- ${c.month}: ${formatCurrency(c.amount)} (${c.status})\n`;
+                });
+                if (brand.credits.length > 10) body += `- ...and ${brand.credits.length - 10} more entries.\n`;
+                body += `\n`;
+            }
+
+            body += `Please review this summary and let us know if your records match or if you need additional itemized data for any specific period.\n\n`;
+            body += `Best regards,\n\nAccounting Team\n`;
+
+            window.location.href = `mailto:${cleanEmails}?cc=accounting@rredco.com&subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+            logSystemAction("EXPORT", `Generated Audit Statement for ${brand.vendor}`);
+        };
+
         const draftEmail = (brand) => {
+
             if (!brand.email) {
                 alert(`No email mapped for ${brand.vendor}. Please add one in the Brand Directory first.`);
                 return;
@@ -1113,8 +1147,45 @@ createApp({
 
         let unsubscribeBrands = null;
 
-                const showWorkspaceMenu = ref(false);
-                const showAdminMenu = ref(false);
+                        const showWorkspaceMenu = ref(false);
+        const showAdminMenu = ref(false);
+
+        const workspaceTabs = [
+            { name: 'Ledger', label: 'Master Ledger', icon: 'layout-dashboard', group: 'Workbook' },
+            { name: 'Tracker', label: 'Digital PCRP', icon: 'list-todo', group: 'Workbook' },
+            { name: 'Sales', label: 'Discovery Intake', icon: 'zap', group: 'Workbook' },
+            { name: 'Recovery', label: 'Recovery Log', icon: 'check-circle', group: 'Workbook' },
+            { name: 'Reports', label: 'Brand Reports', icon: 'file-text', group: 'Workbook' },
+            { name: 'WorkbookViewer', label: 'Excel Viewer', icon: 'table', group: 'Workbook' },
+            { name: 'Validation', label: 'Workbook Parity', icon: 'shield-check', group: 'Workbook' },
+            { name: 'BrandAudit', label: 'Brand Audit', icon: 'search', group: 'Workbook' },
+            { name: 'QuarterlyAudit', label: 'Quarterly Audit', icon: 'calendar-days', group: 'Workbook' },
+            { name: 'Brands', label: 'Brand Directory', icon: 'building', group: 'Identity' }
+        ];
+
+        const selectWorkspace = (tab) => {
+            activeTab.value = tab.name;
+            showWorkspaceMenu.value = false;
+            if (tab.name === 'Ledger') refreshLedger();
+            nextTick(() => refreshIcons());
+        };
+
+        const activeWorkspaceInfo = computed(() => {
+            return workspaceTabs.find(t => t.name === activeTab.value) || { name: 'Unknown', icon: 'help-circle' };
+        });
+
+        const workbookSchema = {
+            "August 2026": ["Brand", "Sundial (Redding)", "Red-Bluff", "Promo Credits", "Treez Total", "YTD Generated (POS)", "YTD Received (GL)", "Variance", "Notes"],
+            "September 2026": ["Brand", "Sundial (Redding)", "Red-Bluff", "Promo Credits", "Treez Total", "YTD Generated (POS)", "YTD Received (GL)", "Variance", "Notes"],
+            "October 2026": ["Brand", "Sundial (Redding)", "Red-Bluff", "Promo Credits", "Treez Total", "YTD Generated (POS)", "YTD Received (GL)", "Variance", "Notes"],
+            "November 2026": ["Brand", "Sundial (Redding)", "Red-Bluff", "Promo Credits", "Treez Total", "YTD Generated (POS)", "YTD Received (GL)", "Variance", "Notes"],
+            "December 2026": ["Brand", "Sundial (Redding)", "Red-Bluff", "Promo Credits", "Treez Total", "YTD Generated (POS)", "YTD Received (GL)", "Variance", "Notes"],
+            "Redding Store Audit": ["Brand", "YTD Generated (POS)", "YTD Received (GL)", "Outstanding"],
+            "Red Bluff Store Audit": ["Brand", "YTD Generated (POS)", "YTD Received (GL)", "Outstanding"],
+            "Monthly Vendor Variance Report": ["Brand", "January Generated", "January Collected", "February Generated", "February Collected"],
+            "GL Raw by Store": ["Posted dt.", "Store", "Memo/Description", "Credit", "Mapped Brand"]
+        };
+
 
 
                                                                 const brandAuditData = computed(() => {
