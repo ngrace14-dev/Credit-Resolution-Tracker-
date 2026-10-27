@@ -4,7 +4,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-app.js";
 import { getFirestore, collection, addDoc, doc, updateDoc, deleteDoc, writeBatch, onSnapshot, setDoc, query, where, orderBy, limit } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js";
 import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js";
-import { getStorage, ref as sRef, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-storage.js";
+import { getStorage, ref as sRef, uploadBytes, getDownloadURL, getBytes } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-storage.js";
 import { initializeAppCheck, ReCaptchaEnterpriseProvider } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-app-check.js";
 
 
@@ -1100,8 +1100,42 @@ createApp({
             "Sheet1": ["Vendor", "Distributor", "Credit Type", "Dates", "Credit amount $$$"]
         };
         const activeWorkbookSheet = ref(Object.keys(workbookSchema)[0]);
-        const isWorkbookLoaded = ref(false);
+                const isWorkbookLoaded = ref(false);
 
+        const loadWorkbookFromStorage = async () => {
+            try {
+                console.log("Fetching Workbook from Storage...");
+                const fileRef = sRef(storage, "RRedco Server/Promo Tracker/Master_Workbook_V9_Board_Report.xlsx");
+                const bytes = await getBytes(fileRef);
+                
+                const workbook = XLSX.read(bytes, { type: 'array' });
+                const workbookData = {};
+
+                workbook.SheetNames.forEach(sheetName => {
+                    const worksheet = workbook.Sheets[sheetName];
+                    workbookData[sheetName] = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
+                });
+
+                // Set local state
+                masterWorkbook.value = {
+                    data: workbookData,
+                    lastPulled: Date.now()
+                };
+                
+                isWorkbookLoaded.value = true;
+                console.log("Workbook successfully parsed from storage:", Object.keys(workbookData));
+                
+                // ALSO: Sync this to Firestore doc for the other app features
+                await setDoc(doc(db, "promo tracker", "Master_Workbook_V9_Board_Report"), {
+                    data: workbookData,
+                    updatedAt: Date.now()
+                });
+
+            } catch (err) {
+                console.error("Storage Workbook Error:", err);
+                alert("Failed to pull workbook from Storage: " + err.message);
+            }
+        };
 
 
         onMounted(() => {
