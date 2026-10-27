@@ -1051,7 +1051,7 @@ createApp({
                     { name: 'Sales', icon: 'inbox', label: 'Discovery Intake', group: 'Workbook' },
                     { name: 'Recovery', icon: 'dollar-sign', group: 'Workbook' },
                     { name: 'Ledger', icon: 'book-open', group: 'Workbook' },
-                    { name: 'Reports', icon: 'building', label: 'Store Rec', group: 'Workbook' },
+                                        { name: 'Reports', icon: 'building', label: 'Store Rec', group: 'Workbook' },
                     { name: 'BrandAudit', icon: 'clipboard-check', label: 'Brand Audit', group: 'Workbook' },
                     { name: 'Validation', icon: 'check-square', label: 'Workbook Validation', group: 'Workbook' },
                     { name: 'Tracker', icon: 'clock', label: 'Legacy Tracker', group: 'Workbook' },
@@ -1561,22 +1561,105 @@ createApp({
 
                         await batch.commit();
                         await updateDoc(doc(db, "source_uploads", uploadId), { status: 'Parsed', rowCount: count });
-                        
+                
                         logSystemAction("IMPORT", `Uploaded ${count} raw sales items from Trees CSV (ID: ${uploadId})`);
                         alert(`Successfully uploaded ${count} sales items and preserved source CSV to cloud storage!`);
                         e.target.value = ''; 
-                    } catch (error) { 
+            } catch (error) { 
                         console.error(error);
                         alert("Error parsing CSV or uploading to cloud."); 
-                    }
-                };
-                reader.readAsText(file); 
-
-            } catch (err) {
-                console.error("Storage Error:", err);
-                alert("CRITICAL: Failed to preserve CSV to Storage. Import aborted for data safety.");
             }
         };
+        reader.readAsText(file); 
+
+    } catch (err) {
+        console.error("Storage Error:", err);
+        alert("CRITICAL: Failed to preserve CSV to Storage. Import aborted for data safety.");
+    }
+};
+
+const handleSageCsvUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    if (!confirm("This will upload your Sage Report and update the 'GL Raw by Store' sheet in the Master Workbook. Continue?")) return;
+
+    const storagePath = `sage_uploads/${activeSite.value}/${Date.now()}_${file.name}`;
+    const fileRef = sRef(storage, storagePath);
+    
+    try {
+        await uploadBytes(fileRef, file);
+        
+        const reader = new FileReader();
+        reader.onload = async (evt) => {
+            try {
+                        const text = evt.target.result;
+                        const rows = text.split(/\r?\n/).filter(r => r.trim() !== '');
+                
+                        // Simple CSV Parser
+                        const parseCSVRow = (str) => {
+                            const result = [];
+                            let cell = '';
+                            let inQuotes = false;
+                            for (let i = 0; i < str.length; i++) {
+                                const char = str[i];
+                                if (char === '"') { inQuotes = !inQuotes; } 
+                                else if (char === ',' && !inQuotes) { result.push(cell.trim()); cell = ''; } 
+                                else { cell += char; }
+                            }
+                            result.push(cell.trim());
+                            return result;
+                        };
+
+                        const headers = parseCSVRow(rows[0]).map(h => h.replace(/["']/g, '').trim());
+                        const importedSageData = [];
+
+                        for (let i = 1; i < rows.length; i++) {
+                            const cols = parseCSVRow(rows[i]);
+                            const rowObj = {};
+                            headers.forEach((h, idx) => { 
+                                rowObj[h] = cols[idx] ? cols[idx].replace(/["']/g, '') : ''; 
+                            });
+                    
+                            // Map Sage Columns to Workbook Schema
+                            // Expected Sage Headers: Posted dt., Store, Location, Memo/Description, Credit
+                            importedSageData.push({
+                                "Posted dt.": rowObj["Posted dt."] || rowObj["Date"] || '',
+                                "Store": rowObj["Store"] || rowObj["Location"] || '',
+                                "Location": rowObj["Location"] || '',
+                                "Memo/Description": rowObj["Memo/Description"] || rowObj["Description"] || rowObj["Memo"] || '',
+                                "Credit": parseFloat(String(rowObj["Credit"] || rowObj["Amount"] || 0).replace(/[^0-9.-]+/g,"")) || 0,
+                                "Mapped Brand": "" // Will be manually mapped or auto-detected later
+                            });
+                        }
+
+                        // Push to Master Workbook
+                        if (!masterWorkbook.value) return alert("Master Workbook not loaded.");
+                
+                        const updatedData = JSON.parse(JSON.stringify(masterWorkbook.value.data));
+                        updatedData["GL Raw by Store"] = [...(updatedData["GL Raw by Store"] || []), ...importedSageData];
+
+                        await setDoc(doc(db, "promo tracker", "Master_Workbook_V9_Board_Report"), {
+                            ...masterWorkbook.value,
+                            data: updatedData,
+                            lastModified: Date.now(),
+                            modifiedBy: loggedInUser.value
+                        });
+
+                        logSystemAction("IMPORT", `Uploaded ${importedSageData.length} Sage GL entries to Master Workbook`);
+                        alert(`Success! Added ${importedSageData.length} entries from Sage to the 'GL Raw by Store' sheet.`);
+                        e.target.value = '';
+            } catch (err) {
+                        console.error(err);
+                        alert("Error processing Sage CSV.");
+            }
+        };
+        reader.readAsText(file);
+    } catch (err) {
+        console.error(err);
+        alert("Storage error during Sage upload.");
+    }
+};
 
         const pushToMainTracker = async () => {
             const groupedBrands = {};
@@ -1921,7 +2004,7 @@ createApp({
                     });
                 }
 
-                await batch.commit();
+                                await batch.commit();
                 logSystemAction("IMPORT", `Master Wipe & Sync: Deleted ${creditsDeleted}, Created ${creditsCreated} credits.`);
                 alert(`Sync Complete!\n\n- Old records cleared: ${creditsDeleted}\n- New records imported: ${creditsCreated}\n- New brands discovered: ${brandsAdded}\n\nYour tracker is now a perfect mirror of the Master Workbook.`);
             } catch (err) {
@@ -1929,6 +2012,49 @@ createApp({
                 alert("Failed to repopulate data: " + err.message);
             }
         };
+
+                const updateWorkbookFromSales = async () => {
+            // ... existing code ...
+        };
+
+        const sageAuditData = computed(() => {
+            if (!masterWorkbook.value || !masterWorkbook.value.data) return [];
+            
+            const rawSageRows = masterWorkbook.value.data["GL Raw by Store"] || [];
+            if (rawSageRows.length === 0) return [];
+
+            const sageMap = {};
+
+            rawSageRows.forEach(row => {
+                const brand = row["Mapped Brand"] || row[5] || 'Unmapped';
+                if (brand === "Mapped Brand" || !brand) return;
+
+                if (!sageMap[brand]) {
+                    sageMap[brand] = {
+                        brand: brand,
+                        totalApplied: 0,
+                        transactions: [],
+                        sites: { "Redding": 0, "Red Bluff": 0 }
+                    };
+                }
+
+                const amt = parseFloat(String(row["Credit"] || row[4] || 0).replace(/[^0-9.-]+/g,"")) || 0;
+                const site = detectSiteFromName(row["Store"] || row[1] || row["Location"] || row[2]);
+                const date = row["Posted dt."] || row[0] || 'Unknown';
+                const memo = row["Memo/Description"] || row[3] || '';
+
+                sageMap[brand].totalApplied += amt;
+                sageMap[brand].sites[site] += amt;
+                sageMap[brand].transactions.push({
+                    date: date,
+                    site: site,
+                    memo: memo,
+                    amount: amt
+                });
+            });
+
+            return Object.values(sageMap).sort((a, b) => b.totalApplied - a.totalApplied);
+        });
 
         return {
             isManagerUnlocked, isSuperAdmin, loggedInUser, emailInput, passwordInput, authError, activeSite, activeTab,
@@ -1944,16 +2070,16 @@ createApp({
             displayTreesSalesData, totalPending, totalApplied, unsyncedSalesCount, openPromoModal,
             totalTreesOwedYTD, totalTreesPending,
             closePromoModal, handleFileUpload, saveCredit, editCredit, deleteCredit, openImportModal,
-            closeImportModal, resetImport, displayGrid, processRawPaste, processImport, regenerateBrandSummary,
-            regenerateMonthReports, handleTreesCsvUpload, pushToMainTracker, resetBrandImport,
+                        closeImportModal, resetImport, displayGrid, processRawPaste, processImport, regenerateBrandSummary,
+            regenerateMonthReports, handleTreesCsvUpload, handleSageCsvUpload, pushToMainTracker, resetBrandImport,
             processBrandRawPaste, processBrandImport, systemLogs, refreshIcons, clearAllSalesData,
             detectMonthInString, drawCharts, openDimeHelper, exportVendorsAndBrandsCSV,
             masterLedgerData, selectedLedgerVendor, refreshLedger, openLegacyVerification, ledgerTotals,
             masterWorkbook, showWorkspaceMenu, showAdminMenu, workspaceTabs, selectWorkspace, activeWorkspaceInfo,
             scrollMonths, workbookSchema, activeWorkbookSheet, isWorkbookLoaded,
-                        auditRange, brandAuditData, draftAuditEmail,
-            showWorkbookSyncModal, workbookPasteData, openWorkbookSyncModal, processWorkbookSync,
-            repopulateFromMasterWorkbook
+                        auditRange, brandAuditData, draftAuditEmail, sageAuditData,
+                        showWorkbookSyncModal, workbookPasteData, openWorkbookSyncModal, processWorkbookSync,
+                        repopulateFromMasterWorkbook, updateWorkbookFromSales
         };
 
     }
