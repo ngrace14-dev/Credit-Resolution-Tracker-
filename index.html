@@ -915,7 +915,68 @@
         </main>
 
 
+                <main v-if="isManagerUnlocked && activeTab === 'BrandAudit'" class="flex-1 flex flex-col p-4 md:p-6 bg-gray-100 overflow-hidden">
+            <div class="flex justify-between items-end mb-4 shrink-0">
+                <div>
+                    <h2 class="text-xl font-bold text-gray-900 leading-tight">Brand Audit Reports</h2>
+                    <p class="text-sm text-gray-500 mt-1">Generate deep-dive reconciliation reports for specific brands over a date range.</p>
+                </div>
+                <div class="flex gap-4 items-end">
+                    <div class="flex flex-col gap-1">
+                        <label class="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Start Date</label>
+                        <input type="date" v-model="auditRange.start" class="bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none shadow-sm">
+                    </div>
+                    <div class="flex flex-col gap-1">
+                        <label class="text-[10px] font-bold text-gray-500 uppercase tracking-widest">End Date</label>
+                        <input type="date" v-model="auditRange.end" class="bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none shadow-sm">
+                    </div>
+                </div>
+            </div>
+
+            <!-- BRAND AUDIT GRID -->
+            <div class="bg-white rounded-xl border border-gray-300 shadow-sm flex-1 flex flex-col min-h-0 overflow-hidden">
+                <div class="overflow-auto flex-1">
+                    <table class="excel-table min-w-max">
+                        <thead class="sticky top-0 z-10 shadow-sm bg-gray-50">
+                            <tr>
+                                <th>Brand / Vendor</th>
+                                <th>Contact Rep</th>
+                                <th class="text-right">Generated</th>
+                                <th class="text-right">Recovered</th>
+                                <th class="text-right">Outstanding</th>
+                                <th class="text-center">Workflow Items</th>
+                                <th class="text-center">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr v-for="brand in brandAuditData" :key="brand.vendor" class="hover:bg-gray-50 transition-colors">
+                                <td class="font-bold text-gray-900">{{ brand.vendor }}</td>
+                                <td class="text-gray-600">
+                                    <div class="font-medium">{{ brand.rep || 'No Rep Assigned' }}</div>
+                                    <div class="text-[10px] text-emerald-600 font-mono">{{ brand.email || 'No Email' }}</div>
+                                </td>
+                                <td class="text-right font-medium">{{ formatCurrency(brand.generated) }}</td>
+                                <td class="text-right font-medium text-emerald-600">{{ formatCurrency(brand.recovered) }}</td>
+                                <td class="text-right font-extrabold" :class="brand.generated - brand.recovered > 0 ? 'text-red-600' : 'text-gray-400'">
+                                    {{ formatCurrency(brand.generated - brand.recovered) }}
+                                </td>
+                                <td class="text-center">
+                                    <span class="bg-gray-100 text-gray-600 px-2 py-0.5 rounded text-[10px] font-bold uppercase">{{ brand.credits.length }} Credits</span>
+                                </td>
+                                <td class="text-center">
+                                    <button @click="draftAuditEmail(brand)" class="bg-gray-900 hover:bg-gray-800 text-amber-500 px-4 py-1.5 rounded-lg text-xs font-bold shadow-sm transition-colors flex items-center justify-center gap-2 mx-auto">
+                                        <i data-lucide="mail" class="w-3.5 h-3.5"></i> Draft Audit Statement
+                                    </button>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+
         <!-- BRAND DIRECTORY TAB -->
+
         <main v-if="isManagerUnlocked && activeTab === 'Brands'" class="flex-1 flex flex-col p-4 md:p-6 pt-4 bg-gray-100 overflow-hidden">
             <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 shrink-0 gap-4">
                 <div>

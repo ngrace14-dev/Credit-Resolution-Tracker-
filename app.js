@@ -58,11 +58,17 @@ createApp({
             // Computed ledger simulation for UI wireframe
             const ledger = {};
             const site = activeSite.value;
+            const month = activeMonth.value;
             
             // 1. Process Promo Credits as Discovery/Recovery Events
             promoCredits.value.forEach(c => {
                 if (c.site !== site) return;
+                
+                // NEW: Respect the global month filter
+                if (month !== 'All' && c.trackingMonth !== month) return;
+
                 const v = c.vendor || 'Unknown';
+
                 if (!ledger[v]) {
                     ledger[v] = { 
                         vendor: v, site: site, generated: 0, recovered: 0, outstanding: 0, 
@@ -124,9 +130,10 @@ createApp({
         };
 
 
-        watch([promoCredits, activeSite], () => {
+                watch([promoCredits, activeSite, activeMonth], () => {
             if (activeTab.value === 'Ledger') refreshLedger();
         });
+
 
         const openLegacyVerification = (vendorItem) => {
             alert(`Opening Legacy Verification Stage for ${vendorItem.vendor}...\n\nThis stage allows cross-referencing old 'promoCredits' records against the new Ledger events to ensure no data loss during transition.`);
@@ -883,22 +890,91 @@ createApp({
                 const showWorkspaceMenu = ref(false);
         const showAdminMenu = ref(false);
 
-                const workspaceTabs = [
-            { name: 'Dashboard', icon: 'bar-chart-2', group: 'Workbook' },
-            { name: 'WorkbookViewer', icon: 'file-spreadsheet', label: 'Complete Workbook', group: 'Workbook' },
-            { name: 'Sales', icon: 'inbox', label: 'Discovery Intake', group: 'Workbook' },
+                const auditRange = ref({ start: '', end: '' });
 
-            { name: 'Recovery', icon: 'dollar-sign', group: 'Workbook' },
-            { name: 'Ledger', icon: 'book-open', group: 'Workbook' },
-            { name: 'Reports', icon: 'building', label: 'Store Rec', group: 'Workbook' },
-            { name: 'Validation', icon: 'check-square', label: 'Workbook Validation', group: 'Workbook' },
-            { name: 'Tracker', icon: 'clock', label: 'Legacy Tracker', group: 'Workbook' },
-            { name: 'VendorMapping', icon: 'network', group: 'Identity' },
-            { name: 'Brands', icon: 'book-user', label: 'Brand Directory', group: 'Identity' },
-            { name: 'RepTracker', icon: 'contact', group: 'Identity' },
-            { name: 'MappingQueue', icon: 'list-todo', group: 'Identity' },
-            { name: 'Logs', icon: 'activity', group: 'Admin' }
-        ];
+                const brandAuditData = computed(() => {
+                    const start = auditRange.value.start ? new Date(auditRange.value.start) : null;
+                    const end = auditRange.value.end ? new Date(auditRange.value.end) : null;
+            
+                    const brandMap = {};
+            
+                    promoCredits.value.forEach(c => {
+                        if (c.site !== activeSite.value || c.archived) return;
+                
+                        // Use dateRequested or created timestamp for date range filtering
+                        const cDate = c.dateRequested ? new Date(c.dateRequested) : new Date(c.createdAt || 0);
+                        if (start && cDate < start) return;
+                        if (end && cDate > end) return;
+                
+                        const v = c.vendor || 'Unknown Brand';
+                        if (!brandMap[v]) {
+                            const brandInfo = masterBrands.value.find(b => (b.vendor || '').toLowerCase() === v.toLowerCase()) || {};
+                            brandMap[v] = {
+                                vendor: v,
+                                email: brandInfo.email || '',
+                                rep: brandInfo.rep || '',
+                                generated: 0,
+                                recovered: 0,
+                                credits: []
+                            };
+                        }
+                
+                        brandMap[v].generated += (parseFloat(c.amount) || 0);
+                        if (c.status === 'Applied') {
+                            brandMap[v].recovered += (parseFloat(c.amount) || 0);
+                        }
+                        brandMap[v].credits.push(c);
+                    });
+            
+                    return Object.values(brandMap).sort((a, b) => (b.generated - b.recovered) - (a.generated - a.recovered));
+                });
+
+                const draftAuditEmail = (brand) => {
+                    if (!brand.email) return alert("No email found for this brand.");
+            
+                    const storeName = activeSite.value === 'Redding' ? 'Sundial' : activeSite.value;
+                    const period = (auditRange.value.start && auditRange.value.end) 
+                        ? `${auditRange.value.start} to ${auditRange.value.end}`
+                        : "Year to Date";
+
+                    const subject = `Promo Credit Audit Report - ${storeName} - ${brand.vendor}`;
+            
+                    let body = `Hello ${brand.rep || brand.vendor},\n\n`;
+                    body += `This is a formal audit report for promo credits associated with ${brand.vendor} at ${storeName} for the period of ${period}.\n\n`;
+                    body += `Summary of Account:\n`;
+                    body += `- Total Credits Generated: ${formatCurrency(brand.generated)}\n`;
+                    body += `- Total Credits Recovered: ${formatCurrency(brand.recovered)}\n`;
+                    body += `- Outstanding Balance: ${formatCurrency(brand.generated - brand.recovered)}\n\n`;
+            
+                    body += `Itemized Outstanding Credits:\n`;
+                    brand.credits.filter(c => c.status !== 'Applied').forEach(c => {
+                        body += `- ${c.trackingMonth}: ${c.creditType} (${c.dates}) - ${formatCurrency(c.amount)}\n`;
+                    });
+            
+                    body += `\nPlease review this statement and let us know if there are any discrepancies.\n\n`;
+                    body += `Best regards,\n\n${storeName} Accounting Team\n`;
+
+                    const cleanEmails = brand.email.split(/[,;\s]+/).filter(Boolean).join(',');
+                    window.location.href = `mailto:${cleanEmails}?cc=accounting@rredco.com&subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+                };
+
+                const workspaceTabs = [
+                    { name: 'Dashboard', icon: 'bar-chart-2', group: 'Workbook' },
+                    { name: 'WorkbookViewer', icon: 'file-spreadsheet', label: 'Complete Workbook', group: 'Workbook' },
+                    { name: 'Sales', icon: 'inbox', label: 'Discovery Intake', group: 'Workbook' },
+                    { name: 'Recovery', icon: 'dollar-sign', group: 'Workbook' },
+                    { name: 'Ledger', icon: 'book-open', group: 'Workbook' },
+                    { name: 'Reports', icon: 'building', label: 'Store Rec', group: 'Workbook' },
+                    { name: 'BrandAudit', icon: 'clipboard-check', label: 'Brand Audit', group: 'Workbook' },
+                    { name: 'Validation', icon: 'check-square', label: 'Workbook Validation', group: 'Workbook' },
+                    { name: 'Tracker', icon: 'clock', label: 'Legacy Tracker', group: 'Workbook' },
+                    { name: 'VendorMapping', icon: 'network', group: 'Identity' },
+                    { name: 'Brands', icon: 'book-user', label: 'Brand Directory', group: 'Identity' },
+                    { name: 'RepTracker', icon: 'contact', group: 'Identity' },
+                    { name: 'MappingQueue', icon: 'list-todo', group: 'Identity' },
+                    { name: 'Logs', icon: 'activity', group: 'Admin' }
+                ];
+
 
         const selectWorkspace = (tab) => {
             activeTab.value = tab.name;
@@ -1649,7 +1725,9 @@ createApp({
                         detectMonthInString, drawCharts, openDimeHelper, exportVendorsAndBrandsCSV,
             masterLedgerData, selectedLedgerVendor, refreshLedger, openLegacyVerification, ledgerTotals,
                         masterWorkbook, showWorkspaceMenu, showAdminMenu, workspaceTabs, selectWorkspace, activeWorkspaceInfo,
-                        scrollMonths, workbookSchema, activeWorkbookSheet, isWorkbookLoaded
+                        scrollMonths, workbookSchema, activeWorkbookSheet, isWorkbookLoaded,
+                        auditRange, brandAuditData, draftAuditEmail
+
 
 
 
