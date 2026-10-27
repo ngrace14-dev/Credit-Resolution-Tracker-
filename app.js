@@ -1720,6 +1720,54 @@ createApp({
             }
         };
 
+                const showWorkbookSyncModal = ref(false);
+        const workbookPasteData = ref('');
+
+        const openWorkbookSyncModal = () => {
+            workbookPasteData.value = '';
+            showWorkbookSyncModal.value = true;
+            refreshIcons();
+        };
+
+        const processWorkbookSync = async () => {
+            if (!workbookPasteData.value.trim()) return;
+            
+            // Basic parser for Workbook V9 Summary Page
+            // Expecting: Month [TAB] Total
+            const rows = workbookPasteData.value.trim().split(/\r?\n/);
+            const lastRow = rows[rows.length - 1].split('\t');
+            
+            if (lastRow.length < 2) {
+                alert("Format Error: Please paste at least two columns (Month and Total) from your Excel Board Report.");
+                return;
+            }
+
+            const month = lastRow[0];
+            const total = parseFloat(String(lastRow[1]).replace(/[^0-9.-]+/g,"")) || 0;
+
+            if (isNaN(total)) {
+                alert("Could not parse a valid dollar amount from the second column.");
+                return;
+            }
+
+            try {
+                await setDoc(doc(db, "promo tracker", "Master_Workbook_V9_Board_Report"), {
+                    reportMonth: month,
+                    total: total,
+                    updatedAt: Date.now(),
+                    updatedBy: loggedInUser.value,
+                    site: activeSite.value
+                });
+                
+                logSystemAction("UPDATE", `Synced Workbook V9 Totals: ${month} - ${formatCurrency(total)}`);
+                showWorkbookSyncModal.value = false;
+                alert(`Success! The Master Workbook balance has been updated to ${formatCurrency(total)}.`);
+            } catch (error) {
+                console.error("Sync Error:", error);
+                alert("Failed to sync totals to the cloud. Check your permissions.");
+            }
+        };
+
         return {
             isManagerUnlocked, isSuperAdmin, loggedInUser, emailInput, passwordInput, authError, activeSite, activeTab,
             treesSalesData, masterBrands, selectedBrands, allBrandsSelected, toggleAllBrands,
@@ -1730,23 +1778,20 @@ createApp({
             groupedPendingReports, draftEmail, archiveAndExportAnnualReport, showImportModal,
             rawPasteData, pastedGrid, mappedHeaders, showBrandImportModal, brandPasteData, brandPastedGrid,
             brandMappedHeaders, brandAvailableHeaders, availableHeaders, form, handleLogin, forceLock,
-                        filteredBrands, selectBrand, formatCurrency, filteredCredits, filteredTreesSalesData,
-                        displayTreesSalesData, totalPending, totalApplied, unsyncedSalesCount, openPromoModal,
-                        totalTreesOwedYTD, totalTreesPending,
-                        closePromoModal, handleFileUpload, saveCredit, editCredit, deleteCredit, openImportModal,
-
+            filteredBrands, selectBrand, formatCurrency, filteredCredits, filteredTreesSalesData,
+            displayTreesSalesData, totalPending, totalApplied, unsyncedSalesCount, openPromoModal,
+            totalTreesOwedYTD, totalTreesPending,
+            closePromoModal, handleFileUpload, saveCredit, editCredit, deleteCredit, openImportModal,
             closeImportModal, resetImport, displayGrid, processRawPaste, processImport, regenerateBrandSummary,
             regenerateMonthReports, handleTreesCsvUpload, pushToMainTracker, resetBrandImport,
             processBrandRawPaste, processBrandImport, systemLogs, refreshIcons, clearAllSalesData,
-                        detectMonthInString, drawCharts, openDimeHelper, exportVendorsAndBrandsCSV,
+            detectMonthInString, drawCharts, openDimeHelper, exportVendorsAndBrandsCSV,
             masterLedgerData, selectedLedgerVendor, refreshLedger, openLegacyVerification, ledgerTotals,
-                        masterWorkbook, showWorkspaceMenu, showAdminMenu, workspaceTabs, selectWorkspace, activeWorkspaceInfo,
-                        scrollMonths, workbookSchema, activeWorkbookSheet, isWorkbookLoaded,
-                        auditRange, brandAuditData, draftAuditEmail
-
-
-
-
+            masterWorkbook, showWorkspaceMenu, showAdminMenu, workspaceTabs, selectWorkspace, activeWorkspaceInfo,
+            scrollMonths, workbookSchema, activeWorkbookSheet, isWorkbookLoaded,
+            auditRange, brandAuditData, draftAuditEmail,
+            showWorkbookSyncModal, workbookPasteData, openWorkbookSyncModal, processWorkbookSync
         };
+
     }
 }).mount('#app');
