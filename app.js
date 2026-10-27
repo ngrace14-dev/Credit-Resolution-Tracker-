@@ -60,55 +60,61 @@ createApp({
         const promoCredits = ref([]); 
         const calendarMonths = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
                 const activeMonth = ref('August');
-        const masterBrands = ref([]);
-        const selectedBrands = ref([]);
+                const masterBrands = ref([]);
+                const selectedBrands = ref([]);
 
-        // 1. DATA SOURCE: Master Workbook Fragments
-        const masterWorkbook = ref({ data: {} });
+                // 1. DATA SOURCE: Master Workbook Fragments
+                const masterWorkbook = ref({ data: {}, summary: {} });
 
-        // 2. COMPUTED: Promo Credits (Mirrors Workbook Sheets exactly)
-        const promoCredits = computed(() => {
-            const allCredits = [];
-            if (!masterWorkbook.value || !masterWorkbook.value.data) return [];
+                // 2. COMPUTED: Promo Credits (Mirrors Workbook Sheets exactly)
+                const promoCredits = computed(() => {
+                    const allCredits = [];
+                    if (!masterWorkbook.value || !masterWorkbook.value.data) return [];
 
-            Object.keys(masterWorkbook.value.data).forEach(sheetName => {
-                // Look for monthly sheets
-                if (!sheetName.includes('2026')) return;
-                const monthName = sheetName.split(' ')[0];
-                const rows = masterWorkbook.value.data[sheetName] || [];
+                    Object.keys(masterWorkbook.value.data).forEach(sheetName => {
+                        // Look for monthly sheets
+                        if (!sheetName.includes('2026')) return;
+                        const monthName = sheetName.split(' ')[0];
+                        const rows = masterWorkbook.value.data[sheetName] || [];
 
-                rows.forEach((row, idx) => {
-                    const vendor = row["Brand"] || row[0];
-                    if (!vendor || vendor === "Brand" || vendor.toLowerCase().includes('total')) return;
+                        rows.forEach((row, idx) => {
+                            const vendor = row["Brand"] || row[0];
+                            if (!vendor || vendor === "Brand" || vendor.toLowerCase().includes('total')) return;
 
-                    ["Redding", "Red-Bluff"].forEach(siteKey => {
-                        const siteName = siteKey === "Red-Bluff" ? "Red Bluff" : "Redding";
-                        const rawAmt = row[siteKey] || row[2]; // Use site column or index
-                        const amt = parseFloat(String(rawAmt || 0).replace(/[^0-9.-]+/g,"")) || 0;
+                            ["Redding", "Red-Bluff"].forEach(siteKey => {
+                                const siteName = siteKey === "Red-Bluff" ? "Red Bluff" : "Redding";
+                        
+                                // Look for site-specific amount in column header
+                                let rawAmt = 0;
+                                if (row[siteKey] !== undefined) rawAmt = row[siteKey];
+                                else if (siteKey === "Redding" && row["Redding"] !== undefined) rawAmt = row["Redding"];
+                                else if (siteKey === "Red-Bluff" && row["Red-Bluff"] !== undefined) rawAmt = row["Red-Bluff"];
 
-                        if (amt > 0) {
-                            const approvedAmt = parseFloat(String(row["Credits Approved"] || 0).replace(/[^0-9.-]+/g,"")) || 0;
-                            const isApplied = (approvedAmt > 0) || (!!row["Date Applied"] && row["Date Applied"] !== 'N/A');
+                                const amt = parseFloat(String(rawAmt || 0).replace(/[^0-9.-]+/g,"")) || 0;
+
+                                if (amt > 0) {
+                                    const approvedAmt = parseFloat(String(row["Credits Approved"] || 0).replace(/[^0-9.-]+/g,"")) || 0;
+                                    const isApplied = (approvedAmt > 0) || (!!row["Date Applied"] && row["Date Applied"] !== 'N/A');
                             
-                            allCredits.push({
-                                id: `${sheetName}-${idx}-${siteKey}`, // Synthetic ID based on workbook location
-                                site: siteName,
-                                trackingMonth: monthName,
-                                vendor: vendor,
-                                amount: amt,
-                                creditType: row["Promo Credits "] || 'Promo',
-                                dateRequested: row["Date Requested"] || '',
-                                dateReceived: row["Date Applied"] || '',
-                                status: isApplied ? "Applied" : "Pending",
-                                archived: false,
-                                workbookRef: { sheet: sheetName, rowIdx: idx }
+                                    allCredits.push({
+                                        id: `${sheetName}-${idx}-${siteKey}`, 
+                                        site: siteName,
+                                        trackingMonth: monthName,
+                                        vendor: vendor,
+                                        amount: amt,
+                                        creditType: row["Promo Credits "] || 'Promo',
+                                        dateRequested: row["Date Requested"] || '',
+                                        dateReceived: row["Date Applied"] || '',
+                                        status: isApplied ? "Applied" : "Pending",
+                                        archived: false,
+                                        workbookRef: { sheet: sheetName, rowIdx: idx }
+                                    });
+                                }
                             });
-                        }
+                        });
                     });
+                    return allCredits;
                 });
-            });
-            return allCredits;
-        });
 
         // 3. DASHBOARD & LEDGER (Now strictly powered by Workbook)
         const treesSalesData = ref([]); 
@@ -1252,17 +1258,20 @@ createApp({
 
                     
                                         // 1. Permanent Sheet Listeners (The Source of Truth)
+                                        console.log("Listening to workbook_v9_sheets...");
                                         onSnapshot(collection(db, "workbook_v9_sheets"), (snapshot) => {
+                                            console.log(`Snapshot received: ${snapshot.size} sheets found.`);
                                             snapshot.forEach(docSnap => {
                                                 const sheet = docSnap.data();
                                                 masterWorkbook.value.data[sheet.sheetName] = sheet.rows;
+                                                console.log(`- Loaded sheet: ${sheet.sheetName} (${sheet.rows.length} rows)`);
                                             });
                                             if (snapshot.size > 0) {
                                                 isWorkbookLoaded.value = true;
-                                                // Trigger Ledger & Dashboard recalculation
-                                                refreshLedger();
+                                                // Recalculate Ledger
+                                                nextTick(() => { refreshLedger(); });
                                             }
-                                        });
+                                        }, (err) => console.error("Sheets Listener Error:", err));
 
                                         // 2. Master Workbook Metadata
                                         onSnapshot(doc(db, "promo tracker", "Master_Workbook_V9_Board_Report"), (docSnap) => {
