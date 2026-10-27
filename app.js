@@ -21,10 +21,15 @@ const firebaseConfig = {
 
 const firebaseApp = initializeApp(firebaseConfig);
 
-// APP CHECK DEBUG MODE (Prevents 403 Throttling in Dev)
-if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') {
+// APP CHECK DEBUG MODE (Broadened for local network and dev environments)
+if (location.hostname === 'localhost' || 
+    location.hostname === '127.0.0.1' || 
+    location.hostname.startsWith('192.168.') || 
+    location.hostname.includes('github.dev')) {
     self.FIREBASE_APPCHECK_DEBUG_TOKEN = true;
+    console.log("App Check Debug Mode Active");
 }
+
 
 try {
     initializeAppCheck(firebaseApp, {
@@ -51,15 +56,17 @@ createApp({
         const passwordInput = ref('');
         const authError = ref('');
         const activeSite = ref('Red Bluff');
-        const activeTab = ref('Ledger');
+                const activeTab = ref('Ledger');
         const promoCredits = ref([]); 
         const calendarMonths = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
         const activeMonth = ref('August');
         const masterBrands = ref([]);
         const selectedBrands = ref([]);
 
-        const treesSalesData = ref(JSON.parse(localStorage.getItem('treesSalesData')) || []);
+        // Removed localStorage fallback to prevent "Old Data" confusion
+        const treesSalesData = ref([]); 
         const auditRange = ref({ start: '', end: '' });
+
 
         const selectedLedgerVendor = ref(null);
         const masterLedgerData = ref([]);
