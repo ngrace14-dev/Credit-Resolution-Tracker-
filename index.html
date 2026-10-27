@@ -76,8 +76,10 @@
 
         <!-- APP TABS NAV (Obsidian Background) -->
         <div v-if="isManagerUnlocked" class="bg-gray-950 px-4 md:px-6 pt-2 flex gap-2 shrink-0 z-10 shadow-sm overflow-x-auto no-scrollbar border-b border-gray-800">
-            <button @click="activeTab = 'Dashboard'" :class="activeTab === 'Dashboard' ? 'bg-gray-100 text-gray-900 font-extrabold border-t-4 border-emerald-500' : 'bg-gray-900/50 text-gray-400 hover:bg-gray-800 hover:text-white'" class="px-6 py-2 rounded-t-xl text-sm transition-colors tracking-wide whitespace-nowrap">Dashboard</button>
-            <button @click="activeTab = 'Tracker'" :class="activeTab === 'Tracker' ? 'bg-gray-100 text-gray-900 font-extrabold border-t-4 border-emerald-500' : 'bg-gray-900/50 text-gray-400 hover:bg-gray-800 hover:text-white'" class="px-6 py-2 rounded-t-xl text-sm transition-colors tracking-wide whitespace-nowrap">Main Tracker</button>
+                        <button @click="activeTab = 'Dashboard'" :class="activeTab === 'Dashboard' ? 'bg-gray-100 text-gray-900 font-extrabold border-t-4 border-emerald-500' : 'bg-gray-900/50 text-gray-400 hover:bg-gray-800 hover:text-white'" class="px-6 py-2 rounded-t-xl text-sm transition-colors tracking-wide whitespace-nowrap">Dashboard</button>
+            <button @click="activeTab = 'Ledger'" :class="activeTab === 'Ledger' ? 'bg-gray-100 text-gray-900 font-extrabold border-t-4 border-emerald-500' : 'bg-gray-900/50 text-gray-400 hover:bg-gray-800 hover:text-white'" class="px-6 py-2 rounded-t-xl text-sm transition-colors tracking-wide whitespace-nowrap">Master Ledger</button>
+            <button @click="activeTab = 'Tracker'" :class="activeTab === 'Tracker' ? 'bg-gray-100 text-gray-900 font-extrabold border-t-4 border-emerald-500' : 'bg-gray-900/50 text-gray-400 hover:bg-gray-800 hover:text-white'" class="px-6 py-2 rounded-t-xl text-sm transition-colors tracking-wide whitespace-nowrap">Legacy Tracker</button>
+
             <button @click="activeTab = 'Reports'" :class="activeTab === 'Reports' ? 'bg-gray-100 text-gray-900 font-extrabold border-t-4 border-emerald-500' : 'bg-gray-900/50 text-gray-400 hover:bg-gray-800 hover:text-white'" class="px-6 py-2 rounded-t-xl text-sm transition-colors tracking-wide whitespace-nowrap">Monthly Reports</button>
             <button @click="activeTab = 'Sales'" :class="activeTab === 'Sales' ? 'bg-gray-100 text-gray-900 font-extrabold border-t-4 border-emerald-500' : 'bg-gray-900/50 text-gray-400 hover:bg-gray-800 hover:text-white'" class="px-6 py-2 rounded-t-xl text-sm transition-colors tracking-wide flex items-center gap-2 whitespace-nowrap">Trees Sales CSV <span v-if="filteredTreesSalesData.length > 0 && activeTab !== 'Sales'" class="bg-amber-500 text-gray-950 text-[10px] px-1.5 py-0.5 rounded-full">{{ filteredTreesSalesData.length }}</span></button>
             <button @click="activeTab = 'Brands'" :class="activeTab === 'Brands' ? 'bg-gray-100 text-gray-900 font-extrabold border-t-4 border-emerald-500' : 'bg-gray-900/50 text-gray-400 hover:bg-gray-800 hover:text-white'" class="px-6 py-2 rounded-t-xl text-sm transition-colors tracking-wide whitespace-nowrap">Brand Directory</button>
@@ -242,8 +244,131 @@
             </div>
         </main>
 
-        <!-- MAIN DASHBOARD TAB (TRACKER) -->
-        <main v-if="isManagerUnlocked && activeTab === 'Tracker'" class="flex-1 flex flex-col p-4 md:p-6 pt-4 bg-gray-100 overflow-hidden">
+                <!-- MASTER LEDGER TAB (NEW WORKSPACE) -->
+        <main v-if="isManagerUnlocked && activeTab === 'Ledger'" class="flex-1 flex flex-col p-4 md:p-6 bg-gray-100 overflow-hidden">
+            <div class="flex justify-between items-end mb-4 shrink-0">
+                <div>
+                    <h2 class="text-xl font-bold text-gray-900 leading-tight">Master Ledger (BETA)</h2>
+                    <p class="text-sm text-gray-500 mt-1">Unified financial workspace derived from Discovery and Recovery events.</p>
+                </div>
+                <div class="flex gap-2">
+                    <button @click="refreshLedger" class="bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 px-4 py-2 rounded-lg flex items-center gap-2 text-sm font-bold shadow-sm transition-colors">
+                        <i data-lucide="refresh-cw" class="w-4 h-4"></i> Recalculate
+                    </button>
+                </div>
+            </div>
+
+            <!-- LEDGER GRID CONTAINER -->
+            <div class="flex flex-col lg:flex-row gap-6 flex-1 min-h-0 overflow-hidden">
+                <!-- PRIMARY GRID -->
+                <div class="bg-white rounded-xl border border-gray-300 shadow-sm flex-1 flex flex-col min-h-0 overflow-hidden">
+                    <div class="overflow-auto flex-1 relative">
+                        <table class="excel-table min-w-max">
+                            <thead class="sticky top-0 z-20 shadow-sm bg-gray-50 text-gray-900">
+                                <tr>
+                                    <th>Vendor</th>
+                                    <th>Store</th>
+                                    <th class="text-right">Generated</th>
+                                    <th class="text-right">Recovered</th>
+                                    <th class="text-right">Outstanding</th>
+                                    <th class="text-right bg-amber-50/30">Variance</th>
+                                    <th class="text-right">0-30</th>
+                                    <th class="text-right">31-60</th>
+                                    <th class="text-right">61-90</th>
+                                    <th class="text-right">91+</th>
+                                    <th class="text-center">Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr v-for="item in masterLedgerData" :key="item.vendor + item.site" @click="selectedLedgerVendor = item" :class="{'bg-emerald-50/50 ring-1 ring-inset ring-emerald-500': selectedLedgerVendor?.vendor === item.vendor}" class="hover:bg-gray-50 cursor-pointer transition-all">
+                                    <td class="font-bold text-gray-900">{{ item.vendor }}</td>
+                                    <td class="text-gray-600">{{ item.site }}</td>
+                                    <td class="text-right font-medium">{{ formatCurrency(item.generated) }}</td>
+                                    <td class="text-right font-medium text-emerald-600">{{ formatCurrency(item.recovered) }}</td>
+                                    <td class="text-right font-extrabold" :class="item.outstanding > 0 ? 'text-red-600' : 'text-gray-400'">{{ formatCurrency(item.outstanding) }}</td>
+                                    <td class="text-right font-bold bg-amber-50/30" :class="item.variance !== 0 ? 'text-amber-600' : 'text-emerald-600'">
+                                        {{ item.variance !== 0 ? formatCurrency(item.variance) : '-' }}
+                                    </td>
+                                    <td class="text-right text-xs text-gray-500">{{ formatCurrency(item.aging['0-30']) }}</td>
+                                    <td class="text-right text-xs text-gray-500">{{ formatCurrency(item.aging['31-60']) }}</td>
+                                    <td class="text-right text-xs text-gray-500">{{ formatCurrency(item.aging['61-90']) }}</td>
+                                    <td class="text-right text-xs text-gray-500">{{ formatCurrency(item.aging['91+']) }}</td>
+                                    <td class="text-center">
+                                        <span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase" :class="item.outstanding <= 0 ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'">
+                                            {{ item.outstanding <= 0 ? 'Settled' : 'Active' }}
+                                        </span>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- RIGHT PANEL: VENDOR AUDIT -->
+                <div v-if="selectedLedgerVendor" class="w-full lg:w-96 bg-white rounded-xl border border-gray-300 shadow-sm flex flex-col shrink-0 overflow-hidden animate-in slide-in-from-right duration-300">
+                    <div class="p-4 border-b bg-gray-50 flex justify-between items-center">
+                        <div>
+                            <h3 class="font-bold text-gray-900">{{ selectedLedgerVendor.vendor }}</h3>
+                            <p class="text-xs text-gray-500 uppercase font-bold tracking-tight">{{ selectedLedgerVendor.site }} Detail</p>
+                        </div>
+                        <button @click="selectedLedgerVendor = null" class="text-gray-400 hover:text-gray-600"><i data-lucide="x" class="w-5 h-5"></i></button>
+                    </div>
+                    
+                    <div class="flex-1 overflow-y-auto p-4 space-y-6">
+                        <!-- Summary Cards -->
+                        <div class="grid grid-cols-2 gap-3">
+                            <div class="bg-gray-50 p-3 rounded-lg border border-gray-200">
+                                <div class="text-[10px] font-bold text-gray-400 uppercase">Claims</div>
+                                <div class="text-lg font-bold text-gray-900">{{ selectedLedgerVendor.generatedCount }}</div>
+                            </div>
+                            <div class="bg-gray-50 p-3 rounded-lg border border-gray-200">
+                                <div class="text-[10px] font-bold text-gray-400 uppercase">Recoveries</div>
+                                <div class="text-lg font-bold text-gray-900">{{ selectedLedgerVendor.recoveredCount }}</div>
+                            </div>
+                        </div>
+
+                        <!-- Discovery Events -->
+                        <div>
+                            <h4 class="text-xs font-bold text-gray-900 uppercase tracking-widest mb-3 flex items-center gap-2">
+                                <i data-lucide="search" class="w-3.5 h-3.5 text-amber-500"></i> Discovery Claims
+                            </h4>
+                            <div class="space-y-2">
+                                <div v-for="event in selectedLedgerVendor.discoveryEvents" :key="event.id" class="text-xs p-2 bg-amber-50/50 border border-amber-100 rounded flex justify-between">
+                                    <div>
+                                        <div class="font-bold text-gray-900">{{ event.type || 'Claim' }}</div>
+                                        <div class="text-gray-500">{{ event.date }}</div>
+                                    </div>
+                                    <div class="text-right font-bold">{{ formatCurrency(event.amount) }}</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Recovery Events -->
+                        <div>
+                            <h4 class="text-xs font-bold text-gray-900 uppercase tracking-widest mb-3 flex items-center gap-2">
+                                <i data-lucide="check-circle" class="w-3.5 h-3.5 text-emerald-500"></i> Recovery Events
+                            </h4>
+                            <div class="space-y-2">
+                                <div v-for="event in selectedLedgerVendor.recoveryEvents" :key="event.id" class="text-xs p-2 bg-emerald-50/50 border border-emerald-100 rounded flex justify-between">
+                                    <div>
+                                        <div class="font-bold text-gray-900">{{ event.ref || 'Ref: -' }}</div>
+                                        <div class="text-gray-500">{{ event.date }}</div>
+                                    </div>
+                                    <div class="text-right font-bold">{{ formatCurrency(event.amount) }}</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="p-4 border-t bg-gray-50">
+                        <button @click="openLegacyVerification(selectedLedgerVendor)" class="w-full py-2 bg-gray-900 text-amber-500 rounded-lg font-bold text-xs flex items-center justify-center gap-2">
+                            <i data-lucide="shield-alert" class="w-3.5 h-3.5"></i> Verify Legacy Migration
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </main>
+
             <div class="flex flex-col sm:flex-row gap-4 md:gap-6 mb-4 shrink-0">
                 <div class="bg-white border-l-4 border-amber-500 rounded-xl p-4 md:p-5 flex-1 shadow-sm flex items-center justify-between">
                     <div>

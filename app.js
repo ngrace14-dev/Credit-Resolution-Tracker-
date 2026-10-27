@@ -42,7 +42,86 @@ createApp({
         const passwordInput = ref('');
         const authError = ref('');
         const activeSite = ref('Red Bluff');
-        const activeTab = ref('Tracker');
+                const activeTab = ref('Ledger');
+        
+        const selectedLedgerVendor = ref(null);
+        const masterLedgerData = ref([]);
+
+        const refreshLedger = async () => {
+            // Computed ledger simulation for UI wireframe
+            const ledger = {};
+            const site = activeSite.value;
+            
+            // 1. Process Promo Credits as Discovery/Recovery Events
+            promoCredits.value.forEach(c => {
+                if (c.site !== site) return;
+                const v = c.vendor || 'Unknown';
+                if (!ledger[v]) {
+                    ledger[v] = { 
+                        vendor: v, site: site, generated: 0, recovered: 0, outstanding: 0, 
+                        variance: 0, discoveryEvents: [], recoveryEvents: [],
+                        generatedCount: 0, recoveredCount: 0,
+                        aging: { '0-30': 0, '31-60': 0, '61-90': 0, '91+': 0 }
+                    };
+                }
+                
+                // DISCOVERY EVENT
+                ledger[v].generated += (parseFloat(c.amount) || 0);
+                ledger[v].generatedCount++;
+                ledger[v].discoveryEvents.push({
+                    id: c.id,
+                    type: c.creditType,
+                    date: c.dateRequested || c.dates,
+                    amount: c.amount
+                });
+
+                                // RECOVERY EVENT (Rules: Status MUST be Applied, but logic is separate in ledger)
+                // NEW SYSTEM: This will be sourced from 'promoRecovered' collection.
+                // CURRENT WIREFRAME: We simulate that only 90% of 'Applied' items are actually 'Recovered'
+                // to demonstrate the Variance/Outstanding logic without automatic 1:1 mapping.
+                if (c.status === 'Applied') {
+                    const recoveredAmount = (parseFloat(c.amount) || 0) * (Math.random() > 0.1 ? 1 : 0.8); 
+                    ledger[v].recovered += recoveredAmount;
+                    
+                    if (recoveredAmount > 0) {
+                        ledger[v].recoveredCount++;
+                        ledger[v].recoveryEvents.push({
+                            id: 'rec-' + c.id,
+                            ref: c.invoice || 'CHECK-PENDING',
+                            date: c.dateReceived || 'Pending Sync',
+                            amount: recoveredAmount
+                        });
+                    }
+                }
+            });
+
+
+            // 2. Finalize Calculations
+            Object.values(ledger).forEach(item => {
+                item.outstanding = item.generated - item.recovered;
+                // Variance simulation: random mock variance if outstanding > 0
+                if (item.outstanding > 0 && Math.random() > 0.7) {
+                    item.variance = (Math.random() * 50) * (Math.random() > 0.5 ? 1 : -1);
+                }
+                
+                // Aging simulation based on generated amount
+                if (item.outstanding > 0) {
+                    item.aging['31-60'] = item.outstanding * 0.4;
+                    item.aging['0-30'] = item.outstanding * 0.6;
+                }
+            });
+
+            masterLedgerData.value = Object.values(ledger).sort((a, b) => b.outstanding - a.outstanding);
+        };
+
+        watch([promoCredits, activeSite], () => {
+            if (activeTab.value === 'Ledger') refreshLedger();
+        });
+
+        const openLegacyVerification = (vendorItem) => {
+            alert(`Opening Legacy Verification Stage for ${vendorItem.vendor}...\n\nThis stage allows cross-referencing old 'promoCredits' records against the new Ledger events to ensure no data loss during transition.`);
+        };
+
         
         const systemUsers = {
             'lenay@rredco.com': { name: 'Lenay A.', access: ['Red Bluff', 'Redding'], active: false },
@@ -494,11 +573,15 @@ createApp({
             });
         };
 
-        watch(activeTab, (newTab) => {
+                watch(activeTab, (newTab) => {
             if (newTab === 'Dashboard') {
                 nextTick(() => { drawCharts(); });
             }
+            if (newTab === 'Ledger') {
+                refreshLedger();
+            }
         });
+
 
         watch(promoCredits, () => {
             if (activeTab.value === 'Dashboard') { drawCharts(); }
@@ -1433,13 +1516,15 @@ createApp({
             groupedPendingReports, draftEmail, archiveAndExportAnnualReport, showImportModal,
             rawPasteData, pastedGrid, mappedHeaders, showBrandImportModal, brandPasteData, brandPastedGrid,
             brandMappedHeaders, brandAvailableHeaders, availableHeaders, form, handleLogin, forceLock,
-            filteredBrands, selectBrand, formatCurrency, filteredCredits, filteredTreesSalesData,
+                        filteredBrands, selectBrand, formatCurrency, filteredCredits, filteredTreesSalesData,
             displayTreesSalesData, totalPending, totalApplied, unsyncedSalesCount, openPromoModal,
             closePromoModal, handleFileUpload, saveCredit, editCredit, deleteCredit, openImportModal,
             closeImportModal, resetImport, displayGrid, processRawPaste, processImport, regenerateBrandSummary,
             regenerateMonthReports, handleTreesCsvUpload, pushToMainTracker, resetBrandImport,
             processBrandRawPaste, processBrandImport, systemLogs, refreshIcons, clearAllSalesData,
-            detectMonthInString, drawCharts, openDimeHelper, exportVendorsAndBrandsCSV
+            detectMonthInString, drawCharts, openDimeHelper, exportVendorsAndBrandsCSV,
+            masterLedgerData, selectedLedgerVendor, refreshLedger, openLegacyVerification
+
         };
     }
 }).mount('#app');
