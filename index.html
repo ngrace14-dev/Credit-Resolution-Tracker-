@@ -348,11 +348,16 @@
                                 </th>
                             </tr>
                         </thead>
-                        <tbody>
-                            <!-- Placeholder rows to show it's ready for data -->
-                            <tr v-for="i in 10" :key="i" class="border-b border-gray-100 hover:bg-gray-50">
+                                                <tbody>
+                            <!-- REAL DATA FROM WORKBOOK -->
+                            <tr v-if="!masterWorkbook || !masterWorkbook.data || !masterWorkbook.data[activeWorkbookSheet]" v-for="i in 5" :key="'empty-'+i">
                                 <td v-for="header in workbookSchema[activeWorkbookSheet]" :key="header" class="py-3 px-4 text-gray-300 italic text-xs">
-                                    Pending data...
+                                    No data in sheet...
+                                </td>
+                            </tr>
+                            <tr v-for="(row, rIdx) in (masterWorkbook?.data?.[activeWorkbookSheet] || [])" :key="rIdx" class="border-b border-gray-100 hover:bg-gray-50 text-xs">
+                                <td v-for="header in workbookSchema[activeWorkbookSheet]" :key="header" class="py-2 px-4 text-gray-700 whitespace-nowrap">
+                                    {{ row[header] || row[workbookSchema[activeWorkbookSheet].indexOf(header)] || '-' }}
                                 </td>
                             </tr>
                         </tbody>

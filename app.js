@@ -1130,13 +1130,19 @@ createApp({
 
                     
                                         // 1. Master Workbook Listener
-                    onSnapshot(doc(db, "promo tracker", "Master_Workbook_V9_Board_Report"), (docSnap) => {
-                        if (docSnap.exists()) {
-                            masterWorkbook.value = docSnap.data();
-                        }
-                    }, (error) => {
-                        console.error("CRITICAL: Workbook Snapshot Error (Check Firebase Rules for 'promo tracker'):", error);
-                    });
+                                        console.log("Starting Workbook Listener...");
+                                        onSnapshot(doc(db, "promo tracker", "Master_Workbook_V9_Board_Report"), (docSnap) => {
+                                            if (docSnap.exists()) {
+                                                const data = docSnap.data();
+                                                console.log("Workbook Data Received:", Object.keys(data.data || {}));
+                                                masterWorkbook.value = data;
+                                                isWorkbookLoaded.value = true; // Auto-set to true once data arrives
+                                            } else {
+                                                console.error("CRITICAL: Workbook Document does not exist in Firebase at 'promo tracker/Master_Workbook_V9_Board_Report'");
+                                            }
+                                        }, (error) => {
+                                            console.error("CRITICAL: Workbook Snapshot Error:", error);
+                                        });
 
                                         // 2. Brands Listener
                     onSnapshot(collection(db, "brands"), (snapshot) => {
