@@ -38,13 +38,30 @@
                 <button @click="activeSite = 'Redding'" :class="activeSite === 'Redding' ? 'bg-amber-500 text-gray-950 shadow-md font-extrabold' : 'text-gray-400 hover:text-white'" class="px-5 py-1.5 rounded text-sm transition-all flex-1 sm:flex-none">Redding</button>
             </div>
 
-            <div class="hidden md:flex items-center gap-2" v-if="isManagerUnlocked">
+                        <div class="hidden md:flex items-center gap-2" v-if="isManagerUnlocked">
                 <div class="flex items-center gap-2 mr-2 bg-gray-900 px-3 py-1.5 rounded shadow-inner border border-gray-800 text-gray-300">
                     <i data-lucide="user" class="w-4 h-4 text-emerald-500"></i> <span class="text-sm font-bold">{{ loggedInUser }}</span>
                 </div>
-                <button v-if="isSuperAdmin" @click="activeTab = 'Logs'" class="bg-gray-800 hover:bg-gray-700 text-amber-500 hover:text-amber-400 px-3 py-1.5 rounded flex items-center gap-1.5 text-sm font-bold shadow transition-colors"><i data-lucide="activity" class="w-4 h-4"></i> Logs</button>
-                <button @click="forceLock" class="bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-amber-500 px-3 py-1.5 rounded flex items-center gap-1.5 text-sm font-bold shadow transition-colors"><i data-lucide="lock" class="w-4 h-4"></i> Lock</button>
-                <button @click="openImportModal" class="bg-gray-800 border border-gray-700 hover:bg-gray-700 text-amber-500 px-3 py-1.5 rounded flex items-center gap-1.5 text-sm font-bold shadow transition-colors"><i data-lucide="grid" class="w-4 h-4"></i> Paste Excel</button>
+                
+                <!-- ACTION MENU -->
+                <div class="relative">
+                    <button @click="showAdminMenu = !showAdminMenu" class="bg-gray-800 hover:bg-gray-700 text-amber-500 px-3 py-1.5 rounded flex items-center gap-1.5 text-sm font-bold shadow transition-all border border-gray-700">
+                        <i data-lucide="settings" class="w-4 h-4"></i> System <i data-lucide="chevron-down" class="w-3 h-3"></i>
+                    </button>
+                    <div v-if="showAdminMenu" class="absolute right-0 mt-2 w-48 bg-gray-900 border border-gray-800 rounded-xl shadow-2xl z-50 py-2 overflow-hidden animate-in fade-in zoom-in duration-200" @click.outside="showAdminMenu = false">
+                        <button @click="openImportModal(); showAdminMenu = false" class="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-emerald-600 hover:text-white transition-colors flex items-center gap-2">
+                            <i data-lucide="grid" class="w-4 h-4 text-amber-500"></i> Paste Excel
+                        </button>
+                        <button v-if="isSuperAdmin" @click="activeTab = 'Logs'; showAdminMenu = false" class="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-emerald-600 hover:text-white transition-colors flex items-center gap-2">
+                            <i data-lucide="activity" class="w-4 h-4 text-emerald-500"></i> View Logs
+                        </button>
+                        <div class="border-t border-gray-800 my-1"></div>
+                        <button @click="forceLock" class="w-full text-left px-4 py-2 text-sm text-red-400 hover:bg-red-600 hover:text-white transition-colors flex items-center gap-2">
+                            <i data-lucide="lock" class="w-4 h-4"></i> Lock System
+                        </button>
+                    </div>
+                </div>
+
                 <button @click="openPromoModal()" class="bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 rounded flex items-center gap-1.5 text-sm font-bold shadow transition-colors"><i data-lucide="plus" class="w-4 h-4"></i> New Promo</button>
             </div>
             
@@ -74,30 +91,48 @@
              </div>
         </main>
 
-                <!-- APP TABS NAV (Obsidian Background) -->
-        <div v-if="isManagerUnlocked" class="bg-gray-950 px-4 md:px-6 pt-2 flex gap-2 shrink-0 z-10 shadow-sm overflow-x-auto no-scrollbar border-b border-gray-800">
-            <div class="text-[10px] uppercase font-bold text-gray-500 tracking-widest self-center mr-2 hidden md:block">Workbook</div>
-                        <button @click="activeTab = 'Dashboard'" :class="activeTab === 'Dashboard' ? 'bg-gray-100 text-gray-900 font-extrabold border-t-4 border-emerald-500' : 'bg-gray-900/50 text-gray-400 hover:bg-gray-800 hover:text-white'" class="px-5 py-2 rounded-t-xl text-sm transition-colors tracking-wide whitespace-nowrap"><i data-lucide="bar-chart-2" class="w-3.5 h-3.5 inline mr-1.5 mb-0.5"></i>Exec Dash</button>
-            <button @click="activeTab = 'Sales'" :class="activeTab === 'Sales' ? 'bg-gray-100 text-gray-900 font-extrabold border-t-4 border-emerald-500' : 'bg-gray-900/50 text-gray-400 hover:bg-gray-800 hover:text-white'" class="px-5 py-2 rounded-t-xl text-sm transition-colors tracking-wide flex items-center gap-2 whitespace-nowrap"><i data-lucide="inbox" class="w-3.5 h-3.5 inline"></i>Discovery Intake <span v-if="filteredTreesSalesData.length > 0 && activeTab !== 'Sales'" class="bg-amber-500 text-gray-950 text-[10px] px-1.5 py-0.5 rounded-full">{{ filteredTreesSalesData.length }}</span></button>
-            <button @click="activeTab = 'Recovery'" :class="activeTab === 'Recovery' ? 'bg-gray-100 text-gray-900 font-extrabold border-t-4 border-emerald-500' : 'bg-gray-900/50 text-gray-400 hover:bg-gray-800 hover:text-white'" class="px-5 py-2 rounded-t-xl text-sm transition-colors tracking-wide whitespace-nowrap"><i data-lucide="dollar-sign" class="w-3.5 h-3.5 inline mr-1.5 mb-0.5"></i>Recovery Log</button>
-            <button @click="activeTab = 'Ledger'" :class="activeTab === 'Ledger' ? 'bg-gray-100 text-gray-900 font-extrabold border-t-4 border-emerald-500' : 'bg-gray-900/50 text-gray-400 hover:bg-gray-800 hover:text-white'" class="px-5 py-2 rounded-t-xl text-sm transition-colors tracking-wide whitespace-nowrap"><i data-lucide="book-open" class="w-3.5 h-3.5 inline mr-1.5 mb-0.5"></i>Master Ledger</button>
+                <!-- APP NAVIGATION (Dropdown View) -->
+                <div v-if="isManagerUnlocked" class="bg-gray-950 px-4 md:px-6 py-2.5 flex items-center justify-between shrink-0 z-10 shadow-sm border-b border-gray-800">
+                    <div class="flex items-center gap-4">
+                        <div class="text-[10px] uppercase font-bold text-gray-500 tracking-widest hidden md:block">Current Workspace</div>
+                
+                        <!-- WORKSPACE SELECTOR -->
+                        <div class="relative">
+                            <button @click="showWorkspaceMenu = !showWorkspaceMenu" class="bg-gray-900 border border-emerald-500/30 hover:border-emerald-500 text-white px-4 py-1.5 rounded-lg flex items-center gap-3 text-sm font-extrabold shadow-lg transition-all min-w-[200px] group">
+                                <div class="bg-emerald-500/10 p-1 rounded group-hover:bg-emerald-500/20 transition-colors">
+                                    <i :data-lucide="activeWorkspaceInfo.icon" class="w-4 h-4 text-emerald-500"></i>
+                                </div>
+                                <span class="flex-1 text-left">{{ activeWorkspaceInfo.label || activeWorkspaceInfo.name }}</span>
+                                <i data-lucide="chevron-down" class="w-4 h-4 text-gray-500 group-hover:text-emerald-500 transition-colors"></i>
+                            </button>
 
-            <button @click="activeTab = 'Reports'" :class="activeTab === 'Reports' ? 'bg-gray-100 text-gray-900 font-extrabold border-t-4 border-emerald-500' : 'bg-gray-900/50 text-gray-400 hover:bg-gray-800 hover:text-white'" class="px-5 py-2 rounded-t-xl text-sm transition-colors tracking-wide whitespace-nowrap"><i data-lucide="building" class="w-3.5 h-3.5 inline mr-1.5 mb-0.5"></i>Store Rec</button>
-                        <button @click="activeTab = 'Validation'" :class="activeTab === 'Validation' ? 'bg-gray-100 text-gray-900 font-extrabold border-t-4 border-emerald-500' : 'bg-gray-900/50 text-gray-400 hover:bg-gray-800 hover:text-white'" class="px-5 py-2 rounded-t-xl text-sm transition-colors tracking-wide whitespace-nowrap"><i data-lucide="check-square" class="w-3.5 h-3.5 inline mr-1.5 mb-0.5"></i>Workbook Validation</button>
-            <button @click="activeTab = 'Tracker'" :class="activeTab === 'Tracker' ? 'bg-gray-100 text-gray-900 font-extrabold border-t-4 border-emerald-500' : 'bg-gray-900/50 text-gray-400 hover:bg-gray-800 hover:text-white'" class="px-5 py-2 rounded-t-xl text-sm transition-colors tracking-wide whitespace-nowrap"><i data-lucide="clock" class="w-3.5 h-3.5 inline mr-1.5 mb-0.5"></i>Legacy Tracker</button>
+                            <!-- DROPDOWN CONTENT -->
+                            <div v-if="showWorkspaceMenu" class="absolute left-0 mt-2 w-72 bg-gray-950 border border-gray-800 rounded-xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] z-50 py-3 overflow-hidden animate-in slide-in-from-top-2 duration-200" @click.outside="showWorkspaceMenu = false">
+                                <div v-for="group in ['Workbook', 'Identity']" :key="group">
+                                    <div class="px-4 py-1 text-[10px] uppercase font-black text-gray-600 tracking-[0.2em] mb-1 flex items-center gap-2">
+                                        {{ group }}
+                                        <div class="h-px bg-gray-800 flex-1"></div>
+                                    </div>
+                                    <button v-for="tab in workspaceTabs.filter(t => t.group === group)" :key="tab.name" 
+                                            @click="selectWorkspace(tab)" 
+                                            :class="activeTab === tab.name ? 'bg-emerald-600/10 text-emerald-400' : 'text-gray-400 hover:bg-gray-900 hover:text-white'"
+                                            class="w-full text-left px-4 py-2.5 text-sm font-bold transition-all flex items-center gap-3 relative overflow-hidden">
+                                        <div v-if="activeTab === tab.name" class="absolute left-0 top-0 bottom-0 w-1 bg-emerald-500"></div>
+                                        <i :data-lucide="tab.icon" class="w-4 h-4" :class="activeTab === tab.name ? 'text-emerald-500' : 'text-gray-500'"></i>
+                                        {{ tab.label || tab.name }}
+                                        <span v-if="tab.name === 'Sales' && filteredTreesSalesData.length > 0" class="ml-auto bg-amber-500 text-gray-950 text-[10px] px-1.5 py-0.5 rounded-full font-black">{{ filteredTreesSalesData.length }}</span>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
 
-            
-                        <div class="w-px bg-gray-800 mx-2 self-stretch my-2"></div>
-            <div class="text-[10px] uppercase font-bold text-gray-500 tracking-widest self-center mr-2 hidden md:block">Identity & Contacts</div>
-            <button @click="activeTab = 'VendorMapping'" :class="activeTab === 'VendorMapping' ? 'bg-gray-100 text-gray-900 font-extrabold border-t-4 border-emerald-500' : 'bg-gray-900/50 text-gray-400 hover:bg-gray-800 hover:text-white'" class="px-5 py-2 rounded-t-xl text-sm transition-colors tracking-wide whitespace-nowrap"><i data-lucide="network" class="w-3.5 h-3.5 inline mr-1.5 mb-0.5"></i>Vendor Mapping</button>
-            <button @click="activeTab = 'Brands'" :class="activeTab === 'Brands' ? 'bg-gray-100 text-gray-900 font-extrabold border-t-4 border-emerald-500' : 'bg-gray-900/50 text-gray-400 hover:bg-gray-800 hover:text-white'" class="px-5 py-2 rounded-t-xl text-sm transition-colors tracking-wide whitespace-nowrap"><i data-lucide="book-user" class="w-3.5 h-3.5 inline mr-1.5 mb-0.5"></i>Brand Directory</button>
-            <button @click="activeTab = 'RepTracker'" :class="activeTab === 'RepTracker' ? 'bg-gray-100 text-gray-900 font-extrabold border-t-4 border-emerald-500' : 'bg-gray-900/50 text-gray-400 hover:bg-gray-800 hover:text-white'" class="px-5 py-2 rounded-t-xl text-sm transition-colors tracking-wide whitespace-nowrap"><i data-lucide="contact" class="w-3.5 h-3.5 inline mr-1.5 mb-0.5"></i>Rep Tracker</button>
-            <button @click="activeTab = 'MappingQueue'" :class="activeTab === 'MappingQueue' ? 'bg-gray-100 text-gray-900 font-extrabold border-t-4 border-emerald-500' : 'bg-gray-900/50 text-gray-400 hover:bg-gray-800 hover:text-white'" class="px-5 py-2 rounded-t-xl text-sm transition-colors tracking-wide whitespace-nowrap"><i data-lucide="list-todo" class="w-3.5 h-3.5 inline mr-1.5 mb-0.5"></i>Mapping Queue</button>
-
-            <div class="w-px bg-gray-800 mx-2 self-stretch my-2"></div>
-            <div class="text-[10px] uppercase font-bold text-gray-500 tracking-widest self-center mr-2 hidden md:block">Admin</div>
-            <button v-if="isSuperAdmin" @click="activeTab = 'Logs'" :class="activeTab === 'Logs' ? 'bg-gray-100 text-gray-900 font-extrabold border-t-4 border-amber-500' : 'bg-gray-900/50 text-gray-400 hover:bg-gray-800 hover:text-white'" class="px-5 py-2 rounded-t-xl text-sm transition-colors tracking-wide whitespace-nowrap"><i data-lucide="activity" class="w-3.5 h-3.5 inline mr-1.5 mb-0.5"></i>Logs</button>
-        </div>
+                    <div class="flex items-center gap-3">
+                        <div v-if="activeTab === 'Sales' && unsyncedSalesCount > 0" class="hidden lg:flex items-center gap-2 bg-amber-500/10 text-amber-500 px-3 py-1 rounded-full border border-amber-500/20 text-[10px] font-black uppercase tracking-tighter">
+                            <i data-lucide="alert-circle" class="w-3 h-3"></i> {{ unsyncedSalesCount }} claims pending sync
+                        </div>
+                    </div>
+                </div>
 
 
         <!-- SHARED GLOBAL FILTERS -->

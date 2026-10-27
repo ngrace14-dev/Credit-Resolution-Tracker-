@@ -4,6 +4,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-app.js";
 import { getFirestore, collection, addDoc, doc, updateDoc, deleteDoc, writeBatch, onSnapshot, setDoc } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js";
 import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js";
+import { getStorage, ref as sRef, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-storage.js";
 import { initializeAppCheck, ReCaptchaEnterpriseProvider } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-app-check.js";
 
 // 2. FIREBASE CONFIGURATION
@@ -30,6 +31,7 @@ try {
 
 const db = getFirestore(firebaseApp);
 const auth = getAuth(firebaseApp); 
+const storage = getStorage(firebaseApp); 
 
 // 3. VUE APP INIT
 const { createApp, ref, computed, nextTick, onMounted, watch } = window.Vue;
@@ -878,7 +880,35 @@ createApp({
         const form = ref(getEmptyForm());
         let unsubscribeBrands = null;
 
-                const masterWorkbook = ref(null);
+                const showWorkspaceMenu = ref(false);
+        const showAdminMenu = ref(false);
+
+        const workspaceTabs = [
+            { name: 'Dashboard', icon: 'bar-chart-2', group: 'Workbook' },
+            { name: 'Sales', icon: 'inbox', label: 'Discovery Intake', group: 'Workbook' },
+            { name: 'Recovery', icon: 'dollar-sign', group: 'Workbook' },
+            { name: 'Ledger', icon: 'book-open', group: 'Workbook' },
+            { name: 'Reports', icon: 'building', label: 'Store Rec', group: 'Workbook' },
+            { name: 'Validation', icon: 'check-square', label: 'Workbook Validation', group: 'Workbook' },
+            { name: 'Tracker', icon: 'clock', label: 'Legacy Tracker', group: 'Workbook' },
+            { name: 'VendorMapping', icon: 'network', group: 'Identity' },
+            { name: 'Brands', icon: 'book-user', label: 'Brand Directory', group: 'Identity' },
+            { name: 'RepTracker', icon: 'contact', group: 'Identity' },
+            { name: 'MappingQueue', icon: 'list-todo', group: 'Identity' },
+            { name: 'Logs', icon: 'activity', group: 'Admin' }
+        ];
+
+        const selectWorkspace = (tab) => {
+            activeTab.value = tab.name;
+            showWorkspaceMenu.value = false;
+            refreshIcons();
+        };
+
+        const activeWorkspaceInfo = computed(() => {
+            return workspaceTabs.find(t => t.name === activeTab.value) || workspaceTabs[0];
+        });
+
+        const masterWorkbook = ref(null);
 
         onMounted(() => {
             refreshIcons();
@@ -1215,109 +1245,140 @@ createApp({
             }
         };
 
-        const handleTreesCsvUpload = async (e) => {
+                const handleTreesCsvUpload = async (e) => {
             const file = e.target.files[0];
             if (!file) return;
-            const reader = new FileReader();
-            reader.onload = async (evt) => {
-                try {
-                    const text = evt.target.result;
-                    const rows = text.split(/\r?\n/);
-                    if (rows.length < 2) return alert("File is empty or invalid.");
 
-                    const parseCSVRow = (str) => {
-                        const result = [];
-                        let cell = '';
-                        let inQuotes = false;
-                        for (let i = 0; i < str.length; i++) {
-                            const char = str[i];
-                            if (char === '"') { inQuotes = !inQuotes; } 
-                            else if (char === ',' && !inQuotes) { result.push(cell.trim()); cell = ''; } 
-                            else { cell += char; }
-                        }
-                        result.push(cell.trim());
-                        return result;
-                    };
+            // NEW PHASE 1: PRESERVE CSV TO STORAGE BEFORE PARSING
+            const storagePath = `master_csvs/${activeSite.value}/${new Date().getFullYear()}/${activeMonth.value}/${Date.now()}_${file.name}`;
+            const fileRef = sRef(storage, storagePath);
+            
+            try {
+                // 1. Register the upload in Firestore manifest
+                const uploadManifest = {
+                    fileName: file.name,
+                    storagePath: storagePath,
+                    uploadedBy: loggedInUser.value,
+                    uploadedAt: Date.now(),
+                    site: activeSite.value,
+                    month: activeMonth.value,
+                    status: 'Preserved'
+                };
+                const manifestRef = await addDoc(collection(db, "source_uploads"), uploadManifest);
+                const uploadId = manifestRef.id;
 
-                    let headerIdx = 0;
-                    let headers = [];
-                    for (let i = 0; i < rows.length; i++) {
-                        const cols = parseCSVRow(rows[i]);
-                        if (cols.some(c => c.toLowerCase().includes('product brand') || c.toLowerCase().includes('vendor credit owed'))) {
-                            headerIdx = i;
-                            headers = cols.map(h => h.replace(/["']/g, '').trim());
-                            break;
-                        }
-                    }
+                // 2. Upload the raw binary to Storage
+                await uploadBytes(fileRef, file);
+                console.log("CSV preserved to storage:", storagePath);
 
-                    const getVal = (rowObj, ...keys) => {
-                        for (const key of keys) {
-                            const foundKey = Object.keys(rowObj).find(k => k.toLowerCase().trim() === key.toLowerCase().trim());
-                            if (foundKey && rowObj[foundKey] !== undefined) return rowObj[foundKey];
-                        }
-                        return '';
-                    };
+                const reader = new FileReader();
+                reader.onload = async (evt) => {
+                    try {
+                        const text = evt.target.result;
+                        const rows = text.split(/\r?\n/);
+                        if (rows.length < 2) return alert("File is empty or invalid.");
 
-                    const batch = writeBatch(db);
-                    let count = 0;
-
-                    for (let i = headerIdx + 1; i < rows.length; i++) {
-                        if (!rows[i].trim()) continue;
-                        const cols = parseCSVRow(rows[i]);
-                        const rowObj = {};
-                        headers.forEach((h, idx) => { rowObj[h] = cols[idx] ? cols[idx].replace(/["']/g, '') : ''; });
-
-                        const brandVal = getVal(rowObj, 'Product Brand', 'Brand');
-                        const trackingVal = getVal(rowObj, 'State Tracking Id', 'Tracking Id');
-
-                        if (!brandVal && !trackingVal) continue;
-
-                        const dateStr = getVal(rowObj, 'Date Closed', 'Date');
-                        const parsedMonth = detectMonthFromDate(dateStr) !== 'Unknown' ? detectMonthFromDate(dateStr) : 'August';
-                        const storeString = getVal(rowObj, 'Store Name', 'Location');
-                        const detectedSite = detectSiteFromName(storeString);
-
-                        const units = parseFloat(getVal(rowObj, 'Units Sold', 'Unit Sold', 'Qty', 'Quantity')) || 0;
-                        const unitPrice = parseFloat(String(getVal(rowObj, 'Cost Per Unit', 'Unit Price', 'Price')).replace(/[^0-9.-]+/g,"")) || 0;
-                        const discAmt = parseFloat(String(getVal(rowObj, 'Discounts', 'Discount Amount', 'Discount')).replace(/[^0-9.-]+/g,"")) || 0;
-                        const owedAmt = parseFloat(String(getVal(rowObj, 'Vendor Credit Owed', 'Credit Owed')).replace(/[^0-9.-]+/g,"")) || 0;
-
-                        const newSale = {
-                            month: parsedMonth, 
-                            brand: brandVal || 'Unknown Brand',
-                            discountTitle: getVal(rowObj, 'Discount Title', 'Discount Name') || '',
-                            dateClosed: dateStr,
-                            storeName: storeString,
-                            detectedSite: detectedSite,
-                            productName: getVal(rowObj, 'Product Name', 'Product') || '',
-                            owed: owedAmt,
-                            trackingId: trackingVal || '',
-                            unitsSold: units,
-                            unitPrice: unitPrice,
-                            discountAmount: discAmt,
-                            status: 'Unsynced',
-                            uploadedAt: Date.now()
+                        const parseCSVRow = (str) => {
+                            const result = [];
+                            let cell = '';
+                            let inQuotes = false;
+                            for (let i = 0; i < str.length; i++) {
+                                const char = str[i];
+                                if (char === '"') { inQuotes = !inQuotes; } 
+                                else if (char === ',' && !inQuotes) { result.push(cell.trim()); cell = ''; } 
+                                else { cell += char; }
+                            }
+                            result.push(cell.trim());
+                            return result;
                         };
 
-                        const newDocRef = doc(collection(db, "treesSales"));
-                        batch.set(newDocRef, newSale);
-                        count++;
-
-                        if (count % 400 === 0) {
-                            await batch.commit();
+                        let headerIdx = 0;
+                        let headers = [];
+                        for (let i = 0; i < rows.length; i++) {
+                            const cols = parseCSVRow(rows[i]);
+                            if (cols.some(c => c.toLowerCase().includes('product brand') || c.toLowerCase().includes('vendor credit owed'))) {
+                                headerIdx = i;
+                                headers = cols.map(h => h.replace(/["']/g, '').trim());
+                                break;
+                            }
                         }
-                    }
 
-                    await batch.commit();
-                    logSystemAction("IMPORT", `Uploaded ${count} raw sales items from Trees CSV`);
-                    alert(`Successfully uploaded ${count} sales items to the cloud!`);
-                    e.target.value = ''; 
-                } catch (error) { 
-                    console.error(error);
-                    alert("Error parsing CSV or uploading to cloud."); 
-                }
-            };
-            reader.readAsText(file); 
+                        const getVal = (rowObj, ...keys) => {
+                            for (const key of keys) {
+                                const foundKey = Object.keys(rowObj).find(k => k.toLowerCase().trim() === key.toLowerCase().trim());
+                                if (foundKey && rowObj[foundKey] !== undefined) return rowObj[foundKey];
+                            }
+                            return '';
+                        };
+
+                        const batch = writeBatch(db);
+                        let count = 0;
+
+                        for (let i = headerIdx + 1; i < rows.length; i++) {
+                            if (!rows[i].trim()) continue;
+                            const cols = parseCSVRow(rows[i]);
+                            const rowObj = {};
+                            headers.forEach((h, idx) => { rowObj[h] = cols[idx] ? cols[idx].replace(/["']/g, '') : ''; });
+
+                            const brandVal = getVal(rowObj, 'Product Brand', 'Brand');
+                            const trackingVal = getVal(rowObj, 'State Tracking Id', 'Tracking Id');
+
+                            if (!brandVal && !trackingVal) continue;
+
+                            const dateStr = getVal(rowObj, 'Date Closed', 'Date');
+                            const parsedMonth = detectMonthFromDate(dateStr) !== 'Unknown' ? detectMonthFromDate(dateStr) : 'August';
+                            const storeString = getVal(rowObj, 'Store Name', 'Location');
+                            const detectedSite = detectSiteFromName(storeString);
+
+                            const units = parseFloat(getVal(rowObj, 'Units Sold', 'Unit Sold', 'Qty', 'Quantity')) || 0;
+                            const unitPrice = parseFloat(String(getVal(rowObj, 'Cost Per Unit', 'Unit Price', 'Price')).replace(/[^0-9.-]+/g,"")) || 0;
+                            const discAmt = parseFloat(String(getVal(rowObj, 'Discounts', 'Discount Amount', 'Discount')).replace(/[^0-9.-]+/g,"")) || 0;
+                            const owedAmt = parseFloat(String(getVal(rowObj, 'Vendor Credit Owed', 'Credit Owed')).replace(/[^0-9.-]+/g,"")) || 0;
+
+                            const newSale = {
+                                uploadId: uploadId, // LINK TO SOURCE CSV
+                                month: parsedMonth, 
+                                brand: brandVal || 'Unknown Brand',
+                                discountTitle: getVal(rowObj, 'Discount Title', 'Discount Name') || '',
+                                dateClosed: dateStr,
+                                storeName: storeString,
+                                detectedSite: detectedSite,
+                                productName: getVal(rowObj, 'Product Name', 'Product') || '',
+                                owed: owedAmt,
+                                trackingId: trackingVal || '',
+                                unitsSold: units,
+                                unitPrice: unitPrice,
+                                discountAmount: discAmt,
+                                status: 'Unsynced',
+                                uploadedAt: Date.now()
+                            };
+
+                            const newDocRef = doc(collection(db, "treesSales"));
+                            batch.set(newDocRef, newSale);
+                            count++;
+
+                            if (count % 400 === 0) {
+                                await batch.commit();
+                            }
+                        }
+
+                        await batch.commit();
+                        await updateDoc(doc(db, "source_uploads", uploadId), { status: 'Parsed', rowCount: count });
+                        
+                        logSystemAction("IMPORT", `Uploaded ${count} raw sales items from Trees CSV (ID: ${uploadId})`);
+                        alert(`Successfully uploaded ${count} sales items and preserved source CSV to cloud storage!`);
+                        e.target.value = ''; 
+                    } catch (error) { 
+                        console.error(error);
+                        alert("Error parsing CSV or uploading to cloud."); 
+                    }
+                };
+                reader.readAsText(file); 
+
+            } catch (err) {
+                console.error("Storage Error:", err);
+                alert("CRITICAL: Failed to preserve CSV to Storage. Import aborted for data safety.");
+            }
         };
 
         const pushToMainTracker = async () => {
@@ -1545,8 +1606,8 @@ createApp({
             regenerateMonthReports, handleTreesCsvUpload, pushToMainTracker, resetBrandImport,
             processBrandRawPaste, processBrandImport, systemLogs, refreshIcons, clearAllSalesData,
                         detectMonthInString, drawCharts, openDimeHelper, exportVendorsAndBrandsCSV,
-            masterLedgerData, selectedLedgerVendor, refreshLedger, openLegacyVerification, ledgerTotals,
-            masterWorkbook
+                        masterLedgerData, selectedLedgerVendor, refreshLedger, openLegacyVerification, ledgerTotals,
+            masterWorkbook, showWorkspaceMenu, showAdminMenu, workspaceTabs, selectWorkspace, activeWorkspaceInfo
 
         };
     }

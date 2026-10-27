@@ -48,6 +48,11 @@ service cloud.firestore {
     match /emailHistories/{historyId} {
       allow read, write: if isAuthorizedManager();
     }
+        // New: Source Uploads Manifest (Phase 1)
+    match /source_uploads/{uploadId} {
+      allow read, write: if isAuthorizedManager();
+    }
+
     /**
     * GLOBAL SECURITY CATCH-ALL
     */
