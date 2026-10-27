@@ -37,19 +37,25 @@ const storage = getStorage(firebaseApp);
 const { createApp, ref, computed, nextTick, onMounted, watch } = window.Vue;
 
 createApp({
-    setup() {
+        setup() {
         const isManagerUnlocked = ref(false);
         const loggedInUser = ref('');
         const emailInput = ref('');
         const passwordInput = ref('');
-                const authError = ref('');
+        const authError = ref('');
         const activeSite = ref('Red Bluff');
         const activeTab = ref('Ledger');
-        const promoCredits = ref([]); // MOVED UP
+        const promoCredits = ref([]); 
+        const calendarMonths = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+        const activeMonth = ref('August');
+        const masterBrands = ref([]);
+        const treesSalesData = ref(JSON.parse(localStorage.getItem('treesSalesData')) || []);
+        const auditRange = ref({ start: '', end: '' });
 
         const selectedLedgerVendor = ref(null);
         const masterLedgerData = ref([]);
         const ledgerTotals = ref({ generated: 0, recovered: 0, outstanding: 0, variance: 0 });
+
 
         const refreshLedger = async () => {
 
@@ -161,18 +167,15 @@ createApp({
             }
         };
 
-        const treesSalesData = ref(JSON.parse(localStorage.getItem('treesSalesData')) || []);
-        
-        const saveTreesDataLocal = () => {
+                const saveTreesDataLocal = () => {
             localStorage.setItem('treesSalesData', JSON.stringify(treesSalesData.value));
         };
 
-        const masterBrands = ref([]);
-        const selectedBrands = ref([]);
-        
-        const allBrandsSelected = computed(() => {
+
+                const allBrandsSelected = computed(() => {
             return masterBrands.value.length > 0 && selectedBrands.value.length === masterBrands.value.length;
         });
+
         
         const toggleAllBrands = () => {
             if (allBrandsSelected.value) selectedBrands.value = [];
@@ -209,11 +212,9 @@ createApp({
         };
 
 
-        const calendarMonths = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-        const activeMonth = ref('August');
-        
-        const searchQueryInput = ref('');
+                const searchQueryInput = ref('');
         const searchQuery = ref('');      
+      
         let searchTimeout = null;
         
         watch(searchQueryInput, (newVal) => {
@@ -888,9 +889,8 @@ createApp({
         let unsubscribeBrands = null;
 
                 const showWorkspaceMenu = ref(false);
-        const showAdminMenu = ref(false);
+                const showAdminMenu = ref(false);
 
-                const auditRange = ref({ start: '', end: '' });
 
                 const brandAuditData = computed(() => {
                     const start = auditRange.value.start ? new Date(auditRange.value.start) : null;
