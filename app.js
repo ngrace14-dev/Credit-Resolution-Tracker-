@@ -80,20 +80,18 @@ createApp({
                     amount: c.amount
                 });
 
-                                // RECOVERY EVENT (Rules: Status MUST be Applied, but logic is separate in ledger)
+                                                // RECOVERY EVENT (Rules: Status MUST be Applied, but logic is separate in ledger)
                 // NEW SYSTEM: This will be sourced from 'promoRecovered' collection.
-                // CURRENT WIREFRAME: We simulate that only 90% of 'Applied' items are actually 'Recovered'
-                // to demonstrate the Variance/Outstanding logic without automatic 1:1 mapping.
                 if (c.status === 'Applied') {
-                    const recoveredAmount = (parseFloat(c.amount) || 0) * (Math.random() > 0.1 ? 1 : 0.8); 
+                    const recoveredAmount = (parseFloat(c.amount) || 0); 
                     ledger[v].recovered += recoveredAmount;
                     
                     if (recoveredAmount > 0) {
                         ledger[v].recoveredCount++;
                         ledger[v].recoveryEvents.push({
                             id: 'rec-' + c.id,
-                            ref: c.invoice || 'CHECK-PENDING',
-                            date: c.dateReceived || 'Pending Sync',
+                            ref: c.invoice || 'CREDIT-MEMO',
+                            date: c.dateReceived || 'Confirmed',
                             amount: recoveredAmount
                         });
                     }
@@ -106,15 +104,11 @@ createApp({
             
             Object.values(ledger).forEach(item => {
                 item.outstanding = item.generated - item.recovered;
-                // Variance simulation: random mock variance if outstanding > 0
-                if (item.outstanding > 0 && Math.random() > 0.7) {
-                    item.variance = (Math.random() * 50) * (Math.random() > 0.5 ? 1 : -1);
-                }
+                item.variance = 0;
                 
-                // Aging simulation based on generated amount
+                // Aging calculation based on actual outstanding
                 if (item.outstanding > 0) {
-                    item.aging['31-60'] = item.outstanding * 0.4;
-                    item.aging['0-30'] = item.outstanding * 0.6;
+                    item.aging['0-30'] = item.outstanding;
                 }
                 
                 totals.generated += item.generated;
@@ -884,6 +878,8 @@ createApp({
         const form = ref(getEmptyForm());
         let unsubscribeBrands = null;
 
+                const masterWorkbook = ref(null);
+
         onMounted(() => {
             refreshIcons();
 
@@ -905,6 +901,12 @@ createApp({
                     activeSite.value = managerData.access[0];
                     isManagerUnlocked.value = true;
                     
+                    onSnapshot(doc(db, "promo tracker", "Master_Workbook_V9_Board_Report"), (docSnap) => {
+                        if (docSnap.exists()) {
+                            masterWorkbook.value = docSnap.data();
+                        }
+                    });
+
                     unsubscribeBrands = onSnapshot(collection(db, "brands"), (snapshot) => {
                         const fetchedBrands = [];
                         snapshot.forEach(docSnap => { fetchedBrands.push({ id: docSnap.id, ...docSnap.data() }); });
@@ -1543,7 +1545,8 @@ createApp({
             regenerateMonthReports, handleTreesCsvUpload, pushToMainTracker, resetBrandImport,
             processBrandRawPaste, processBrandImport, systemLogs, refreshIcons, clearAllSalesData,
                         detectMonthInString, drawCharts, openDimeHelper, exportVendorsAndBrandsCSV,
-            masterLedgerData, selectedLedgerVendor, refreshLedger, openLegacyVerification, ledgerTotals
+            masterLedgerData, selectedLedgerVendor, refreshLedger, openLegacyVerification, ledgerTotals,
+            masterWorkbook
 
         };
     }

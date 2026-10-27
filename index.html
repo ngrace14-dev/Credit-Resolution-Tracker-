@@ -308,25 +308,16 @@
                                 <th class="text-center">Actions</th>
                             </tr>
                         </thead>
-                        <tbody>
-                            <!-- WIREFRAME MOCK DATA -->
-                            <tr class="hover:bg-gray-50">
-                                <td>2024-10-15</td>
-                                <td class="font-bold text-gray-900">Jeeter</td>
-                                <td class="font-mono text-gray-600">ACH-99482</td>
-                                <td>ACH</td>
-                                <td class="text-right font-bold text-emerald-600">$9,500.00</td>
-                                <td class="text-center"><span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-emerald-100 text-emerald-800">Matched</span></td>
-                                <td class="text-center">
-                                    <button class="text-gray-400 hover:text-amber-500 transition-colors"><i data-lucide="edit-2" class="w-4 h-4"></i></button>
-                                </td>
+                                                <tbody>
+                            <tr v-if="masterLedgerData.length === 0">
+                                <td colspan="7" class="text-center py-10 text-gray-500 font-medium bg-gray-50">No recovery records found.</td>
                             </tr>
-                            <tr class="hover:bg-gray-50">
-                                <td>2024-10-14</td>
-                                <td class="font-bold text-gray-900">Wyld</td>
-                                <td class="font-mono text-gray-600">CHK-1002</td>
-                                <td>Check</td>
-                                <td class="text-right font-bold text-emerald-600">$4,200.00</td>
+                            <tr v-for="recovery in masterLedgerData.filter(i => i.recovered > 0)" :key="'rec-'+recovery.vendor" class="hover:bg-gray-50">
+                                <td>{{ recovery.recoveryEvents[0]?.date || '-' }}</td>
+                                <td class="font-bold text-gray-900">{{ recovery.vendor }}</td>
+                                <td class="font-mono text-gray-600">{{ recovery.recoveryEvents[0]?.ref || '-' }}</td>
+                                <td>-</td>
+                                <td class="text-right font-bold text-emerald-600">{{ formatCurrency(recovery.recovered) }}</td>
                                 <td class="text-center"><span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-emerald-100 text-emerald-800">Matched</span></td>
                                 <td class="text-center">
                                     <button class="text-gray-400 hover:text-amber-500 transition-colors"><i data-lucide="edit-2" class="w-4 h-4"></i></button>
@@ -654,16 +645,16 @@
             <!-- PARITY DASHBOARD -->
             <div class="flex flex-col sm:flex-row gap-4 mb-6 shrink-0">
                 <div class="bg-gray-900 rounded-xl p-5 flex-1 shadow-md flex items-center justify-between border border-gray-800">
-                    <div>
+                                        <div>
                         <div class="text-[10px] md:text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">System Trust Score (Parity)</div>
-                        <div class="text-3xl font-extrabold text-emerald-400">98.4%</div>
+                        <div class="text-3xl font-extrabold text-emerald-400">{{ (ledgerTotals.generated > 0) ? (((ledgerTotals.generated - Math.abs(ledgerTotals.generated - (masterWorkbook?.total || 0))) / ledgerTotals.generated) * 100).toFixed(1) : '100' }}%</div>
                     </div>
                     <i data-lucide="shield-check" class="w-12 h-12 text-emerald-500/20"></i>
                 </div>
-                <div class="bg-white rounded-xl p-5 flex-1 shadow-sm flex items-center justify-between border border-gray-200">
+                                <div class="bg-white rounded-xl p-5 flex-1 shadow-sm flex items-center justify-between border border-gray-200">
                     <div>
                         <div class="text-[10px] md:text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Total Workbook Balance (Manual)</div>
-                        <div class="text-2xl font-extrabold text-gray-900">$1,250,400.00</div>
+                        <div class="text-2xl font-extrabold text-gray-900">{{ formatCurrency(masterWorkbook?.total || 0) }}</div>
                     </div>
                 </div>
                 <div class="bg-white rounded-xl p-5 flex-1 shadow-sm flex items-center justify-between border border-gray-200">
@@ -672,9 +663,11 @@
                         <div class="text-2xl font-extrabold text-gray-900">{{ formatCurrency(ledgerTotals.generated) }}</div>
                     </div>
                 </div>
-                <div class="bg-white border-l-4 border-red-500 rounded-xl p-5 flex-1 shadow-sm flex flex-col justify-center">
+                                <div class="bg-white border-l-4 border-red-500 rounded-xl p-5 flex-1 shadow-sm flex flex-col justify-center">
                     <div class="text-[10px] md:text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Net Variance</div>
-                    <div class="text-2xl font-extrabold text-red-600">($1,900.00)</div>
+                    <div class="text-2xl font-extrabold" :class="(ledgerTotals.generated - (masterWorkbook?.total || 0)) === 0 ? 'text-emerald-600' : 'text-red-600'">
+                        {{ formatCurrency(ledgerTotals.generated - (masterWorkbook?.total || 0)) }}
+                    </div>
                 </div>
             </div>
 
@@ -695,21 +688,22 @@
                                 <th class="text-center">Status</th>
                             </tr>
                         </thead>
-                        <tbody>
-                            <!-- WIREFRAME MOCK DATA -->
-                            <tr class="hover:bg-gray-50">
-                                <td class="font-bold text-gray-900">October</td>
-                                <td class="text-right font-mono bg-amber-50/20">$45,000.00</td>
-                                <td class="text-right font-mono text-gray-600">$45,000.00</td>
-                                <td class="text-right font-bold text-emerald-600">$0.00</td>
-                                <td class="text-center"><span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-emerald-100 text-emerald-800">Balanced</span></td>
+                                                <tbody>
+                            <tr v-if="!masterWorkbook" class="hover:bg-gray-50">
+                                <td colspan="5" class="text-center py-10 text-gray-500 font-medium bg-gray-50">No Board Report Loaded.</td>
                             </tr>
-                            <tr class="hover:bg-gray-50">
-                                <td class="font-bold text-gray-900">September</td>
-                                <td class="text-right font-mono bg-amber-50/20">$32,400.00</td>
-                                <td class="text-right font-mono text-gray-600">$30,500.00</td>
-                                <td class="text-right font-bold text-red-600">($1,900.00)</td>
-                                <td class="text-center"><span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-red-100 text-red-800">Investigation Required</span></td>
+                            <tr v-else class="hover:bg-gray-50">
+                                <td class="font-bold text-gray-900">{{ masterWorkbook.reportMonth || 'Current' }}</td>
+                                <td class="text-right font-mono bg-amber-50/20">{{ formatCurrency(masterWorkbook.total) }}</td>
+                                <td class="text-right font-mono text-gray-600">{{ formatCurrency(ledgerTotals.generated) }}</td>
+                                <td class="text-right font-bold" :class="(ledgerTotals.generated - masterWorkbook.total) === 0 ? 'text-emerald-600' : 'text-red-600'">
+                                    {{ formatCurrency(ledgerTotals.generated - masterWorkbook.total) }}
+                                </td>
+                                <td class="text-center">
+                                    <span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase" :class="(ledgerTotals.generated - masterWorkbook.total) === 0 ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'">
+                                        {{ (ledgerTotals.generated - masterWorkbook.total) === 0 ? 'Balanced' : 'Investigation Required' }}
+                                    </span>
+                                </td>
                             </tr>
                         </tbody>
                     </table>
