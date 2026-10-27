@@ -883,9 +883,11 @@ createApp({
                 const showWorkspaceMenu = ref(false);
         const showAdminMenu = ref(false);
 
-        const workspaceTabs = [
+                const workspaceTabs = [
             { name: 'Dashboard', icon: 'bar-chart-2', group: 'Workbook' },
+            { name: 'WorkbookViewer', icon: 'file-spreadsheet', label: 'Complete Workbook', group: 'Workbook' },
             { name: 'Sales', icon: 'inbox', label: 'Discovery Intake', group: 'Workbook' },
+
             { name: 'Recovery', icon: 'dollar-sign', group: 'Workbook' },
             { name: 'Ledger', icon: 'book-open', group: 'Workbook' },
             { name: 'Reports', icon: 'building', label: 'Store Rec', group: 'Workbook' },
@@ -909,6 +911,35 @@ createApp({
         });
 
         const masterWorkbook = ref(null);
+        const workbookSchema = {
+            "Board Recon - Red Bluff": ["Red Bluff - YTD Promo Reconciliation"],
+            "Board Recon - Redding": ["Redding - YTD Promo Reconciliation"],
+            "YTD Dashboard": ["Month", "Master Tracked", "Treez Valid POS", "Sage Collected"],
+            "Brand_Mapping": ["Master Workbook Legacy Name", "Standardized POS Name (CSV)"],
+            "YTD Running Totals": ["Brand", "Redding", "Red-Bluff", "Running Total Promo Credits", "Combined Brand Total"],
+            "January 2026": ["Brand", "Redding", "Red-Bluff", "Promo Credits ", "Date Requested", "Date Applied", "Credits Approved", "Credits Rejected", "Treez Total", "Month promo credits were generated"],
+            "February 2026": ["Brand", "Redding", "Red-Bluff", "Promo Credits ", "Date Requested", "Date Applied", "Credits Approved", "Credits Rejected", "Treez Total", "Month promo credits were generated"],
+            "March 2026": ["Brand", "Redding", "Red-Bluff", "Promo Credits ", "Date Requested", "Date Applied", "Credits Approved", "Credits Rejected", "Treez Total", "Month promo credits were generated"],
+            "April 2026": ["Brand", "Redding", "Red-Bluff", "Promo Credits ", "Date Requested", "Date Applied", "Credits Approved", "Credits Rejected", "Treez Total", "Month promo credits were generated"],
+            "May 2026": ["Brand", "Redding", "Red-Bluff", "Promo Credits ", "Date Requested", "Date Applied", "Credits Approved", "Credits Rejected", "Treez Total", "Month promo credits were generated"],
+            "June 2026": ["Brand", "Redding", "Red-Bluff", "Promo Credits ", "Date Requested", "Date Applied", "Credits Approved", "Credits Rejected", "Treez Total", "Month promo credits were generated"],
+            "July 2026": ["Brand", "Redding", "Red-Bluff", "Promo Credits ", "Date Requested", "Date Applied", "Credits Approved", "Credits Rejected", "Treez Total", "Month promo credits were generated"],
+            "August 2026": ["Brand", "Redding", "Red-Bluff", "Promo Credits ", "Date Requested", "Date Applied", "Credits Approved", "Credits Rejected", "Treez Total", "Month promo credits were generated"],
+            "September 2026": ["Brand", "Redding", "Red-Bluff", "Promo Credits ", "Date Requested", "Date Applied", "Credits Approved", "Credits Rejected", "Treez Total", "Month promo credits were generated"],
+            "October 2026": ["Brand", "Redding", "Red-Bluff", "Promo Credits ", "Date Requested", "Date Applied", "Credits Approved", "Credits Rejected", "Treez Total", "Month promo credits were generated"],
+            "November 2026": ["Brand", "Redding", "Red-Bluff", "Promo Credits ", "Date Requested", "Date Applied", "Credits Approved", "Credits Rejected", "Treez Total", "Month promo credits were generated"],
+            "December 2026": ["Brand", "Redding", "Red-Bluff", "Promo Credits ", "Date Requested", "Date Applied", "Credits Approved", "Credits Rejected", "Treez Total", "Month promo credits were generated"],
+            "Store Macro Summary": ["Store", "YTD Generated (POS)", "YTD Received (GL)", "Outstanding Balance"],
+            "Redding Store Audit": ["Brand", "Store", "YTD Generated (POS)", "YTD Received (GL)", "Outstanding Balance"],
+            "Red Bluff Store Audit": ["Brand", "Store", "YTD Generated (POS)", "YTD Received (GL)", "Outstanding Balance"],
+            "GL Raw by Store": ["Posted dt.", "Store", "Location", "Memo/Description", "Credit", "Mapped Brand"],
+            "Monthly Vendor Variance Report": ["Brand", "January Generated", "January Collected", "January Left on Table", "February Generated", "February Collected", "February Left on Table", "March Generated", "March Collected", "March Left on Table", "April Generated", "April Collected", "April Left on Table", "May Generated", "May Collected", "May Left on Table", "June Generated", "June Collected", "June Left on Table", "July Generated", "July Collected", "July Left on Table", "August Generated", "August Collected", "August Left on Table", "September Generated", "September Collected", "September Left on Table", "October Generated", "October Collected", "October Left on Table", "November Generated", "November Collected", "November Left on Table", "December Generated", "December Collected", "December Left on Table", "YTD Generated", "YTD Collected", "YTD Left on Table"],
+            "Sheet1": ["Vendor", "Distributor", "Credit Type", "Dates", "Credit amount $$$"]
+        };
+        const activeWorkbookSheet = ref(Object.keys(workbookSchema)[0]);
+        const isWorkbookLoaded = ref(false);
+
+
 
         onMounted(() => {
             refreshIcons();
@@ -1615,8 +1646,10 @@ createApp({
             processBrandRawPaste, processBrandImport, systemLogs, refreshIcons, clearAllSalesData,
                         detectMonthInString, drawCharts, openDimeHelper, exportVendorsAndBrandsCSV,
             masterLedgerData, selectedLedgerVendor, refreshLedger, openLegacyVerification, ledgerTotals,
-            masterWorkbook, showWorkspaceMenu, showAdminMenu, workspaceTabs, selectWorkspace, activeWorkspaceInfo,
-            scrollMonths
+                        masterWorkbook, showWorkspaceMenu, showAdminMenu, workspaceTabs, selectWorkspace, activeWorkspaceInfo,
+                        scrollMonths, workbookSchema, activeWorkbookSheet, isWorkbookLoaded
+
+
 
         };
     }
