@@ -2,10 +2,11 @@
 
 // 1. FIREBASE IMPORTS
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-app.js";
-import { getFirestore, collection, addDoc, doc, updateDoc, deleteDoc, writeBatch, onSnapshot, setDoc } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js";
+import { getFirestore, collection, addDoc, doc, updateDoc, deleteDoc, writeBatch, onSnapshot, setDoc, query, where, orderBy } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js";
 import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js";
 import { getStorage, ref as sRef, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-storage.js";
 import { initializeAppCheck, ReCaptchaEnterpriseProvider } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-app-check.js";
+
 
 // 2. FIREBASE CONFIGURATION
 const firebaseConfig = {
@@ -20,6 +21,11 @@ const firebaseConfig = {
 
 const firebaseApp = initializeApp(firebaseConfig);
 
+// APP CHECK DEBUG MODE (Prevents 403 Throttling in Dev)
+if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') {
+    self.FIREBASE_APPCHECK_DEBUG_TOKEN = true;
+}
+
 try {
     initializeAppCheck(firebaseApp, {
         provider: new ReCaptchaEnterpriseProvider("6LeNEb8tAAAAAN454U2BgfO-ot6wN8T3VexIgIMq"),
@@ -28,6 +34,7 @@ try {
 } catch (error) {
     console.error("App Check Error:", error);
 }
+
 
 const db = getFirestore(firebaseApp);
 const auth = getAuth(firebaseApp); 
@@ -1048,24 +1055,31 @@ createApp({
                         }
                     });
 
-                    unsubscribeBrands = onSnapshot(collection(db, "brands"), (snapshot) => {
+                                        onSnapshot(collection(db, "brands"), (snapshot) => {
                         const fetchedBrands = [];
                         snapshot.forEach(docSnap => { fetchedBrands.push({ id: docSnap.id, ...docSnap.data() }); });
                         fetchedBrands.sort((a, b) => (a.vendor || '').localeCompare(b.vendor || ''));
                         masterBrands.value = fetchedBrands;
+                    }, (error) => {
+                        console.error("Brands Snapshot Error:", error);
                     });
 
-                    onSnapshot(collection(db, "treesSales"), (snapshot) => {
+                    onSnapshot(query(collection(db, "treesSales"), where("detectedSite", "==", activeSite.value)), (snapshot) => {
                         const fetchedSales = [];
                         snapshot.forEach(docSnap => { fetchedSales.push({ id: docSnap.id, ...docSnap.data() }); });
                         treesSalesData.value = fetchedSales;
+                    }, (error) => {
+                        console.error("TreesSales Snapshot Error:", error);
                     });
 
-                    onSnapshot(collection(db, "promoCredits"), (snapshot) => {
+                    onSnapshot(query(collection(db, "promoCredits"), where("site", "==", activeSite.value)), (snapshot) => {
                         const fetchedCredits = [];
                         snapshot.forEach(docSnap => { fetchedCredits.push({ id: docSnap.id, ...docSnap.data() }); });
                         promoCredits.value = fetchedCredits;
+                    }, (error) => {
+                        console.error("PromoCredits Snapshot Error:", error);
                     });
+
 
                     if (managerData.superAdmin) {
                         onSnapshot(collection(db, "systemLogs"), (snapshot) => {
