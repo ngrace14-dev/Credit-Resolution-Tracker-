@@ -6,11 +6,11 @@ service cloud.firestore {
     // HELPER FUNCTIONS
     // ==========================================
     function isAuthorizedManager() {
-      return request.auth != null &&
+      return request.auth != null && request.auth.token.email != null &&
       (
-        request.auth.token.email == 'nicholas.grace@rredco.com' ||
-        request.auth.token.email == 'accounting@rredco.com' ||
-        request.auth.token.email.matches('.*@rredco[.]com$')
+        request.auth.token.email.lower() == 'nicholas.grace@rredco.com' ||
+        request.auth.token.email.lower() == 'accounting@rredco.com' ||
+        request.auth.token.email.lower().matches('^.*@rredco\\.com$')
       );
     }
 
@@ -18,22 +18,26 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    function isRredcoStaff() {
+      return request.auth != null && request.auth.token.email != null &&
+      request.auth.token.email.lower().matches('^.*@rredco\\.com$');
+    }
+
     function isNicholas() {
-      return request.auth != null &&
-      request.auth.token.email == 'nicholas.grace@rredco.com';
+      return request.auth != null && request.auth.token.email != null &&
+      request.auth.token.email.lower() == 'nicholas.grace@rredco.com';
     }
 
     // ==========================================
-    // NEW: WORKBOOK & BOARD REPORT HOOK
-    // Handles space in "promo tracker" collection name
+    // WORKBOOK & BOARD REPORTS
     // ==========================================
-    match /{colName}/{document} {
-      allow read: if colName == "promo tracker" && isAuthorizedManager();
-      allow write: if colName == "promo tracker" && isNicholas();
+    match /promo tracker/{document} {
+      allow read: if isAuthorizedManager();
+      allow write: if isNicholas();
     }
 
     // ==========================================
-    // PHASE 1: SOURCE UPLOAD MANIFESTS
+    // SOURCE UPLOAD MANIFESTS
     // ==========================================
     match /source_uploads/{document=**} {
       allow read, write: if isAuthorizedManager();
@@ -120,33 +124,52 @@ service cloud.firestore {
     }
 
     // ==========================================
-    // master_csvs (For parity with Storage)
+    // PCRP RECONCILIATION WORKFLOW
+    // ==========================================
+    match /reconciliationQueue/{document=**} {
+      allow read, write: if isAuthorizedManager();
+      allow delete: if isNicholas();
+    }
+
+    // ==========================================
+    // PCRP MASTER LEDGER
+    // ==========================================
+    match /reconciliationLedger/{document=**} {
+      allow read, create: if isAuthorizedManager();
+      allow update, delete: if false;
+    }
+
+    // ==========================================
+    // IMPORT BATCH TRACKING
+    // ==========================================
+    match /importBatches/{document=**} {
+      allow read, write: if isAuthorizedManager();
+      allow delete: if isNicholas();
+    }
+
+    // ==========================================
+    // FORENSIC AUDIT TRAIL
+    // ==========================================
+    match /auditLogs/{document=**} {
+      allow create: if isAuthorizedManager();
+      allow read: if isNicholas();
+      allow update, delete: if false;
+    }
+
+    // ==========================================
+    // FINANCIAL SNAPSHOTS
+    // ==========================================
+    match /ledgerSnapshots/{document=**} {
+      allow read, create: if isAuthorizedManager();
+      allow delete: if isNicholas();
+    }
+
+    // ==========================================
+    // CSV METADATA
     // ==========================================
     match /master_csvs/{document=**} {
       allow read: if isAuthorizedManager();
       allow write: if isNicholas();
-    }
-
-    // ==========================================
-    // MASTER LEDGER & RECONCILIATION
-    // ==========================================
-    match /reconciliationQueue/{document=**} {
-      allow read, write: if isAuthorizedManager();
-    }
-    match /reconciliationLedger/{document=**} {
-      allow read: if isAuthorizedManager();
-      allow write: if false;
-    }
-    match /importBatches/{document=**} {
-      allow read, write: if isAuthorizedManager();
-    }
-    match /auditLogs/{document=**} {
-      allow create: if isAuthorizedManager();
-      allow read: if isNicholas();
-    }
-    match /ledgerSnapshots/{document=**} {
-      allow read, create: if isAuthorizedManager();
-      allow delete: if isNicholas();
     }
   }
 }

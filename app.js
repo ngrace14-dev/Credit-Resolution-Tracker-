@@ -957,10 +957,12 @@ createApp({
                 const userEmail = user.email.toLowerCase();
                 const managerData = systemUsers[userEmail];
 
-                if (managerData && managerData.active) {
+                                if (managerData && managerData.active) {
                     loggedInUser.value = managerData.name;
                     activeSite.value = managerData.access[0];
                     isManagerUnlocked.value = true;
+                    isSuperAdmin.value = !!managerData.superAdmin;
+
                     
                     onSnapshot(doc(db, "promo tracker", "Master_Workbook_V9_Board_Report"), (docSnap) => {
                         if (docSnap.exists()) {
