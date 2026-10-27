@@ -902,41 +902,69 @@ createApp({
 
 
                 const brandAuditData = computed(() => {
+                    if (!masterWorkbook.value || !masterWorkbook.value.data) return [];
+            
                     const start = auditRange.value.start ? new Date(auditRange.value.start) : null;
                     const end = auditRange.value.end ? new Date(auditRange.value.end) : null;
             
                     const brandMap = {};
             
-                    promoCredits.value.forEach(c => {
-                        if (c.site !== activeSite.value || c.archived) return;
+                    // Define columns based on Workbook V9 Schema
+                    // Headers: ["Brand", "Redding", "Red-Bluff", "Promo Credits ", "Date Requested", "Date Applied", "Credits Approved", "Credits Rejected", "Treez Total", "Month promo credits were generated"]
+            
+                    // Loop through all sheets that look like a month (e.g., "January 2026")
+                    Object.keys(masterWorkbook.value.data).forEach(sheetName => {
+                        if (!sheetName.includes('2026')) return; // Filter for monthly sheets
                 
-                        // Use dateRequested or created timestamp for date range filtering
-                        const cDate = c.dateRequested ? new Date(c.dateRequested) : new Date(c.createdAt || 0);
-                        if (start && cDate < start) return;
-                        if (end && cDate > end) return;
+                        const sheetMonth = sheetName.split(' ')[0];
+                        const sheetYear = sheetName.split(' ')[1];
+                        const sheetDate = new Date(`${sheetMonth} 1, ${sheetYear}`);
                 
-                        const v = c.vendor || 'Unknown Brand';
-                        if (!brandMap[v]) {
-                            const brandInfo = masterBrands.value.find(b => (b.vendor || '').toLowerCase() === v.toLowerCase()) || {};
-                            brandMap[v] = {
-                                vendor: v,
-                                email: brandInfo.email || '',
-                                rep: brandInfo.rep || '',
-                                generated: 0,
-                                recovered: 0,
-                                credits: []
-                            };
-                        }
+                        // Only process sheets within the date range (approximate by month)
+                        if (start && sheetDate < new Date(start.getFullYear(), start.getMonth(), 1)) return;
+                        if (end && sheetDate > new Date(end.getFullYear(), end.getMonth(), 1)) return;
+
+                        const rows = masterWorkbook.value.data[sheetName] || [];
                 
-                        brandMap[v].generated += (parseFloat(c.amount) || 0);
-                        if (c.status === 'Applied') {
-                            brandMap[v].recovered += (parseFloat(c.amount) || 0);
-                        }
-                        brandMap[v].credits.push(c);
+                        rows.forEach(row => {
+                            const vendor = row["Brand"] || row[0]; // Handle object or array formats
+                            if (!vendor || vendor === "Brand") return; // Skip header/empty
+                    
+                            if (!brandMap[vendor]) {
+                                const brandInfo = masterBrands.value.find(b => (b.vendor || '').toLowerCase() === vendor.toLowerCase()) || {};
+                                brandMap[vendor] = {
+                                    vendor: vendor,
+                                    email: brandInfo.email || '',
+                                    rep: brandInfo.rep || '',
+                                    generated: 0,
+                                    recovered: 0,
+                                    rejected: 0,
+                                    credits: []
+                                };
+                            }
+                    
+                            // Column mapping from Workbook V9
+                            const amtGenerated = parseFloat(String(row["Promo Credits "] || row[3]).replace(/[^0-9.-]+/g,"")) || 0;
+                            const amtRecovered = parseFloat(String(row["Credits Approved"] || row[6]).replace(/[^0-9.-]+/g,"")) || 0;
+                            const amtRejected = parseFloat(String(row["Credits Rejected"] || row[7]).replace(/[^0-9.-]+/g,"")) || 0;
+                    
+                            brandMap[vendor].generated += amtGenerated;
+                            brandMap[vendor].recovered += amtRecovered;
+                            brandMap[vendor].rejected += amtRejected;
+                    
+                            brandMap[vendor].credits.push({
+                                month: sheetName,
+                                type: row["Promo Credits "] ? "Promo" : "N/A",
+                                dates: row["Date Requested"] || row[4] || "N/A",
+                                amount: amtGenerated,
+                                status: amtRecovered > 0 ? "Approved" : (amtRejected > 0 ? "Rejected" : "Pending")
+                            });
+                        });
                     });
             
                     return Object.values(brandMap).sort((a, b) => (b.generated - b.recovered) - (a.generated - a.recovered));
                 });
+
 
                 const draftAuditEmail = (brand) => {
                     if (!brand.email) return alert("No email found for this brand.");
@@ -950,14 +978,15 @@ createApp({
             
                     let body = `Hello ${brand.rep || brand.vendor},\n\n`;
                     body += `This is a formal audit report for promo credits associated with ${brand.vendor} at ${storeName} for the period of ${period}.\n\n`;
-                    body += `Summary of Account:\n`;
+                    body += `Summary of Account (Per Master Workbook V9):\n`;
                     body += `- Total Credits Generated: ${formatCurrency(brand.generated)}\n`;
-                    body += `- Total Credits Recovered: ${formatCurrency(brand.recovered)}\n`;
-                    body += `- Outstanding Balance: ${formatCurrency(brand.generated - brand.recovered)}\n\n`;
+                    body += `- Total Credits Approved/Applied: ${formatCurrency(brand.recovered)}\n`;
+                    if (brand.rejected > 0) body += `- Total Credits Rejected: ${formatCurrency(brand.rejected)}\n`;
+                    body += `- Net Outstanding Balance: ${formatCurrency(brand.generated - brand.recovered - brand.rejected)}\n\n`;
             
-                    body += `Itemized Outstanding Credits:\n`;
-                    brand.credits.filter(c => c.status !== 'Applied').forEach(c => {
-                        body += `- ${c.trackingMonth}: ${c.creditType} (${c.dates}) - ${formatCurrency(c.amount)}\n`;
+                    body += `Itemized Outstanding/Pending Credits:\n`;
+                    brand.credits.filter(c => c.status === 'Pending').forEach(c => {
+                        body += `- ${c.month}: ${formatCurrency(c.amount)} (Requested: ${c.dates})\n`;
                     });
             
                     body += `\nPlease review this statement and let us know if there are any discrepancies.\n\n`;
@@ -966,6 +995,7 @@ createApp({
                     const cleanEmails = brand.email.split(/[,;\s]+/).filter(Boolean).join(',');
                     window.location.href = `mailto:${cleanEmails}?cc=accounting@rredco.com&subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
                 };
+
 
                 const workspaceTabs = [
                     { name: 'Dashboard', icon: 'bar-chart-2', group: 'Workbook' },
@@ -1049,13 +1079,17 @@ createApp({
                     isSuperAdmin.value = !!managerData.superAdmin;
 
                     
+                                        // 1. Master Workbook Listener
                     onSnapshot(doc(db, "promo tracker", "Master_Workbook_V9_Board_Report"), (docSnap) => {
                         if (docSnap.exists()) {
                             masterWorkbook.value = docSnap.data();
                         }
+                    }, (error) => {
+                        console.error("CRITICAL: Workbook Snapshot Error (Check Firebase Rules for 'promo tracker'):", error);
                     });
 
-                                        onSnapshot(collection(db, "brands"), (snapshot) => {
+                    // 2. Brands Listener
+                    onSnapshot(collection(db, "brands"), (snapshot) => {
                         const fetchedBrands = [];
                         snapshot.forEach(docSnap => { fetchedBrands.push({ id: docSnap.id, ...docSnap.data() }); });
                         fetchedBrands.sort((a, b) => (a.vendor || '').localeCompare(b.vendor || ''));
@@ -1064,21 +1098,24 @@ createApp({
                         console.error("Brands Snapshot Error:", error);
                     });
 
+                    // 3. Sales Listener (Filtered)
                     onSnapshot(query(collection(db, "treesSales"), where("detectedSite", "==", activeSite.value)), (snapshot) => {
                         const fetchedSales = [];
                         snapshot.forEach(docSnap => { fetchedSales.push({ id: docSnap.id, ...docSnap.data() }); });
                         treesSalesData.value = fetchedSales;
                     }, (error) => {
-                        console.error("TreesSales Snapshot Error:", error);
+                        console.error("TreesSales Snapshot Error (Filtered Query):", error);
                     });
 
+                    // 4. Credits Listener (Filtered)
                     onSnapshot(query(collection(db, "promoCredits"), where("site", "==", activeSite.value)), (snapshot) => {
                         const fetchedCredits = [];
                         snapshot.forEach(docSnap => { fetchedCredits.push({ id: docSnap.id, ...docSnap.data() }); });
                         promoCredits.value = fetchedCredits;
                     }, (error) => {
-                        console.error("PromoCredits Snapshot Error:", error);
+                        console.error("PromoCredits Snapshot Error (Filtered Query):", error);
                     });
+
 
 
                     if (managerData.superAdmin) {
