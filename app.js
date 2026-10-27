@@ -1073,7 +1073,7 @@ createApp({
             return workspaceTabs.find(t => t.name === activeTab.value) || workspaceTabs[0];
         });
 
-        const masterWorkbook = ref(null);
+                const masterWorkbook = ref({ data: {} });
         const workbookSchema = {
             "Board Recon - Red Bluff": ["Red Bluff - YTD Promo Reconciliation"],
             "Board Recon - Redding": ["Redding - YTD Promo Reconciliation"],
@@ -1100,7 +1100,7 @@ createApp({
             "Sheet1": ["Vendor", "Distributor", "Credit Type", "Dates", "Credit amount $$$"]
         };
         const activeWorkbookSheet = ref(Object.keys(workbookSchema)[0]);
-                const isWorkbookLoaded = ref(false);
+        const isWorkbookLoaded = ref(false);
 
         const loadWorkbookFromStorage = async () => {
             try {
@@ -1109,31 +1109,41 @@ createApp({
                 const bytes = await getBytes(fileRef);
                 
                 const workbook = XLSX.read(bytes, { type: 'array' });
-                const workbookData = {};
+                const batch = writeBatch(db);
+                let sheetsImported = 0;
 
-                workbook.SheetNames.forEach(sheetName => {
+                for (const sheetName of workbook.SheetNames) {
                     const worksheet = workbook.Sheets[sheetName];
-                    workbookData[sheetName] = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
-                });
+                    const json = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
+                    
+                    // Prune empty rows
+                    const prunedRows = json.filter(row => {
+                        return Object.values(row).some(val => val !== "" && val !== null && val !== undefined);
+                    });
 
-                // Set local state
-                masterWorkbook.value = {
-                    data: workbookData,
-                    lastPulled: Date.now()
-                };
-                
+                    // SAVE EACH SHEET AS A SEPARATE DOCUMENT (Bypasses 1MB limit)
+                    const docId = sheetName.replace(/\//g, '_'); // Replace slashes for safe doc IDs
+                    const sheetRef = doc(db, "workbook_v9_sheets", docId);
+                    
+                    batch.set(sheetRef, {
+                        sheetName: sheetName,
+                        rows: prunedRows,
+                        updatedAt: Date.now()
+                    });
+                    
+                    // Update local state immediately
+                    masterWorkbook.value.data[sheetName] = prunedRows;
+                    sheetsImported++;
+                }
+
+                await batch.commit();
                 isWorkbookLoaded.value = true;
-                console.log("Workbook successfully parsed from storage:", Object.keys(workbookData));
-                
-                // ALSO: Sync this to Firestore doc for the other app features
-                await setDoc(doc(db, "promo tracker", "Master_Workbook_V9_Board_Report"), {
-                    data: workbookData,
-                    updatedAt: Date.now()
-                });
+                console.log(`Success! ${sheetsImported} sheets broken into individual docs and saved permanently.`);
+                alert(`Permanent Population Complete!\n\n${sheetsImported} sheets have been saved as individual records in Firestore. You will not need to pull the 2MB file from the server again.`);
 
             } catch (err) {
                 console.error("Storage Workbook Error:", err);
-                alert("Failed to pull workbook from Storage: " + err.message);
+                alert("Failed to pull and batch-save workbook: " + err.message);
             }
         };
 
@@ -1163,22 +1173,24 @@ createApp({
                     isSuperAdmin.value = !!managerData.superAdmin;
 
                     
-                                        // 1. Master Workbook Listener
-                                        console.log("Starting Workbook Listener...");
-                                        onSnapshot(doc(db, "promo tracker", "Master_Workbook_V9_Board_Report"), (docSnap) => {
-                                            if (docSnap.exists()) {
-                                                const data = docSnap.data();
-                                                console.log("Workbook Data Received:", Object.keys(data.data || {}));
-                                                masterWorkbook.value = data;
-                                                isWorkbookLoaded.value = true; // Auto-set to true once data arrives
-                                            } else {
-                                                console.error("CRITICAL: Workbook Document does not exist in Firebase at 'promo tracker/Master_Workbook_V9_Board_Report'");
-                                            }
-                                        }, (error) => {
-                                            console.error("CRITICAL: Workbook Snapshot Error:", error);
+                                        // 1. Permanent Sheet Listeners
+                                        onSnapshot(collection(db, "workbook_v9_sheets"), (snapshot) => {
+                                            snapshot.forEach(docSnap => {
+                                                const sheet = docSnap.data();
+                                                masterWorkbook.value.data[sheet.sheetName] = sheet.rows;
+                                            });
+                                            if (snapshot.size > 0) isWorkbookLoaded.value = true;
                                         });
 
-                                        // 2. Brands Listener
+                                        // 2. Master Workbook Summary Listener
+                                        onSnapshot(doc(db, "promo tracker", "Master_Workbook_V9_Board_Report"), (docSnap) => {
+                                            if (docSnap.exists()) {
+                                                const summary = docSnap.data();
+                                                masterWorkbook.value.summary = summary;
+                                            }
+                                        });
+
+                                        // 3. Brands Listener
                     onSnapshot(collection(db, "brands"), (snapshot) => {
                         const fetchedBrands = [];
                         snapshot.forEach(docSnap => { fetchedBrands.push({ id: docSnap.id, ...docSnap.data() }); });
@@ -1679,14 +1691,20 @@ const handleSageCsvUpload = async (e) => {
                         const updatedData = JSON.parse(JSON.stringify(masterWorkbook.value.data));
                         updatedData["GL Raw by Store"] = [...(updatedData["GL Raw by Store"] || []), ...importedSageData];
 
-                        await setDoc(doc(db, "promo tracker", "Master_Workbook_V9_Board_Report"), {
-                            ...masterWorkbook.value,
-                            data: updatedData,
-                            lastModified: Date.now(),
-                            modifiedBy: loggedInUser.value
-                        });
+                                            const sheetDocId = "GL Raw by Store";
+                    await setDoc(doc(db, "workbook_v9_sheets", sheetDocId), {
+                        sheetName: "GL Raw by Store",
+                        rows: updatedData["GL Raw by Store"],
+                        updatedAt: Date.now()
+                    });
 
-                        logSystemAction("IMPORT", `Uploaded ${importedSageData.length} Sage GL entries to Master Workbook`);
+                    // Update summary metadata
+                    await setDoc(doc(db, "promo tracker", "Master_Workbook_V9_Board_Report"), {
+                        lastModified: Date.now(),
+                        modifiedBy: loggedInUser.value
+                    }, { merge: true });
+
+                    logSystemAction("IMPORT", `Uploaded ${importedSageData.length} Sage GL entries to Master Workbook`);
                         alert(`Success! Added ${importedSageData.length} entries from Sage to the 'GL Raw by Store' sheet.`);
                         e.target.value = '';
             } catch (err) {
@@ -2105,16 +2123,22 @@ const handleSageCsvUpload = async (e) => {
                             updatesCount++;
                         });
 
-                        // Update the Master Document in Firestore
-                        await setDoc(doc(db, "promo tracker", "Master_Workbook_V9_Board_Report"), {
-                            ...masterWorkbook.value,
-                            data: updatedData,
-                            lastModified: Date.now(),
-                            modifiedBy: loggedInUser.value
-                        });
+                        // Update the specific sheet document instead of the whole workbook
+                            const sheetDocId = sheetName.replace(/\//g, '_');
+                            await setDoc(doc(db, "workbook_v9_sheets", sheetDocId), {
+                                sheetName: sheetName,
+                                rows: updatedData[sheetName],
+                                updatedAt: Date.now()
+                            });
 
-                        // Mark sales as Synced in the raw collection
-                        const batch = writeBatch(db);
+                            // Update summary metadata
+                            await setDoc(doc(db, "promo tracker", "Master_Workbook_V9_Board_Report"), {
+                                lastModified: Date.now(),
+                                modifiedBy: loggedInUser.value
+                            }, { merge: true });
+
+                            // Mark sales as Synced
+                            const batch = writeBatch(db);
                         unsynced.forEach(sale => {
                             batch.update(doc(db, "treesSales", sale.id), { status: 'Synced' });
                         });
