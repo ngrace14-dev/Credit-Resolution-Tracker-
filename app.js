@@ -1041,7 +1041,7 @@ createApp({
             return workspaceTabs.find(t => t.name === activeTab.value) || workspaceTabs[0];
         });
 
-                const masterWorkbook = ref({ data: {} });
+
         const workbookSchema = {
             "Board Recon - Red Bluff": ["Red Bluff - YTD Promo Reconciliation"],
             "Board Recon - Redding": ["Redding - YTD Promo Reconciliation"],
