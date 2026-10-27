@@ -1117,7 +1117,7 @@ createApp({
                 const showAdminMenu = ref(false);
 
 
-                                const brandAuditData = computed(() => {
+                                                                const brandAuditData = computed(() => {
                     if (!masterWorkbook.value || !masterWorkbook.value.data) return [];
             
                     const start = auditRange.value.start ? new Date(auditRange.value.start) : null;
@@ -1155,7 +1155,7 @@ createApp({
                                 };
                             }
                     
-                                                                                    // Column mapping based on Workbook V9 Master Schema with Fuzzy Match
+                            // Column mapping based on Workbook V9 Master Schema with Fuzzy Match
                             const rowKeys = Object.keys(row);
                             
                             const redKey = rowKeys.find(k => k.trim().toLowerCase() === 'redding');
@@ -1188,112 +1188,35 @@ createApp({
                                 brandMap[vendor].collected += amtCollected;
                                 brandMap[vendor].treezTotal += amtTreezRaw;
                         
-                                                    // NEW: Apply definitive Applied values from Audit sheets as per Extraction Rules
-                                                    const activeSiteKey = activeSite.value === "Redding" ? "redding" : "redBluff";
-                                                    Object.keys(brandMap).forEach(vendor => {
-                                                        const brandMetrics = definitiveBrandMetrics.value[activeSiteKey][vendor];
-                                                        if (brandMetrics) {
-                                                            brandMap[vendor].collected = brandMetrics.applied;
-                                                            brandMap[vendor].recovered = brandMetrics.applied; // For audit email template
-                            
-                                                            // If no range filter is active, use definitive generated too
-                                                            if (!start && !end) {
-                                                                brandMap[vendor].generated = brandMetrics.generated;
-                                                            }
-                                                        }
-                                                    });
+                                brandMap[vendor].credits.push({
+                                    month: sheetName,
+                                    amount: (amtRedding + amtRedBluff),
+                                    status: amtCollected > 0 ? "Collected" : "Pending"
+                                });
+                            }
+                        });
+                    });
 
-                                                    return Object.values(brandMap).sort((a, b) => (b.generated - b.collected) - (a.generated - a.collected));
+                    // NEW: Apply definitive Applied values from Audit sheets as per Extraction Rules
+                    const activeSiteKey = activeSite.value === "Redding" ? "redding" : "redBluff";
+                    Object.keys(brandMap).forEach(vendor => {
+                        const brandMetrics = definitiveBrandMetrics.value[activeSiteKey] ? definitiveBrandMetrics.value[activeSiteKey][vendor] : null;
+                        if (brandMetrics) {
+                            brandMap[vendor].collected = brandMetrics.applied;
+                            brandMap[vendor].recovered = brandMetrics.applied; // For audit email template
 
+                            // If no range filter is active, use definitive generated too
+                            if (!start && !end) {
+                                brandMap[vendor].generated = brandMetrics.generated;
+                            }
+                        }
+                    });
+
+                    return Object.values(brandMap).sort((a, b) => (b.generated - b.collected) - (a.generated - a.collected));
                 });
 
 
 
-                const draftAuditEmail = (brand) => {
-                    if (!brand.email) return alert("No email found for this brand.");
-            
-                    const storeName = activeSite.value === 'Redding' ? 'Sundial' : activeSite.value;
-                    const period = (auditRange.value.start && auditRange.value.end) 
-                        ? `${auditRange.value.start} to ${auditRange.value.end}`
-                        : "Year to Date";
-
-                    const subject = `Promo Credit Audit Report - ${storeName} - ${brand.vendor}`;
-            
-                    let body = `Hello ${brand.rep || brand.vendor},\n\n`;
-                    body += `This is a formal audit report for promo credits associated with ${brand.vendor} at ${storeName} for the period of ${period}.\n\n`;
-                    body += `Summary of Account (Per Master Workbook V9):\n`;
-                    body += `- Total Credits Generated: ${formatCurrency(brand.generated)}\n`;
-                    body += `- Total Credits Approved/Applied: ${formatCurrency(brand.recovered)}\n`;
-                    if (brand.rejected > 0) body += `- Total Credits Rejected: ${formatCurrency(brand.rejected)}\n`;
-                    body += `- Net Outstanding Balance: ${formatCurrency(brand.generated - brand.recovered - brand.rejected)}\n\n`;
-            
-                    body += `Itemized Outstanding/Pending Credits:\n`;
-                    brand.credits.filter(c => c.status === 'Pending').forEach(c => {
-                        body += `- ${c.month}: ${formatCurrency(c.amount)} (Requested: ${c.dates})\n`;
-                    });
-            
-                    body += `\nPlease review this statement and let us know if there are any discrepancies.\n\n`;
-                    body += `Best regards,\n\n${storeName} Accounting Team\n`;
-
-                    const cleanEmails = brand.email.split(/[,;\s]+/).filter(Boolean).join(',');
-                    window.location.href = `mailto:${cleanEmails}?cc=accounting@rredco.com&subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-                };
-
-
-                const workspaceTabs = [
-                                        { name: 'Dashboard', icon: 'bar-chart-2', group: 'Workbook' },
-                    { name: 'WorkbookViewer', icon: 'file-spreadsheet', label: 'Complete Workbook', group: 'Workbook' },
-                    { name: 'Sales', icon: 'inbox', label: 'Discovery Intake', group: 'Workbook' },
-                    { name: 'Recovery', icon: 'dollar-sign', group: 'Workbook' },
-                    { name: 'Ledger', icon: 'book-open', group: 'Workbook' },
-                    { name: 'Validation', icon: 'check-square', label: 'Workbook Validation', group: 'Workbook' },
-                    { name: 'BrandAudit', icon: 'clipboard-check', label: 'Brand Audit', group: 'Workbook' },
-                    { name: 'Reports', icon: 'mail-open', label: 'Monthly Reports', group: 'Workbook' },
-                    { name: 'Tracker', icon: 'list', label: 'Master Credit List', group: 'Workbook' },
-                    { name: 'VendorMapping', icon: 'network', group: 'Identity' },
-                    { name: 'Brands', icon: 'book-user', label: 'Brand Directory', group: 'Identity' },
-                    { name: 'RepTracker', icon: 'contact', group: 'Identity' },
-                    { name: 'MappingQueue', icon: 'list-todo', group: 'Identity' },
-                    { name: 'Logs', icon: 'activity', group: 'Admin' }
-                ];
-
-
-        const selectWorkspace = (tab) => {
-            activeTab.value = tab.name;
-            showWorkspaceMenu.value = false;
-            refreshIcons();
-        };
-
-        const activeWorkspaceInfo = computed(() => {
-            return workspaceTabs.find(t => t.name === activeTab.value) || workspaceTabs[0];
-        });
-
-
-                const workbookSchema = {
-            "Board Recon - Red Bluff": ["Red Bluff - YTD Promo Reconciliation", "Gross Promos Generated", "Store-Funded deductions", "Net Collectibles", "Sage Collected", "Monthly Outstanding", "YTD balances"],
-            "Board Recon - Redding": ["Redding - YTD Promo Reconciliation", "Gross Promos Generated", "Store-Funded deductions", "Net Collectibles", "Sage Collected", "Monthly Outstanding", "YTD balances"],
-            "YTD Dashboard": ["Month", "Master Tracked", "Treez Valid POS", "Sage Collected"],
-            "Brand_Mapping": ["Master Workbook Legacy Name", "Standardized POS Name (CSV)"],
-            "YTD Running Totals": ["Brand", "Redding", "Red-Bluff", "Running Total Promo Credits", "Combined Brand Total"],
-            "January 2026": ["Brand", "Redding", "Red-Bluff", "Date Requested", "Month promo credits were generated", "Promo Credits", "Date Applied", "Credits Approved", "Credits Rejected", "Treez Total"],
-            "February 2026": ["Brand", "Redding", "Red-Bluff", "Date Requested", "Month promo credits were generated", "Promo Credits", "Date Applied", "Credits Approved", "Credits Rejected", "Treez Total"],
-            "March 2026": ["Brand", "Redding", "Red-Bluff", "Date Requested", "Month promo credits were generated", "Promo Credits", "Date Applied", "Credits Approved", "Credits Rejected", "Treez Total"],
-            "April 2026": ["Brand", "Redding", "Red-Bluff", "Date Requested", "Month promo credits were generated", "Promo Credits", "Date Applied", "Credits Approved", "Credits Rejected", "Treez Total"],
-            "May 2026": ["Brand", "Redding", "Red-Bluff", "Date Requested", "Month promo credits were generated", "Promo Credits", "Date Applied", "Credits Approved", "Credits Rejected", "Treez Total"],
-            "June 2026": ["Brand", "Redding", "Red-Bluff", "Date Requested", "Month promo credits were generated", "Promo Credits", "Date Applied", "Credits Approved", "Credits Rejected", "Treez Total"],
-            "July 2026": ["Brand", "Redding", "Red-Bluff", "Date Requested", "Month promo credits were generated", "Promo Credits", "Date Applied", "Credits Approved", "Credits Rejected", "Treez Total"],
-            "August 2026": ["Brand", "Redding", "Red-Bluff", "Date Requested", "Month promo credits were generated", "Promo Credits", "Date Applied", "Credits Approved", "Credits Rejected", "Treez Total"],
-            "September 2026": ["Brand", "Redding", "Red-Bluff", "Date Requested", "Month promo credits were generated", "Promo Credits", "Date Applied", "Credits Approved", "Credits Rejected", "Treez Total"],
-            "October 2026": ["Brand", "Redding", "Red-Bluff", "Date Requested", "Month promo credits were generated", "Promo Credits", "Date Applied", "Credits Approved", "Credits Rejected", "Treez Total"],
-            "November 2026": ["Brand", "Redding", "Red-Bluff", "Date Requested", "Month promo credits were generated", "Promo Credits", "Date Applied", "Credits Approved", "Credits Rejected", "Treez Total"],
-            "December 2026": ["Brand", "Redding", "Red-Bluff", "Date Requested", "Month promo credits were generated", "Promo Credits", "Date Applied", "Credits Approved", "Credits Rejected", "Treez Total"],
-            "Store Macro Summary": ["Store", "YTD Generated (POS)", "YTD Received (GL)", "Outstanding Balance"],
-            "Redding Store Audit": ["Brand", "Store", "YTD Generated (POS)", "YTD Received (GL)", "Outstanding Balance"],
-            "Red Bluff Store Audit": ["Brand", "Store", "YTD Generated (POS)", "YTD Received (GL)", "Outstanding Balance"],
-            "GL Raw by Store": ["Posted dt.", "Store", "Location", "Memo/Description", "Mapped Brand", "Credit"],
-            "Monthly Vendor Variance Report": ["Brand", "January Generated", "January Collected", "January Left on Table", "February Generated", "February Collected", "February Left on Table", "March Generated", "March Collected", "March Left on Table", "April Generated", "April Collected", "April Left on Table", "May Generated", "May Collected", "May Left on Table", "June Generated", "June Collected", "June Left on Table", "July Generated", "July Collected", "July Left on Table", "August Generated", "August Collected", "August Left on Table", "September Generated", "September Collected", "September Left on Table", "October Generated", "October Collected", "October Left on Table", "November Generated", "November Collected", "November Left on Table", "December Generated", "December Collected", "December Left on Table", "YTD Generated", "YTD Collected", "YTD Left on Table"],
-            "Sheet1": ["Vendor", "Credit Type", "Dates", "Distributor", "Credit amount $$$"]
-        };
                 const activeWorkbookSheet = ref(Object.keys(workbookSchema)[0]);
         const isWorkbookLoaded = ref(false);
 
