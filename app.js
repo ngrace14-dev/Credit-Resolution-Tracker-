@@ -40,14 +40,18 @@ createApp({
         const loggedInUser = ref('');
         const emailInput = ref('');
         const passwordInput = ref('');
-        const authError = ref('');
+                const authError = ref('');
         const activeSite = ref('Red Bluff');
-                const activeTab = ref('Ledger');
-        
+        const activeTab = ref('Ledger');
+        const promoCredits = ref([]); // MOVED UP
+
         const selectedLedgerVendor = ref(null);
+
         const masterLedgerData = ref([]);
 
         const refreshLedger = async () => {
+            if (!promoCredits.value) return; // Prevent execution against undefined/null
+
             // Computed ledger simulation for UI wireframe
             const ledger = {};
             const site = activeSite.value;
@@ -179,7 +183,7 @@ createApp({
             }
         };
 
-        const updateBrandField = async (brandId, fieldName, event) => {
+                const updateBrandField = async (brandId, fieldName, event) => {
             const newValue = event.target.value;
             try {
                 await updateDoc(doc(db, "brands", brandId), {
@@ -191,7 +195,7 @@ createApp({
             }
         };
 
-        const promoCredits = ref([]);
+
         const calendarMonths = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
         const activeMonth = ref('August');
         
