@@ -2,7 +2,7 @@
 
 // 1. FIREBASE IMPORTS
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-app.js";
-import { getFirestore, collection, addDoc, doc, updateDoc, deleteDoc, writeBatch, onSnapshot, setDoc, query, where, orderBy } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js";
+import { getFirestore, collection, addDoc, doc, updateDoc, deleteDoc, writeBatch, onSnapshot, setDoc, query, where, orderBy, limit } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js";
 import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js";
 import { getStorage, ref as sRef, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-storage.js";
 import { initializeAppCheck, ReCaptchaEnterpriseProvider } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-app-check.js";
@@ -902,6 +902,47 @@ createApp({
         });
         
         const form = ref(getEmptyForm());
+        
+        // Optimized Listeners state
+        let unsubscribeSales = null;
+        let unsubscribeCredits = null;
+
+        const setupFilteredListeners = () => {
+            // Kill old listeners to prevent memory leaks/timeouts
+            if (unsubscribeSales) unsubscribeSales();
+            if (unsubscribeCredits) unsubscribeCredits();
+
+            // 1. Target exactly what you are looking at (Site + Month)
+            let salesQ = query(collection(db, "treesSales"), where("detectedSite", "==", activeSite.value));
+            let creditsQ = query(collection(db, "promoCredits"), where("site", "==", activeSite.value));
+
+            // Only pull the month you need (Huge performance boost!)
+            if (activeMonth.value !== 'All') {
+                salesQ = query(salesQ, where("month", "==", activeMonth.value));
+                creditsQ = query(creditsQ, where("trackingMonth", "==", activeMonth.value));
+            }
+
+            // Limit the pull to 2000 records to prevent browser crash
+            salesQ = query(salesQ, limit(2000));
+
+            unsubscribeSales = onSnapshot(salesQ, (snapshot) => {
+                const fetchedSales = [];
+                snapshot.forEach(docSnap => { fetchedSales.push({ id: docSnap.id, ...docSnap.data() }); });
+                treesSalesData.value = fetchedSales;
+            }, (err) => console.error("Sales Pull Failed:", err));
+
+            unsubscribeCredits = onSnapshot(creditsQ, (snapshot) => {
+                const fetchedCredits = [];
+                snapshot.forEach(docSnap => { fetchedCredits.push({ id: docSnap.id, ...docSnap.data() }); });
+                promoCredits.value = fetchedCredits;
+            }, (err) => console.error("Credits Pull Failed:", err));
+        };
+
+        // Re-run the pull whenever you change the Month or Site
+        watch([activeSite, activeMonth], () => {
+            if (isManagerUnlocked.value) setupFilteredListeners();
+        });
+
         let unsubscribeBrands = null;
 
                 const showWorkspaceMenu = ref(false);
@@ -1070,9 +1111,11 @@ createApp({
                 showImportModal.value = false;
                 showBrandImportModal.value = false;
 
-                if (!user) {
+                                if (!user) {
                     isManagerUnlocked.value = false;
                     loggedInUser.value = '';
+                    if (unsubscribeSales) { unsubscribeSales(); unsubscribeSales = null; }
+                    if (unsubscribeCredits) { unsubscribeCredits(); unsubscribeCredits = null; }
                     return;
                 }
 
@@ -1095,7 +1138,7 @@ createApp({
                         console.error("CRITICAL: Workbook Snapshot Error (Check Firebase Rules for 'promo tracker'):", error);
                     });
 
-                    // 2. Brands Listener
+                                        // 2. Brands Listener
                     onSnapshot(collection(db, "brands"), (snapshot) => {
                         const fetchedBrands = [];
                         snapshot.forEach(docSnap => { fetchedBrands.push({ id: docSnap.id, ...docSnap.data() }); });
@@ -1105,23 +1148,8 @@ createApp({
                         console.error("Brands Snapshot Error:", error);
                     });
 
-                    // 3. Sales Listener (Filtered)
-                    onSnapshot(query(collection(db, "treesSales"), where("detectedSite", "==", activeSite.value)), (snapshot) => {
-                        const fetchedSales = [];
-                        snapshot.forEach(docSnap => { fetchedSales.push({ id: docSnap.id, ...docSnap.data() }); });
-                        treesSalesData.value = fetchedSales;
-                    }, (error) => {
-                        console.error("TreesSales Snapshot Error (Filtered Query):", error);
-                    });
-
-                    // 4. Credits Listener (Filtered)
-                    onSnapshot(query(collection(db, "promoCredits"), where("site", "==", activeSite.value)), (snapshot) => {
-                        const fetchedCredits = [];
-                        snapshot.forEach(docSnap => { fetchedCredits.push({ id: docSnap.id, ...docSnap.data() }); });
-                        promoCredits.value = fetchedCredits;
-                    }, (error) => {
-                        console.error("PromoCredits Snapshot Error (Filtered Query):", error);
-                    });
+                    // 3. Optimized Sales & Credits Listeners
+                    setupFilteredListeners();
 
 
 
