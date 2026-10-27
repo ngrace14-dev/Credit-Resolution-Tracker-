@@ -28,10 +28,15 @@ service cloud.firestore {
       request.auth.token.email.lower() == 'nicholas.grace@rredco.com';
     }
 
-    // ==========================================
+        // ==========================================
     // WORKBOOK & BOARD REPORTS
     // ==========================================
     match /promo tracker/{document} {
+      allow read: if isAuthorizedManager();
+      allow write: if isNicholas();
+    }
+
+    match /workbook_v9_sheets/{document=**} {
       allow read: if isAuthorizedManager();
       allow write: if isNicholas();
     }

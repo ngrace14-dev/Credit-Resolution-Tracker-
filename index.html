@@ -328,20 +328,33 @@
                                 </div>
             </div>
 
-            <div v-if="isWorkbookLoaded" class="flex-1 flex flex-col min-h-0 bg-white rounded-xl border border-gray-300 shadow-sm overflow-hidden">
-                <!-- Workbook Sheet Selector (Tabs) -->
-                <div class="flex overflow-x-auto bg-gray-50 border-b border-gray-300 no-scrollbar">
-                    <button v-for="(headers, sheetName) in workbookSchema" :key="sheetName"
-                            @click="activeWorkbookSheet = sheetName"
-                            :class="activeWorkbookSheet === sheetName ? 'bg-white border-b-2 border-b-emerald-500 text-emerald-600 font-bold' : 'text-gray-500 hover:bg-gray-100'"
-                            class="px-5 py-3 text-sm whitespace-nowrap transition-colors border-r border-gray-200">
-                        {{ sheetName }}
+                        <div v-if="isWorkbookLoaded" class="flex-1 flex flex-col min-h-0 bg-white rounded-xl border border-gray-300 shadow-sm overflow-hidden">
+                <!-- Workbook Sheet Selector (With Scroll Arrows) -->
+                <div class="relative group bg-gray-50 border-b border-gray-300">
+                    <!-- Left Arrow -->
+                    <button @click="scrollWorkbookTabs('left')" class="absolute left-0 top-0 bottom-0 z-10 bg-white/80 hover:bg-white px-2 shadow-md border-r border-gray-200 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <i data-lucide="chevron-left" class="w-5 h-5 text-emerald-600"></i>
+                    </button>
+
+                    <div id="workbookTabContainer" class="flex overflow-x-auto no-scrollbar scroll-smooth px-8">
+                        <button v-for="(headers, sheetName) in workbookSchema" :key="sheetName"
+                                @click="activeWorkbookSheet = sheetName"
+                                :class="activeWorkbookSheet === sheetName ? 'bg-white border-b-2 border-b-emerald-500 text-emerald-600 font-bold' : 'text-gray-500 hover:bg-gray-100'"
+                                class="px-5 py-3 text-sm whitespace-nowrap transition-colors border-r border-gray-200">
+                            {{ sheetName }}
+                        </button>
+                    </div>
+
+                    <!-- Right Arrow -->
+                    <button @click="scrollWorkbookTabs('right')" class="absolute right-0 top-0 bottom-0 z-10 bg-white/80 hover:bg-white px-2 shadow-md border-l border-gray-200 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <i data-lucide="chevron-right" class="w-5 h-5 text-emerald-600"></i>
                     </button>
                 </div>
 
-                <!-- Sheet Data Grid -->
-                <div class="flex-1 overflow-auto">
-                    <table class="excel-table min-w-full">
+                <!-- Sheet Data Grid (With Internal Scrolling) -->
+                <div class="flex-1 overflow-auto bg-gray-200 p-1">
+                    <div class="bg-white shadow-inner rounded border border-gray-300 min-w-full inline-block">
+                        <table class="excel-table min-w-full">
                         <thead>
                             <tr class="bg-gray-50">
                                 <th v-for="header in workbookSchema[activeWorkbookSheet]" :key="header" class="text-left py-3 px-4 font-bold text-gray-700 uppercase tracking-wider text-[11px]">

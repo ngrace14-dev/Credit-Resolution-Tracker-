@@ -1926,12 +1926,20 @@ const handleSageCsvUpload = async (e) => {
         };
 
                 const scrollMonths = (direction) => {
-            const container = document.getElementById('monthScrollContainer');
-            if (container) {
-                const scrollAmount = direction === 'left' ? -200 : 200;
-                container.scrollBy({ left: scrollAmount, behavior: 'smooth' });
-            }
-        };
+                    const container = document.getElementById('monthScrollContainer');
+                    if (container) {
+                        const scrollAmount = direction === 'left' ? -200 : 200;
+                        container.scrollBy({ left: scrollAmount, behavior: 'smooth' });
+                    }
+                };
+
+                const scrollWorkbookTabs = (direction) => {
+                    const container = document.getElementById('workbookTabContainer');
+                    if (container) {
+                        const scrollAmount = direction === 'left' ? -300 : 300;
+                        container.scrollBy({ left: scrollAmount, behavior: 'smooth' });
+                    }
+                };
 
                 const showWorkbookSyncModal = ref(false);
         const workbookPasteData = ref('');
@@ -2211,7 +2219,7 @@ const handleSageCsvUpload = async (e) => {
             detectMonthInString, drawCharts, openDimeHelper, exportVendorsAndBrandsCSV,
             masterLedgerData, selectedLedgerVendor, refreshLedger, openLegacyVerification, ledgerTotals,
             masterWorkbook, showWorkspaceMenu, showAdminMenu, workspaceTabs, selectWorkspace, activeWorkspaceInfo,
-            scrollMonths, workbookSchema, activeWorkbookSheet, isWorkbookLoaded,
+            scrollMonths, scrollWorkbookTabs, workbookSchema, activeWorkbookSheet, isWorkbookLoaded,
                         auditRange, brandAuditData, draftAuditEmail, sageAuditData,
                         showWorkbookSyncModal, workbookPasteData, openWorkbookSyncModal, processWorkbookSync,
                         repopulateFromMasterWorkbook, updateWorkbookFromSales, loadWorkbookFromStorage
