@@ -83,7 +83,9 @@
             <button @click="activeTab = 'Ledger'" :class="activeTab === 'Ledger' ? 'bg-gray-100 text-gray-900 font-extrabold border-t-4 border-emerald-500' : 'bg-gray-900/50 text-gray-400 hover:bg-gray-800 hover:text-white'" class="px-5 py-2 rounded-t-xl text-sm transition-colors tracking-wide whitespace-nowrap"><i data-lucide="book-open" class="w-3.5 h-3.5 inline mr-1.5 mb-0.5"></i>Master Ledger</button>
 
             <button @click="activeTab = 'Reports'" :class="activeTab === 'Reports' ? 'bg-gray-100 text-gray-900 font-extrabold border-t-4 border-emerald-500' : 'bg-gray-900/50 text-gray-400 hover:bg-gray-800 hover:text-white'" class="px-5 py-2 rounded-t-xl text-sm transition-colors tracking-wide whitespace-nowrap"><i data-lucide="building" class="w-3.5 h-3.5 inline mr-1.5 mb-0.5"></i>Store Rec</button>
+                        <button @click="activeTab = 'Validation'" :class="activeTab === 'Validation' ? 'bg-gray-100 text-gray-900 font-extrabold border-t-4 border-emerald-500' : 'bg-gray-900/50 text-gray-400 hover:bg-gray-800 hover:text-white'" class="px-5 py-2 rounded-t-xl text-sm transition-colors tracking-wide whitespace-nowrap"><i data-lucide="check-square" class="w-3.5 h-3.5 inline mr-1.5 mb-0.5"></i>Workbook Validation</button>
             <button @click="activeTab = 'Tracker'" :class="activeTab === 'Tracker' ? 'bg-gray-100 text-gray-900 font-extrabold border-t-4 border-emerald-500' : 'bg-gray-900/50 text-gray-400 hover:bg-gray-800 hover:text-white'" class="px-5 py-2 rounded-t-xl text-sm transition-colors tracking-wide whitespace-nowrap"><i data-lucide="clock" class="w-3.5 h-3.5 inline mr-1.5 mb-0.5"></i>Legacy Tracker</button>
+
             
             <div class="w-px bg-gray-800 mx-2 self-stretch my-2"></div>
             <div class="text-[10px] uppercase font-bold text-gray-500 tracking-widest self-center mr-2 hidden md:block">Admin</div>
@@ -626,7 +628,86 @@
             </div>
         </div>
 
-                <!-- TREES SALES REPORTS TAB (DISCOVERY INTAKE) -->
+                <!-- WORKBOOK VALIDATION TAB (NEW WORKSPACE) -->
+        <main v-if="isManagerUnlocked && activeTab === 'Validation'" class="flex-1 flex flex-col p-4 md:p-6 bg-gray-100 overflow-hidden">
+            <div class="flex justify-between items-end mb-4 shrink-0">
+                <div>
+                    <h2 class="text-xl font-bold text-gray-900 leading-tight">Workbook Validation</h2>
+                    <p class="text-sm text-gray-500 mt-1">Audit the digital PCRP ledger against the physical accounting workbook to ensure parity.</p>
+                </div>
+                <div class="flex gap-2">
+                    <button class="bg-gray-900 hover:bg-gray-800 text-amber-500 px-4 py-2 rounded-lg flex items-center gap-2 text-sm font-bold shadow-md transition-colors">
+                        <i data-lucide="upload-cloud" class="w-4 h-4"></i> Sync Workbook Totals
+                    </button>
+                </div>
+            </div>
+
+            <!-- PARITY DASHBOARD -->
+            <div class="flex flex-col sm:flex-row gap-4 mb-6 shrink-0">
+                <div class="bg-gray-900 rounded-xl p-5 flex-1 shadow-md flex items-center justify-between border border-gray-800">
+                    <div>
+                        <div class="text-[10px] md:text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">System Trust Score (Parity)</div>
+                        <div class="text-3xl font-extrabold text-emerald-400">98.4%</div>
+                    </div>
+                    <i data-lucide="shield-check" class="w-12 h-12 text-emerald-500/20"></i>
+                </div>
+                <div class="bg-white rounded-xl p-5 flex-1 shadow-sm flex items-center justify-between border border-gray-200">
+                    <div>
+                        <div class="text-[10px] md:text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Total Workbook Balance (Manual)</div>
+                        <div class="text-2xl font-extrabold text-gray-900">$1,250,400.00</div>
+                    </div>
+                </div>
+                <div class="bg-white rounded-xl p-5 flex-1 shadow-sm flex items-center justify-between border border-gray-200">
+                    <div>
+                        <div class="text-[10px] md:text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Total PCRP Ledger Balance (Auto)</div>
+                        <div class="text-2xl font-extrabold text-gray-900">{{ formatCurrency(ledgerTotals.generated) }}</div>
+                    </div>
+                </div>
+                <div class="bg-white border-l-4 border-red-500 rounded-xl p-5 flex-1 shadow-sm flex flex-col justify-center">
+                    <div class="text-[10px] md:text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Net Variance</div>
+                    <div class="text-2xl font-extrabold text-red-600">($1,900.00)</div>
+                </div>
+            </div>
+
+            <!-- COMPARISON GRID -->
+            <div class="bg-white rounded-xl border border-gray-300 shadow-sm flex-1 flex flex-col min-h-0 overflow-hidden">
+                <div class="p-4 border-b bg-gray-50 flex justify-between items-center shrink-0">
+                    <h3 class="font-bold text-gray-900">Variance Breakdown by Month</h3>
+                    <div class="text-xs text-gray-500 font-medium"><i data-lucide="info" class="w-3.5 h-3.5 inline mb-0.5"></i> Variances over $100 require manager approval.</div>
+                </div>
+                <div class="overflow-auto flex-1">
+                    <table class="excel-table min-w-max">
+                        <thead class="sticky top-0 z-10 shadow-sm bg-gray-50">
+                            <tr>
+                                <th>Month</th>
+                                <th class="text-right bg-amber-50/50">Workbook Total</th>
+                                <th class="text-right">PCRP Total</th>
+                                <th class="text-right">Variance</th>
+                                <th class="text-center">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <!-- WIREFRAME MOCK DATA -->
+                            <tr class="hover:bg-gray-50">
+                                <td class="font-bold text-gray-900">October</td>
+                                <td class="text-right font-mono bg-amber-50/20">$45,000.00</td>
+                                <td class="text-right font-mono text-gray-600">$45,000.00</td>
+                                <td class="text-right font-bold text-emerald-600">$0.00</td>
+                                <td class="text-center"><span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-emerald-100 text-emerald-800">Balanced</span></td>
+                            </tr>
+                            <tr class="hover:bg-gray-50">
+                                <td class="font-bold text-gray-900">September</td>
+                                <td class="text-right font-mono bg-amber-50/20">$32,400.00</td>
+                                <td class="text-right font-mono text-gray-600">$30,500.00</td>
+                                <td class="text-right font-bold text-red-600">($1,900.00)</td>
+                                <td class="text-center"><span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-red-100 text-red-800">Investigation Required</span></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+
         <main v-if="isManagerUnlocked && activeTab === 'Sales'" class="flex-1 flex flex-col p-4 md:p-6 pt-4 bg-gray-100 overflow-hidden">
             <div class="flex justify-between items-end mb-4 shrink-0">
                 <div>
