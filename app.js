@@ -63,10 +63,46 @@ createApp({
                 const masterBrands = ref([]);
                 const selectedBrands = ref([]);
 
-                // 1. DATA SOURCE: Master Workbook Fragments
-                const masterWorkbook = ref({ data: {}, summary: {} });
+                                // 1. DATA SOURCE: Master Workbook Fragments
+                                const masterWorkbook = ref({ data: {}, summary: {} });
 
-                // 2. COMPUTED: promoCredits (This name is what all components expect)
+                                // NEW: Extraction Rules Logic (Definitive Applied & Generated per Brand)
+                                const definitiveBrandMetrics = computed(() => {
+                                    const metrics = { total: {}, redding: {}, redBluff: {} };
+                                    if (!masterWorkbook.value || !masterWorkbook.value.data) return metrics;
+
+                                    const processSheet = (sheetName, siteKey) => {
+                                        const rows = masterWorkbook.value.data[sheetName] || [];
+                                        rows.forEach(row => {
+                                            const brandRaw = row["Brand"];
+                                            if (!brandRaw) return;
+                                            const brand = String(brandRaw).trim();
+                            
+                                            // Cleaning as per Extraction Rules Step 3/4
+                                            const cleanBrand = brand.toLowerCase();
+                                            if (['nan', 'grand total', '(blank)', 'store-funded', 'brand'].includes(cleanBrand)) return;
+
+                                            const applied = parseFloat(String(row["YTD Received (GL)"] || 0).replace(/[^0-9.-]+/g,"")) || 0;
+                                            const generated = parseFloat(String(row["YTD Generated (POS)"] || 0).replace(/[^0-9.-]+/g,"")) || 0;
+                            
+                                            if (!metrics.total[brand]) metrics.total[brand] = { applied: 0, generated: 0 };
+                                            metrics.total[brand].applied += applied;
+                                            metrics.total[brand].generated += generated;
+
+                                            if (!metrics[siteKey][brand]) metrics[siteKey][brand] = { applied: 0, generated: 0 };
+                                            metrics[siteKey][brand].applied += applied;
+                                            metrics[siteKey][brand].generated += generated;
+                                        });
+                                    };
+
+                                    processSheet('Redding Store Audit', 'redding');
+                                    processSheet('Red Bluff Store Audit', 'redBluff');
+                                    return metrics;
+                                });
+
+                                // 2. COMPUTED: promoCredits (This name is what all components expect)
+
+
                 const promoCredits = computed(() => {
                     const allCredits = [];
                     if (!masterWorkbook.value || !masterWorkbook.value.data) return [];
@@ -236,12 +272,28 @@ createApp({
             });
 
 
-                        // 2. Finalize Calculations
-            const totals = { generated: 0, recovered: 0, outstanding: 0, variance: 0 };
+                        // 2. Finalize Calculations using Definitive Extraction Rules
+                        const totals = { generated: 0, recovered: 0, outstanding: 0, variance: 0 };
+                        const siteKey = site === "Redding" ? "redding" : "redBluff";
             
-            Object.values(ledger).forEach(item => {
-                item.outstanding = item.generated - item.recovered;
-                item.variance = 0;
+                        Object.values(ledger).forEach(item => {
+                            // APPLY CRITICAL EXTRACTION RULES:
+                            // Treat YTD Received (GL) from Audit sheets as the definitive "Applied" value.
+                            // We use the site-specific metric when a site is selected, or 'total' if we were in a global view.
+                            const brandMetrics = definitiveBrandMetrics.value[siteKey][item.vendor];
+                
+                            if (brandMetrics) {
+                                item.recovered = brandMetrics.applied;
+                                // If viewing 'All' months, we also use the definitive Generated value to ensure parity
+                                if (month === 'All') {
+                                    item.generated = brandMetrics.generated;
+                                }
+                            }
+
+                            item.outstanding = item.generated - item.recovered;
+                            item.variance = 0;
+
+
                 
                 // Aging calculation based on actual outstanding
                 if (item.outstanding > 0) {
@@ -1136,17 +1188,25 @@ createApp({
                                 brandMap[vendor].collected += amtCollected;
                                 brandMap[vendor].treezTotal += amtTreezRaw;
                         
-                                brandMap[vendor].credits.push({
-                                    month: sheetName,
-                                    amount: (amtRedding + amtRedBluff),
-                                    status: amtCollected > 0 ? "Collected" : "Pending"
-                                });
-                            }
-                        });
-                    });
-            
-                    return Object.values(brandMap).sort((a, b) => (b.generated - b.collected) - (a.generated - a.collected));
+                                                    // NEW: Apply definitive Applied values from Audit sheets as per Extraction Rules
+                                                    const activeSiteKey = activeSite.value === "Redding" ? "redding" : "redBluff";
+                                                    Object.keys(brandMap).forEach(vendor => {
+                                                        const brandMetrics = definitiveBrandMetrics.value[activeSiteKey][vendor];
+                                                        if (brandMetrics) {
+                                                            brandMap[vendor].collected = brandMetrics.applied;
+                                                            brandMap[vendor].recovered = brandMetrics.applied; // For audit email template
+                            
+                                                            // If no range filter is active, use definitive generated too
+                                                            if (!start && !end) {
+                                                                brandMap[vendor].generated = brandMetrics.generated;
+                                                            }
+                                                        }
+                                                    });
+
+                                                    return Object.values(brandMap).sort((a, b) => (b.generated - b.collected) - (a.generated - a.collected));
+
                 });
+
 
 
                 const draftAuditEmail = (brand) => {
