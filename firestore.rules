@@ -1,63 +1,152 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    /**
-    * AUTHENTICATION HELPERS
-    */
+    
+    // ==========================================
+    // HELPER FUNCTIONS
+    // ==========================================
     function isAuthorizedManager() {
-      return request.auth != null && (
+      return request.auth != null &&
+      (
         request.auth.token.email == 'nicholas.grace@rredco.com' ||
         request.auth.token.email == 'accounting@rredco.com' ||
         request.auth.token.email.matches('.*@rredco[.]com$')
       );
     }
-    /**
-    * WORKBOOK & BOARD REPORT HOOK
-    * Corrected syntax for collection with spaces: "promo tracker"
-    */
+
+    function isPortalUser() {
+      return request.auth != null;
+    }
+
+    function isNicholas() {
+      return request.auth != null &&
+      request.auth.token.email == 'nicholas.grace@rredco.com';
+    }
+
+    // ==========================================
+    // NEW: WORKBOOK & BOARD REPORT HOOK
+    // Handles space in "promo tracker" collection name
+    // ==========================================
     match /{colName}/{document} {
       allow read: if colName == "promo tracker" && isAuthorizedManager();
-      // Restrict modification to Nicholas Grace
-      allow write: if colName == "promo tracker" && 
-      request.auth != null && 
-      request.auth.token.email == 'nicholas.grace@rredco.com';
+      allow write: if colName == "promo tracker" && isNicholas();
     }
-    /**
-    * CORE COLLECTIONS
-    */
-    match /promoCredits/{creditId} {
-      allow read, write: if isAuthorizedManager();
-    }
-    match /brands/{brandId} {
-      allow read, write: if isAuthorizedManager();
-    }
-    match /treesSales/{saleId} {
-      allow read, write: if isAuthorizedManager();
-    }
-    match /promoRecovered/{recoveryId} {
-      allow read, write: if isAuthorizedManager();
-    }
-    /**
-    * SYSTEM AUDIT & HISTORY
-    */
-    match /systemLogs/{logId} {
-      allow create: if isAuthorizedManager();
-      allow read, update, delete: if request.auth != null && 
-      request.auth.token.email == 'nicholas.grace@rredco.com';
-    }
-    match /emailHistories/{historyId} {
-      allow read, write: if isAuthorizedManager();
-    }
-        // New: Source Uploads Manifest (Phase 1)
-    match /source_uploads/{uploadId} {
+
+    // ==========================================
+    // PHASE 1: SOURCE UPLOAD MANIFESTS
+    // ==========================================
+    match /source_uploads/{document=**} {
       allow read, write: if isAuthorizedManager();
     }
 
-    /**
-    * GLOBAL SECURITY CATCH-ALL
-    */
-    match /{document=**} {
-      allow read, write: if false;
+    // ==========================================
+    // BRAND PORTAL ACCESS
+    // ==========================================
+    match /brands/{document=**} {
+      allow read: if isPortalUser() || isAuthorizedManager();
+      allow write: if isAuthorizedManager();
+    }
+    match /reports/{document=**} {
+      allow read: if isPortalUser() || isAuthorizedManager();
+      allow write: if isAuthorizedManager();
+    }
+    match /treesSales/{document=**} {
+      allow read: if isPortalUser() || isAuthorizedManager();
+      allow write: if isAuthorizedManager();
+    }
+    match /creditRequests/{document=**} {
+      allow read, create: if isPortalUser() || isAuthorizedManager();
+      allow update, delete: if isAuthorizedManager();
+    }
+    match /systemLogs/{document=**} {
+      allow create: if isPortalUser() || isAuthorizedManager();
+      allow read, update, delete: if isAuthorizedManager();
+    }
+    match /statusDefinitions/{document=**} {
+      allow read: if isPortalUser() || isAuthorizedManager();
+      allow write: if isAuthorizedManager();
+    }
+    match /promoDefinitions/{document=**} {
+      allow read: if isPortalUser() || isAuthorizedManager();
+      allow write: if isAuthorizedManager();
+    }
+
+    // ==========================================
+    // LEGACY TRACKER
+    // ==========================================
+    match /promoCredits/{document=**} {
+      allow read, write: if isAuthorizedManager();
+    }
+    match /emailHistories/{document=**} {
+      allow read, write: if isAuthorizedManager();
+    }
+    match /powerGP/{document=**} {
+      allow read: if isAuthorizedManager();
+      allow write: if false;
+    }
+
+    // ==========================================
+    // PCRP IDENTITY LAYER
+    // ==========================================
+    match /vendorMappings/{document=**} {
+      allow read, write: if isAuthorizedManager();
+    }
+    match /siteMappings/{document=**} {
+      allow read, write: if isAuthorizedManager();
+    }
+    match /mappingQueue/{document=**} {
+      allow read, create, update: if isAuthorizedManager();
+      allow delete: if isNicholas();
+    }
+
+    // ==========================================
+    // PCRP DISCOVERY LEDGER
+    // ==========================================
+    match /promoGenerated/{document=**} {
+      allow read: if isAuthorizedManager();
+      allow create: if isAuthorizedManager();
+      allow update: if false;
+      allow delete: if isNicholas();
+    }
+
+    // ==========================================
+    // PCRP RECOVERY LEDGER
+    // ==========================================
+    match /promoRecovered/{document=**} {
+      allow read: if isAuthorizedManager();
+      allow create: if isAuthorizedManager();
+      allow update: if false;
+      allow delete: if isNicholas();
+    }
+
+    // ==========================================
+    // master_csvs (For parity with Storage)
+    // ==========================================
+    match /master_csvs/{document=**} {
+      allow read: if isAuthorizedManager();
+      allow write: if isNicholas();
+    }
+
+    // ==========================================
+    // MASTER LEDGER & RECONCILIATION
+    // ==========================================
+    match /reconciliationQueue/{document=**} {
+      allow read, write: if isAuthorizedManager();
+    }
+    match /reconciliationLedger/{document=**} {
+      allow read: if isAuthorizedManager();
+      allow write: if false;
+    }
+    match /importBatches/{document=**} {
+      allow read, write: if isAuthorizedManager();
+    }
+    match /auditLogs/{document=**} {
+      allow create: if isAuthorizedManager();
+      allow read: if isNicholas();
+    }
+    match /ledgerSnapshots/{document=**} {
+      allow read, create: if isAuthorizedManager();
+      allow delete: if isNicholas();
     }
   }
 }
