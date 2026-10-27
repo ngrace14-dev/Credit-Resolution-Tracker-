@@ -1822,7 +1822,7 @@ createApp({
                 return;
             }
 
-            try {
+                        try {
                 await setDoc(doc(db, "promo tracker", "Master_Workbook_V9_Board_Report"), {
                     reportMonth: month,
                     total: total,
@@ -1837,6 +1837,96 @@ createApp({
             } catch (error) {
                 console.error("Sync Error:", error);
                 alert("Failed to sync totals to the cloud. Check your permissions.");
+            }
+        };
+
+                const repopulateFromMasterWorkbook = async () => {
+            if (!masterWorkbook.value || !masterWorkbook.value.data) {
+                return alert("No workbook data found in the cloud. Please load the Complete Workbook first.");
+            }
+
+            if (!confirm("⚠️ CRITICAL ACTION: This will PERMANENTLY DELETE all current active credits and re-populate them from the Master Workbook to ensure 100% parity. This cannot be undone. Proceed?")) return;
+
+            try {
+                const batch = writeBatch(db);
+                let creditsCreated = 0;
+                let creditsDeleted = 0;
+                let brandsAdded = 0;
+
+                // 1. Clear out ALL existing (non-archived) credits first to prevent duplicates
+                // We use the full promoCredits list we currently have in memory
+                promoCredits.value.forEach(c => {
+                    if (!c.archived) {
+                        batch.delete(doc(db, "promoCredits", c.id));
+                        creditsDeleted++;
+                    }
+                });
+
+                // 2. Loop through all sheets in the workbook
+                for (const sheetName of Object.keys(masterWorkbook.value.data)) {
+                    // We only want the monthly sheets (e.g., "August 2026")
+                    if (!sheetName.includes('2026')) continue;
+
+                    const monthName = sheetName.split(' ')[0]; // "August"
+                    const rows = masterWorkbook.value.data[sheetName] || [];
+
+                    rows.forEach(row => {
+                        const vendor = row["Brand"] || row[0];
+                        if (!vendor || vendor === "Brand" || vendor.toLowerCase().includes('total')) return; 
+
+                        // Prepare the Credit Record
+                        const sites = ["Redding", "Red-Bluff"];
+                        sites.forEach(siteKey => {
+                            const siteName = siteKey === "Red-Bluff" ? "Red Bluff" : "Redding";
+                            // Get amount, cleaning dollar signs and commas
+                            const rawAmt = row[siteKey] || row[sites.indexOf(siteKey) + 1];
+                            const amt = parseFloat(String(rawAmt || 0).replace(/[^0-9.-]+/g,"")) || 0;
+
+                            if (amt > 0) {
+                                const creditRef = doc(collection(db, "promoCredits"));
+                                
+                                // Determine status based on presence of Approved amount or Date Applied
+                                const approvedAmt = parseFloat(String(row["Credits Approved"] || 0).replace(/[^0-9.-]+/g,"")) || 0;
+                                const isApplied = (approvedAmt > 0) || (!!row["Date Applied"] && row["Date Applied"] !== 'N/A');
+
+                                batch.set(creditRef, {
+                                    site: siteName,
+                                    trackingMonth: monthName,
+                                    vendor: vendor,
+                                    distributor: 'Workbook Sync',
+                                    creditType: row["Promo Credits "] || 'Promo',
+                                    dates: row["Date Requested"] || 'Workbook Import',
+                                    amount: amt,
+                                    dateRequested: row["Date Requested"] || '',
+                                    dateReceived: row["Date Applied"] || '',
+                                    invoice: 'WB-V9-SYNC',
+                                    status: isApplied ? "Applied" : "Pending",
+                                    createdAt: Date.now(),
+                                    archived: false
+                                });
+                                creditsCreated++;
+                            }
+                        });
+
+                        // Ensure Brand exists in Directory
+                        if (!masterBrands.value.find(b => (b.vendor || '').toLowerCase() === vendor.toLowerCase())) {
+                            const brandRef = doc(collection(db, "brands"));
+                            batch.set(brandRef, {
+                                vendor: vendor,
+                                distributor: 'Auto-Imported (Workbook)',
+                                createdAt: Date.now()
+                            });
+                            brandsAdded++;
+                        }
+                    });
+                }
+
+                await batch.commit();
+                logSystemAction("IMPORT", `Master Wipe & Sync: Deleted ${creditsDeleted}, Created ${creditsCreated} credits.`);
+                alert(`Sync Complete!\n\n- Old records cleared: ${creditsDeleted}\n- New records imported: ${creditsCreated}\n- New brands discovered: ${brandsAdded}\n\nYour tracker is now a perfect mirror of the Master Workbook.`);
+            } catch (err) {
+                console.error("Repopulation Error:", err);
+                alert("Failed to repopulate data: " + err.message);
             }
         };
 
@@ -1861,8 +1951,9 @@ createApp({
             masterLedgerData, selectedLedgerVendor, refreshLedger, openLegacyVerification, ledgerTotals,
             masterWorkbook, showWorkspaceMenu, showAdminMenu, workspaceTabs, selectWorkspace, activeWorkspaceInfo,
             scrollMonths, workbookSchema, activeWorkbookSheet, isWorkbookLoaded,
-            auditRange, brandAuditData, draftAuditEmail,
-            showWorkbookSyncModal, workbookPasteData, openWorkbookSyncModal, processWorkbookSync
+                        auditRange, brandAuditData, draftAuditEmail,
+            showWorkbookSyncModal, workbookPasteData, openWorkbookSyncModal, processWorkbookSync,
+            repopulateFromMasterWorkbook
         };
 
     }
