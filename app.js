@@ -1170,125 +1170,112 @@ createApp({
             nextTick(() => refreshIcons());
         };
 
-        const activeWorkspaceInfo = computed(() => {
+                const activeWorkspaceInfo = computed(() => {
             return workspaceTabs.find(t => t.name === activeTab.value) || { name: 'Unknown', icon: 'help-circle' };
         });
 
+
+                                                                        const brandAuditData = computed(() => {
+
+            if (!masterWorkbook.value || !masterWorkbook.value.data) return [];
+            const targetMonth = activeMonth.value;
+            const targetSite = activeSite.value;
+            const siteKey = targetSite === "Redding" ? "redding" : "redBluff";
+            const start = auditRange.value.start ? new Date(auditRange.value.start) : null;
+            const end = auditRange.value.end ? new Date(auditRange.value.end) : null;
+            const brandMap = {};
+
+            // 1. Process Promo Credits (Mirrors Master Ledger)
+            (promoCredits.value || []).forEach(c => {
+                if (c.site !== targetSite) return;
+
+                // Priority: Specific Date Range Picker, fallback to Global Month Selector
+                if (start || end) {
+                    const creditDate = c.dateRequested || c.dates ? new Date(c.dateRequested || c.dates) : null;
+                    if (creditDate && !isNaN(creditDate.getTime())) {
+                        if (start && creditDate < start) return;
+                        if (end && creditDate > end) return;
+                    }
+                } else if (targetMonth !== 'All' && c.trackingMonth !== targetMonth) {
+                    return;
+                }
+
+                const vendor = c.vendor || 'Unknown Brand';
+                if (!brandMap[vendor]) {
+                    const brandInfo = masterBrands.value.find(b => (b.vendor || '').toLowerCase() === vendor.toLowerCase()) || {};
+                    brandMap[vendor] = {
+                        vendor: vendor,
+                        email: brandInfo.email || '',
+                        rep: brandInfo.rep || '',
+                        generated: 0,
+                        collected: 0,
+                        treezTotal: 0,
+                        credits: []
+                    };
+                }
+
+                const amt = parseFloat(c.amount) || 0;
+                brandMap[vendor].generated += amt;
+
+                // Preliminary collected status from item level
+                if (c.status === 'Applied') {
+                    brandMap[vendor].collected += amt;
+                }
+
+                brandMap[vendor].credits.push({
+                    month: c.trackingMonth,
+                    amount: amt,
+                    dates: c.dateRequested || c.dates || '-',
+                    status: c.status === 'Applied' ? 'Collected' : 'Pending'
+                });
+            });
+
+            // 2. Apply Definitive Extraction Rules (Exact Master Ledger Parity)
+            Object.keys(brandMap).forEach(vendor => {
+                const brandMetrics = definitiveBrandMetrics.value[siteKey] ? definitiveBrandMetrics.value[siteKey][vendor] : null;
+                if (brandMetrics) {
+                    // Override with definitive GL applied credits
+                    brandMap[vendor].collected = brandMetrics.applied;
+                    brandMap[vendor].recovered = brandMetrics.applied;
+                    // If viewing all months and no custom range, sync generated to audit sheet
+                    if (!start && !end && targetMonth === 'All') {
+                        brandMap[vendor].generated = brandMetrics.generated;
+                    }
+                }
+            });
+
+            // 3. Sort by Net Outstanding Balance descending
+            return Object.values(brandMap).sort((a, b) => (b.generated - b.collected) - (a.generated - a.collected));
+        });
+
         const workbookSchema = {
-            "August 2026": ["Brand", "Sundial (Redding)", "Red-Bluff", "Promo Credits", "Treez Total", "YTD Generated (POS)", "YTD Received (GL)", "Variance", "Notes"],
-            "September 2026": ["Brand", "Sundial (Redding)", "Red-Bluff", "Promo Credits", "Treez Total", "YTD Generated (POS)", "YTD Received (GL)", "Variance", "Notes"],
-            "October 2026": ["Brand", "Sundial (Redding)", "Red-Bluff", "Promo Credits", "Treez Total", "YTD Generated (POS)", "YTD Received (GL)", "Variance", "Notes"],
-            "November 2026": ["Brand", "Sundial (Redding)", "Red-Bluff", "Promo Credits", "Treez Total", "YTD Generated (POS)", "YTD Received (GL)", "Variance", "Notes"],
-            "December 2026": ["Brand", "Sundial (Redding)", "Red-Bluff", "Promo Credits", "Treez Total", "YTD Generated (POS)", "YTD Received (GL)", "Variance", "Notes"],
-            "Redding Store Audit": ["Brand", "YTD Generated (POS)", "YTD Received (GL)", "Outstanding"],
-            "Red Bluff Store Audit": ["Brand", "YTD Generated (POS)", "YTD Received (GL)", "Outstanding"],
-            "Monthly Vendor Variance Report": ["Brand", "January Generated", "January Collected", "February Generated", "February Collected"],
-            "GL Raw by Store": ["Posted dt.", "Store", "Memo/Description", "Credit", "Mapped Brand"]
+            "Board Recon - Red Bluff": ["Red Bluff - YTD Promo Reconciliation", "Gross Promos Generated", "Store-Funded deductions", "Net Collectibles", "Sage Collected", "Monthly Outstanding", "YTD balances"],
+            "Board Recon - Redding": ["Redding - YTD Promo Reconciliation", "Gross Promos Generated", "Store-Funded deductions", "Net Collectibles", "Sage Collected", "Monthly Outstanding", "YTD balances"],
+            "YTD Dashboard": ["Month", "Master Tracked", "Treez Valid POS", "Sage Collected"],
+            "Brand_Mapping": ["Master Workbook Legacy Name", "Standardized POS Name (CSV)"],
+            "YTD Running Totals": ["Brand", "Redding", "Red-Bluff", "Running Total Promo Credits", "Combined Brand Total"],
+            "January 2026": ["Brand", "Redding", "Red-Bluff", "Date Requested", "Month promo credits were generated", "Promo Credits", "Date Applied", "Credits Approved", "Credits Rejected", "Treez Total"],
+            "February 2026": ["Brand", "Redding", "Red-Bluff", "Date Requested", "Month promo credits were generated", "Promo Credits", "Date Applied", "Credits Approved", "Credits Rejected", "Treez Total"],
+            "March 2026": ["Brand", "Redding", "Red-Bluff", "Date Requested", "Month promo credits were generated", "Promo Credits", "Date Applied", "Credits Approved", "Credits Rejected", "Treez Total"],
+            "April 2026": ["Brand", "Redding", "Red-Bluff", "Date Requested", "Month promo credits were generated", "Promo Credits", "Date Applied", "Credits Approved", "Credits Rejected", "Treez Total"],
+            "May 2026": ["Brand", "Redding", "Red-Bluff", "Date Requested", "Month promo credits were generated", "Promo Credits", "Date Applied", "Credits Approved", "Credits Rejected", "Treez Total"],
+            "June 2026": ["Brand", "Redding", "Red-Bluff", "Date Requested", "Month promo credits were generated", "Promo Credits", "Date Applied", "Credits Approved", "Credits Rejected", "Treez Total"],
+            "July 2026": ["Brand", "Redding", "Red-Bluff", "Date Requested", "Month promo credits were generated", "Promo Credits", "Date Applied", "Credits Approved", "Credits Rejected", "Treez Total"],
+            "August 2026": ["Brand", "Redding", "Red-Bluff", "Date Requested", "Month promo credits were generated", "Promo Credits", "Date Applied", "Credits Approved", "Credits Rejected", "Treez Total"],
+            "September 2026": ["Brand", "Redding", "Red-Bluff", "Date Requested", "Month promo credits were generated", "Promo Credits", "Date Applied", "Credits Approved", "Credits Rejected", "Treez Total"],
+            "October 2026": ["Brand", "Redding", "Red-Bluff", "Date Requested", "Month promo credits were generated", "Promo Credits", "Date Applied", "Credits Approved", "Credits Rejected", "Treez Total"],
+            "November 2026": ["Brand", "Redding", "Red-Bluff", "Date Requested", "Month promo credits were generated", "Promo Credits", "Date Applied", "Credits Approved", "Credits Rejected", "Treez Total"],
+            "December 2026": ["Brand", "Redding", "Red-Bluff", "Date Requested", "Month promo credits were generated", "Promo Credits", "Date Applied", "Credits Approved", "Credits Rejected", "Treez Total"],
+            "Store Macro Summary": ["Store", "YTD Generated (POS)", "YTD Received (GL)", "Outstanding Balance"],
+            "Redding Store Audit": ["Brand", "Store", "YTD Generated (POS)", "YTD Received (GL)", "Outstanding Balance"],
+            "Red Bluff Store Audit": ["Brand", "Store", "YTD Generated (POS)", "YTD Received (GL)", "Outstanding Balance"],
+            "GL Raw by Store": ["Posted dt.", "Store", "Location", "Memo/Description", "Mapped Brand", "Credit"],
+            "Monthly Vendor Variance Report": ["Brand", "January Generated", "January Collected", "January Left on Table", "February Generated", "February Collected", "February Left on Table", "March Generated", "March Collected", "March Left on Table", "April Generated", "April Collected", "April Left on Table", "May Generated", "May Collected", "May Left on Table", "June Generated", "June Collected", "June Left on Table", "July Generated", "July Collected", "July Left on Table", "August Generated", "August Collected", "August Left on Table", "September Generated", "September Collected", "September Left on Table", "October Generated", "October Collected", "October Left on Table", "November Generated", "November Collected", "November Left on Table", "December Generated", "December Collected", "December Left on Table", "YTD Generated", "YTD Collected", "YTD Left on Table"],
+            "Sheet1": ["Vendor", "Credit Type", "Dates", "Distributor", "Credit amount $$$"]
         };
 
+        const activeWorkbookSheet = ref(Object.keys(workbookSchema)[0]);
 
-
-                                                                const brandAuditData = computed(() => {
-                    if (!masterWorkbook.value || !masterWorkbook.value.data) return [];
-            
-                    const start = auditRange.value.start ? new Date(auditRange.value.start) : null;
-                    const end = auditRange.value.end ? new Date(auditRange.value.end) : null;
-            
-                    const brandMap = {};
-            
-                    // Loop through all monthly sheets
-                    Object.keys(masterWorkbook.value.data).forEach(sheetName => {
-                        if (!sheetName.includes('2026')) return; 
-                
-                        const sheetMonth = sheetName.split(' ')[0];
-                        const sheetYear = sheetName.split(' ')[1];
-                        const sheetDate = new Date(`${sheetMonth} 1, ${sheetYear}`);
-                
-                        if (start && sheetDate < new Date(start.getFullYear(), start.getMonth(), 1)) return;
-                        if (end && sheetDate > new Date(end.getFullYear(), end.getMonth(), 1)) return;
-
-                        const rows = masterWorkbook.value.data[sheetName] || [];
-                
-                        rows.forEach(row => {
-                            const vendor = row["Brand"] || row[0]; 
-                            if (!vendor || vendor === "Brand" || vendor.toLowerCase().includes('total')) return; 
-                    
-                            if (!brandMap[vendor]) {
-                                const brandInfo = masterBrands.value.find(b => (b.vendor || '').toLowerCase() === vendor.toLowerCase()) || {};
-                                brandMap[vendor] = {
-                                    vendor: vendor,
-                                    email: brandInfo.email || '',
-                                    rep: brandInfo.rep || '',
-                                    generated: 0,
-                                    collected: 0,
-                                    treezTotal: 0,
-                                    credits: []
-                                };
-                            }
-                    
-                            // Column mapping based on Workbook V9 Master Schema with Fuzzy Match
-                            const rowKeys = Object.keys(row);
-                            
-                            const redKey = rowKeys.find(k => k.trim().toLowerCase() === 'redding');
-                            const bluffKey = rowKeys.find(k => k.trim().toLowerCase() === 'red-bluff' || k.trim().toLowerCase() === 'red bluff');
-                            
-                            const promoKey = rowKeys.find(k => k.toLowerCase().includes('promo credits'));
-                            const commonPromoAmt = promoKey ? parseFloat(String(row[promoKey] || 0).replace(/[^0-9.-]+/g,"")) : 0;
-
-                            let amtRedding = 0;
-                            if (redKey) {
-                                const val = String(row[redKey]).trim().toLowerCase();
-                                amtRedding = (val === 'x') ? commonPromoAmt : (parseFloat(val.replace(/[^0-9.-]+/g,"")) || 0);
-                            }
-                            
-                            let amtRedBluff = 0;
-                            if (bluffKey) {
-                                const val = String(row[bluffKey]).trim().toLowerCase();
-                                amtRedBluff = (val === 'x') ? commonPromoAmt : (parseFloat(val.replace(/[^0-9.-]+/g,"")) || 0);
-                            }
-                            
-                            // Only add if there is actual activity for this site/brand combo
-                            if (amtRedding > 0 || amtRedBluff > 0) {
-                                const approvedKey = rowKeys.find(k => k.toLowerCase().includes('approved') || k.toLowerCase().includes('applied') || k.toLowerCase().includes('collected'));
-                                const amtCollected = parseFloat(String(row[approvedKey] || row["Credits Approved"] || 0).replace(/[^0-9.-]+/g,"")) || 0;
-                                
-                                const treezKey = rowKeys.find(k => k.toLowerCase().includes('treez'));
-                                const amtTreezRaw = parseFloat(String(row[treezKey] || row["Treez Total"] || 0).replace(/[^0-9.-]+/g,"")) || 0;
-                        
-                                brandMap[vendor].generated += (amtRedding + amtRedBluff);
-                                brandMap[vendor].collected += amtCollected;
-                                brandMap[vendor].treezTotal += amtTreezRaw;
-                        
-                                brandMap[vendor].credits.push({
-                                    month: sheetName,
-                                    amount: (amtRedding + amtRedBluff),
-                                    status: amtCollected > 0 ? "Collected" : "Pending"
-                                });
-                            }
-                        });
-                    });
-
-                    // NEW: Apply definitive Applied values from Audit sheets as per Extraction Rules
-                    const activeSiteKey = activeSite.value === "Redding" ? "redding" : "redBluff";
-                    Object.keys(brandMap).forEach(vendor => {
-                        const brandMetrics = definitiveBrandMetrics.value[activeSiteKey] ? definitiveBrandMetrics.value[activeSiteKey][vendor] : null;
-                        if (brandMetrics) {
-                            brandMap[vendor].collected = brandMetrics.applied;
-                            brandMap[vendor].recovered = brandMetrics.applied; // For audit email template
-
-                            // If no range filter is active, use definitive generated too
-                            if (!start && !end) {
-                                brandMap[vendor].generated = brandMetrics.generated;
-                            }
-                        }
-                    });
-
-                    return Object.values(brandMap).sort((a, b) => (b.generated - b.collected) - (a.generated - a.collected));
-                });
-
-
-
-                const activeWorkbookSheet = ref(Object.keys(workbookSchema)[0]);
         const isWorkbookLoaded = ref(false);
 
         const activeWorkbookHeaders = computed(() => {
