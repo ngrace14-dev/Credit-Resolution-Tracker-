@@ -439,14 +439,31 @@ createApp({
                                 const vendor = row["Brand"] || row[0];
                                 if (!vendor || vendor === "Brand" || vendor.toLowerCase().includes('total')) return;
 
-                                const siteKey = targetSite === "Redding" ? "Redding" : "Red-Bluff";
-                                const amt = parseFloat(String(row[siteKey] || 0).replace(/[^0-9.-]+/g,"")) || 0;
+                                                                let rawAmt = 0;
+                                if (row[siteKey] !== undefined) rawAmt = row[siteKey];
+                                else if (siteKey === "Redding" && row["Redding"] !== undefined) rawAmt = row["Redding"];
+                                else if (siteKey === "Red-Bluff" && row["Red-Bluff"] !== undefined) rawAmt = row["Red-Bluff"];
+
+                                const amt = parseFloat(String(rawAmt || 0).replace(/[^0-9.-]+/g,"")) || 0;
 
                                 if (amt > 0) {
                                     const brand = ensureStructure(mName, vendor);
                                     brand.workbookTotal += amt;
                                     brand.total += amt;
                                     groups[mName].total += amt;
+                                    groups[mName].count += 1;
+                                    
+                                    // Add a simulated credit record for the UI list
+                                    brand.credits.push({
+                                        id: `sim-${mName}-${vendor}`,
+                                        site: targetSite,
+                                        trackingMonth: mName,
+                                        vendor: vendor,
+                                        amount: amt,
+                                        creditType: row["Promo Credits "] || 'Aggregated POS Sales',
+                                        dates: row["Date Requested"] || 'Workbook Sync',
+                                        status: (parseFloat(String(row["Credits Approved"] || 0).replace(/[^0-9.-]+/g,"")) > 0) ? 'Applied' : 'Pending'
+                                    });
                                 }
                             });
                         });
@@ -1019,21 +1036,37 @@ createApp({
                                 };
                             }
                     
-                            // Column mapping based on Workbook V9 Master Schema
-                            const amtRedding = parseFloat(String(row["Redding"] || 0).replace(/[^0-9.-]+/g,"")) || 0;
-                            const amtRedBluff = parseFloat(String(row["Red-Bluff"] || 0).replace(/[^0-9.-]+/g,"")) || 0;
-                            const amtCollected = parseFloat(String(row["Credits Approved"] || 0).replace(/[^0-9.-]+/g,"")) || 0;
-                            const amtTreezRaw = parseFloat(String(row["Treez Total"] || 0).replace(/[^0-9.-]+/g,"")) || 0;
-                    
-                            brandMap[vendor].generated += (amtRedding + amtRedBluff);
-                            brandMap[vendor].collected += amtCollected;
-                            brandMap[vendor].treezTotal += amtTreezRaw;
-                    
-                            brandMap[vendor].credits.push({
-                                month: sheetName,
-                                amount: (amtRedding + amtRedBluff),
-                                status: amtCollected > 0 ? "Collected" : "Pending"
-                            });
+                                                        // Column mapping based on Workbook V9 Master Schema
+                            
+                            // Safe fetching for Redding
+                            let rawRedding = 0;
+                            if (row["Redding"] !== undefined) rawRedding = row["Redding"];
+                            else if (row[1] !== undefined) rawRedding = row[1]; // Fallback to index if column header missing
+                            
+                            // Safe fetching for Red Bluff
+                            let rawRedBluff = 0;
+                            if (row["Red-Bluff"] !== undefined) rawRedBluff = row["Red-Bluff"];
+                            else if (row["Red Bluff"] !== undefined) rawRedBluff = row["Red Bluff"];
+                            else if (row[2] !== undefined) rawRedBluff = row[2]; // Fallback to index
+
+                            const amtRedding = parseFloat(String(rawRedding).replace(/[^0-9.-]+/g,"")) || 0;
+                            const amtRedBluff = parseFloat(String(rawRedBluff).replace(/[^0-9.-]+/g,"")) || 0;
+                            
+                            // Only add if there is actual activity for this site/brand combo
+                            if (amtRedding > 0 || amtRedBluff > 0) {
+                                const amtCollected = parseFloat(String(row["Credits Approved"] || 0).replace(/[^0-9.-]+/g,"")) || 0;
+                                const amtTreezRaw = parseFloat(String(row["Treez Total"] || 0).replace(/[^0-9.-]+/g,"")) || 0;
+                        
+                                brandMap[vendor].generated += (amtRedding + amtRedBluff);
+                                brandMap[vendor].collected += amtCollected;
+                                brandMap[vendor].treezTotal += amtTreezRaw;
+                        
+                                brandMap[vendor].credits.push({
+                                    month: sheetName,
+                                    amount: (amtRedding + amtRedBluff),
+                                    status: amtCollected > 0 ? "Collected" : "Pending"
+                                });
+                            }
                         });
                     });
             
