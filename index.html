@@ -318,7 +318,7 @@
                                     <h2 class="text-xl font-bold text-gray-900 leading-tight">Complete Workbook Viewer</h2>
                                     <p class="text-sm text-gray-500 mt-1">Visual representation of the master Excel structure.</p>
                                 </div>
-                                <div class="flex gap-2">
+                                                                <div class="flex gap-2">
                                     <button @click="repopulateFromMasterWorkbook" v-if="isWorkbookLoaded" class="bg-amber-500 hover:bg-amber-600 text-gray-950 px-5 py-2.5 rounded-lg font-bold shadow-md transition-colors flex items-center gap-2">
                                         <i data-lucide="database-zap" class="w-4 h-4"></i> Sync Tracker to Workbook
                                     </button>
@@ -328,7 +328,17 @@
                                 </div>
             </div>
 
-                        <div v-if="isWorkbookLoaded" class="flex-1 flex flex-col min-h-0 bg-white rounded-xl border border-gray-300 shadow-sm overflow-hidden">
+            <div v-if="!isWorkbookLoaded" class="flex-1 flex items-center justify-center bg-white rounded-xl border border-gray-300 shadow-sm">
+                <div class="text-center">
+                    <div class="bg-gray-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <i data-lucide="file-spreadsheet" class="w-8 h-8 text-gray-400"></i>
+                    </div>
+                    <h3 class="text-lg font-bold text-gray-900">Workbook Not Loaded</h3>
+                    <p class="text-gray-500 max-w-xs mx-auto mt-2 mb-6">Click the green button above to pull the master data from the RRedco server.</p>
+                </div>
+            </div>
+
+            <div v-if="isWorkbookLoaded" class="flex-1 flex flex-col min-h-0 bg-white rounded-xl border border-gray-300 shadow-sm overflow-hidden">
                 <!-- Workbook Sheet Selector (With Scroll Arrows) -->
                 <div class="relative group bg-gray-50 border-b border-gray-300">
                     <!-- Left Arrow -->
@@ -374,23 +384,10 @@
                                         {{ row[header] || '-' }}
                                     </td>
                                 </tr>
-                            </tbody>
+                                                        </tbody>
                         </table>
                     </div>
                 </div>
-
-            <div v-else class="flex-1 flex items-center justify-center bg-white rounded-xl border border-gray-300 shadow-sm">
-                <div class="text-center">
-                    <div class="bg-gray-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
-                        <i data-lucide="file-spreadsheet" class="w-8 h-8 text-gray-400"></i>
-                    </div>
-                    <h3 class="text-lg font-bold text-gray-900">Workbook Not Loaded</h3>
-                    <p class="text-gray-500 max-w-xs mx-auto mt-2 mb-6">Click the button above to generate the UI controls for the complete workbook structure.</p>
-                    <button @click="isWorkbookLoaded = true" class="bg-gray-950 text-amber-500 px-6 py-2.5 rounded-lg font-bold shadow-md hover:bg-gray-800 transition-colors">
-                        Load Complete Workbook
-                    </button>
-                </div>
-            </div>
         </main>
 
 
