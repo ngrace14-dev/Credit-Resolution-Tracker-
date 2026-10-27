@@ -1,4 +1,4 @@
-// app.js
+u// app.js
 
 // 1. FIREBASE IMPORTS
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-app.js";
@@ -106,17 +106,17 @@ createApp({
                                     const isApplied = (approvedAmt > 0) || (!!row[dateKey] && row[dateKey] !== 'N/A');
                             
                                     allCredits.push({
-                                        id: `${sheetName}-${idx}-${siteKey}`, 
-                                        site: siteName,
-                                        trackingMonth: monthName,
-                                        vendor: vendor,
-                                        amount: amt,
-                                        creditType: row["Promo Credits "] || 'Promo',
-                                        dateRequested: row["Date Requested"] || '',
-                                        dateReceived: row[dateKey] || '',
-                                        status: isApplied ? "Applied" : "Pending",
-                                        archived: false,
-                                        workbookRef: { sheet: sheetName, rowIdx: idx }
+                                    id: `${sheetName}-${idx}-${siteKey}`, 
+                                    site: siteName,
+                                    trackingMonth: monthName,
+                                    vendor: vendor,
+                                    amount: amt,
+                                    creditType: row["Promo Credits"] || 'Promo',
+                                    dateRequested: row["Date Requested"] || '',
+                                    dateReceived: row[dateKey] || '',
+                                    status: isApplied ? "Applied" : "Pending",
+                                    archived: false,
+                                    workbookRef: { sheet: sheetName, rowIdx: idx }
                                     });
                                 }
                             });
@@ -474,14 +474,14 @@ createApp({
                                     
                                                                 const approvedKey = rowKeys.find(k => k.toLowerCase().includes('approved') || k.toLowerCase().includes('applied') || k.toLowerCase().includes('collected'));
                                     
-                                                                // Add a simulated credit record for the UI list
+                                                                                                                                // Add a simulated credit record for the UI list
                                                                 brand.credits.push({
                                                                     id: `sim-${mName}-${vendor}`,
                                                                     site: targetSite,
                                                                     trackingMonth: mName,
                                                                     vendor: vendor,
                                                                     amount: amt,
-                                                                    creditType: row["Promo Credits "] || 'Aggregated POS Sales',
+                                                                    creditType: row["Promo Credits"] || 'Aggregated POS Sales',
                                                                     dates: row["Date Requested"] || 'Workbook Sync',
                                                                     status: (parseFloat(String(row[approvedKey] || 0).replace(/[^0-9.-]+/g,"")) > 0) ? 'Applied' : 'Pending'
                                                                 });
@@ -1154,30 +1154,30 @@ createApp({
         });
 
 
-        const workbookSchema = {
-            "Board Recon - Red Bluff": ["Red Bluff - YTD Promo Reconciliation"],
-            "Board Recon - Redding": ["Redding - YTD Promo Reconciliation"],
+                const workbookSchema = {
+            "Board Recon - Red Bluff": ["Red Bluff - YTD Promo Reconciliation", "Gross Promos Generated", "Store-Funded deductions", "Net Collectibles", "Sage Collected", "Monthly Outstanding", "YTD balances"],
+            "Board Recon - Redding": ["Redding - YTD Promo Reconciliation", "Gross Promos Generated", "Store-Funded deductions", "Net Collectibles", "Sage Collected", "Monthly Outstanding", "YTD balances"],
             "YTD Dashboard": ["Month", "Master Tracked", "Treez Valid POS", "Sage Collected"],
             "Brand_Mapping": ["Master Workbook Legacy Name", "Standardized POS Name (CSV)"],
             "YTD Running Totals": ["Brand", "Redding", "Red-Bluff", "Running Total Promo Credits", "Combined Brand Total"],
-            "January 2026": ["Brand", "Redding", "Red-Bluff", "Promo Credits ", "Date Requested", "Date Applied", "Credits Approved", "Credits Rejected", "Treez Total", "Month promo credits were generated"],
-            "February 2026": ["Brand", "Redding", "Red-Bluff", "Promo Credits ", "Date Requested", "Date Applied", "Credits Approved", "Credits Rejected", "Treez Total", "Month promo credits were generated"],
-            "March 2026": ["Brand", "Redding", "Red-Bluff", "Promo Credits ", "Date Requested", "Date Applied", "Credits Approved", "Credits Rejected", "Treez Total", "Month promo credits were generated"],
-            "April 2026": ["Brand", "Redding", "Red-Bluff", "Promo Credits ", "Date Requested", "Date Applied", "Credits Approved", "Credits Rejected", "Treez Total", "Month promo credits were generated"],
-            "May 2026": ["Brand", "Redding", "Red-Bluff", "Promo Credits ", "Date Requested", "Date Applied", "Credits Approved", "Credits Rejected", "Treez Total", "Month promo credits were generated"],
-            "June 2026": ["Brand", "Redding", "Red-Bluff", "Promo Credits ", "Date Requested", "Date Applied", "Credits Approved", "Credits Rejected", "Treez Total", "Month promo credits were generated"],
-            "July 2026": ["Brand", "Redding", "Red-Bluff", "Promo Credits ", "Date Requested", "Date Applied", "Credits Approved", "Credits Rejected", "Treez Total", "Month promo credits were generated"],
-            "August 2026": ["Brand", "Redding", "Red-Bluff", "Promo Credits ", "Date Requested", "Date Applied", "Credits Approved", "Credits Rejected", "Treez Total", "Month promo credits were generated"],
-            "September 2026": ["Brand", "Redding", "Red-Bluff", "Promo Credits ", "Date Requested", "Date Applied", "Credits Approved", "Credits Rejected", "Treez Total", "Month promo credits were generated"],
-            "October 2026": ["Brand", "Redding", "Red-Bluff", "Promo Credits ", "Date Requested", "Date Applied", "Credits Approved", "Credits Rejected", "Treez Total", "Month promo credits were generated"],
-            "November 2026": ["Brand", "Redding", "Red-Bluff", "Promo Credits ", "Date Requested", "Date Applied", "Credits Approved", "Credits Rejected", "Treez Total", "Month promo credits were generated"],
-            "December 2026": ["Brand", "Redding", "Red-Bluff", "Promo Credits ", "Date Requested", "Date Applied", "Credits Approved", "Credits Rejected", "Treez Total", "Month promo credits were generated"],
+            "January 2026": ["Brand", "Redding", "Red-Bluff", "Date Requested", "Month promo credits were generated", "Promo Credits", "Date Applied", "Credits Approved", "Credits Rejected", "Treez Total"],
+            "February 2026": ["Brand", "Redding", "Red-Bluff", "Date Requested", "Month promo credits were generated", "Promo Credits", "Date Applied", "Credits Approved", "Credits Rejected", "Treez Total"],
+            "March 2026": ["Brand", "Redding", "Red-Bluff", "Date Requested", "Month promo credits were generated", "Promo Credits", "Date Applied", "Credits Approved", "Credits Rejected", "Treez Total"],
+            "April 2026": ["Brand", "Redding", "Red-Bluff", "Date Requested", "Month promo credits were generated", "Promo Credits", "Date Applied", "Credits Approved", "Credits Rejected", "Treez Total"],
+            "May 2026": ["Brand", "Redding", "Red-Bluff", "Date Requested", "Month promo credits were generated", "Promo Credits", "Date Applied", "Credits Approved", "Credits Rejected", "Treez Total"],
+            "June 2026": ["Brand", "Redding", "Red-Bluff", "Date Requested", "Month promo credits were generated", "Promo Credits", "Date Applied", "Credits Approved", "Credits Rejected", "Treez Total"],
+            "July 2026": ["Brand", "Redding", "Red-Bluff", "Date Requested", "Month promo credits were generated", "Promo Credits", "Date Applied", "Credits Approved", "Credits Rejected", "Treez Total"],
+            "August 2026": ["Brand", "Redding", "Red-Bluff", "Date Requested", "Month promo credits were generated", "Promo Credits", "Date Applied", "Credits Approved", "Credits Rejected", "Treez Total"],
+            "September 2026": ["Brand", "Redding", "Red-Bluff", "Date Requested", "Month promo credits were generated", "Promo Credits", "Date Applied", "Credits Approved", "Credits Rejected", "Treez Total"],
+            "October 2026": ["Brand", "Redding", "Red-Bluff", "Date Requested", "Month promo credits were generated", "Promo Credits", "Date Applied", "Credits Approved", "Credits Rejected", "Treez Total"],
+            "November 2026": ["Brand", "Redding", "Red-Bluff", "Date Requested", "Month promo credits were generated", "Promo Credits", "Date Applied", "Credits Approved", "Credits Rejected", "Treez Total"],
+            "December 2026": ["Brand", "Redding", "Red-Bluff", "Date Requested", "Month promo credits were generated", "Promo Credits", "Date Applied", "Credits Approved", "Credits Rejected", "Treez Total"],
             "Store Macro Summary": ["Store", "YTD Generated (POS)", "YTD Received (GL)", "Outstanding Balance"],
             "Redding Store Audit": ["Brand", "Store", "YTD Generated (POS)", "YTD Received (GL)", "Outstanding Balance"],
             "Red Bluff Store Audit": ["Brand", "Store", "YTD Generated (POS)", "YTD Received (GL)", "Outstanding Balance"],
-            "GL Raw by Store": ["Posted dt.", "Store", "Location", "Memo/Description", "Credit", "Mapped Brand"],
+            "GL Raw by Store": ["Posted dt.", "Store", "Location", "Memo/Description", "Mapped Brand", "Credit"],
             "Monthly Vendor Variance Report": ["Brand", "January Generated", "January Collected", "January Left on Table", "February Generated", "February Collected", "February Left on Table", "March Generated", "March Collected", "March Left on Table", "April Generated", "April Collected", "April Left on Table", "May Generated", "May Collected", "May Left on Table", "June Generated", "June Collected", "June Left on Table", "July Generated", "July Collected", "July Left on Table", "August Generated", "August Collected", "August Left on Table", "September Generated", "September Collected", "September Left on Table", "October Generated", "October Collected", "October Left on Table", "November Generated", "November Collected", "November Left on Table", "December Generated", "December Collected", "December Left on Table", "YTD Generated", "YTD Collected", "YTD Left on Table"],
-            "Sheet1": ["Vendor", "Distributor", "Credit Type", "Dates", "Credit amount $$$"]
+            "Sheet1": ["Vendor", "Credit Type", "Dates", "Distributor", "Credit amount $$$"]
         };
                 const activeWorkbookSheet = ref(Object.keys(workbookSchema)[0]);
         const isWorkbookLoaded = ref(false);
@@ -1836,490 +1836,4 @@ const handleSageCsvUpload = async (e) => {
             
             for (const [key, data] of Object.entries(groupedBrands)) {
                 if (data.totalOwed > 0) {
-                    const masterRecord = masterBrands.value.find(b => (b.vendor || '').toLowerCase() === data.brand.toLowerCase());
-                    const payload = {
-                        site: data.site, 
-                        trackingMonth: data.month, 
-                        vendor: data.brand,
-                        distributor: (masterRecord && masterRecord.distributor) ? masterRecord.distributor : '', 
-                        creditType: `Aggregated POS Sales (${data.itemCount} items)`,
-                        dates: new Date().toLocaleDateString(),
-                        amount: data.totalOwed,
-                        dateRequested: new Date().toLocaleDateString(),
-                        dateReceived: '',
-                        invoice: 'CSV-AUTO-SYNC',
-                        status: 'Pending',
-                        createdAt: Date.now()
-                    };
-                    const newDocRef = doc(collection(db, "promoCredits"));
-                    batch.set(newDocRef, payload);
-                    creditsCreated++;
-
-                    data.salesItems.forEach(saleId => {
-                        const saleRef = doc(db, "treesSales", saleId);
-                        batch.update(saleRef, { status: 'Synced' });
-                    });
-                }
-            }
-            
-            try {
-                await batch.commit();
-                logSystemAction("UPDATE", `Synced and aggregated ${creditsCreated} vendor credits`);
-                alert(`Success! Aggregated ${creditsCreated} vendor credits and pushed them to Firebase.`);
-                activeTab.value = 'Tracker'; 
-            } catch (err) { 
-                console.error(err);
-                alert("Failed to sync aggregated credits to the cloud."); 
-            }
-        };
-
-        const resetBrandImport = () => {
-            brandPastedGrid.value = [];
-            brandMappedHeaders.value = [];
-            brandPasteData.value = '';
-        };
-
-        const processBrandRawPaste = () => {
-            const text = brandPasteData.value;
-            if (!text.trim()) return;
-            const rows = text.split(/\r?\n/).filter(r => r.trim() !== '');
-            const grid = rows.map(r => r.split('\t').map(c => c.trim()));
-            if (grid.length === 0) return;
-            
-            brandPastedGrid.value = grid;
-            
-            const firstRow = grid[0].map(c => c.toLowerCase());
-            brandMappedHeaders.value = firstRow.map(cell => {
-                if (cell.includes('brand') || cell.includes('vendor')) return 'Brand';
-                if (cell.includes('rep')) return 'Rep';
-                if (cell.includes('email')) return 'Email';
-                if (cell.includes('trees')) return 'Name as appears in TREES';
-                if (cell.includes('distro')) return 'Distro';
-                if (cell.includes('asset')) return 'Asset Library';
-                if (cell.includes('order')) return 'Order From';
-                if (cell.includes('payee')) return 'Payee';
-                if (cell.includes('note')) return 'Notes';
-                return '-- Ignore Column --';
-            });
-        };
-
-        const processBrandImport = async () => {
-            let updatedCount = 0;
-            let newCount = 0;
-            
-            let startRow = 0;
-            if (brandPastedGrid.value.length > 0) {
-                const firstRowStr = brandPastedGrid.value[0].join('').toLowerCase();
-                if (firstRowStr.includes('brand') && (firstRowStr.includes('email') || firstRowStr.includes('rep') || firstRowStr.includes('distro'))) {
-                    startRow = 1;
-                }
-            }
-            
-            const batch = writeBatch(db);
-
-            for (let r = startRow; r < brandPastedGrid.value.length; r++) {
-                const row = brandPastedGrid.value[r];
-                let currentBrand = {};
-                
-                for (let c = 0; c < row.length; c++) {
-                    const header = brandMappedHeaders.value[c];
-                    if (header === '-- Ignore Column --') continue;
-                    currentBrand[header] = row[c] || '';
-                }
-                
-                const vendorName = currentBrand['Brand'];
-                if (!vendorName || vendorName.length <= 1) continue; 
-                
-                const existingBrand = masterBrands.value.find(b => (b.vendor || '').toLowerCase() === vendorName.toLowerCase());
-                
-                const payload = {};
-                if (currentBrand['Rep'] !== undefined) payload.rep = currentBrand['Rep'];
-                if (currentBrand['Email'] !== undefined) payload.email = currentBrand['Email'];
-                if (currentBrand['Name as appears in TREES'] !== undefined) payload.treesName = currentBrand['Name as appears in TREES'];
-                if (currentBrand['Distro'] !== undefined) payload.distributor = currentBrand['Distro'];
-                if (currentBrand['Asset Library'] !== undefined) payload.assetLibrary = currentBrand['Asset Library'];
-                if (currentBrand['Order From'] !== undefined) payload.orderFrom = currentBrand['Order From'];
-                if (currentBrand['Payee'] !== undefined) payload.payee = currentBrand['Payee'];
-                if (currentBrand['Notes'] !== undefined) payload.notes = currentBrand['Notes'];
-
-                if (existingBrand) {
-                    if (Object.keys(payload).length > 0) {
-                        batch.update(doc(db, "brands", existingBrand.id), payload);
-                        updatedCount++;
-                    }
-                } else {
-                    payload.vendor = vendorName;
-                    const newDocRef = doc(collection(db, "brands"));
-                    batch.set(newDocRef, payload);
-                    newCount++;
-                }
-            }
-            
-            try {
-                await batch.commit();
-                alert(`Success! Added ${newCount} new brands and updated ${updatedCount} existing entries in the cloud.`);
-                resetBrandImport();
-                showBrandImportModal.value = false;
-            } catch (error) {
-                console.error("Import error:", error);
-                alert("Failed to save imported brands to the cloud.");
-            }
-        };
-
-        const isSuperAdmin = ref(false);
-        const systemLogs = ref([]);
-
-        const refreshIcons = () => {
-            nextTick(() => {
-                if (window.lucide) window.lucide.createIcons();
-            });
-        };
-
-        const clearAllSalesData = async () => {
-            if (confirm("Are you sure you want to permanently delete ALL raw sales data from the cloud? This cannot be undone.")) {
-                try {
-                    const batch = writeBatch(db);
-                    treesSalesData.value.forEach(sale => {
-                        batch.delete(doc(db, "treesSales", sale.id));
-                    });
-                    await batch.commit();
-                    logSystemAction("DELETE", "Cleared all raw sales data");
-                    alert("All raw sales data has been cleared.");
-                } catch (error) {
-                    console.error("Error clearing sales data:", error);
-                    alert("Failed to clear sales data.");
-                }
-            }
-        };
-        
-        const openDimeHelper = async (brand) => {
-            const storeName = activeSite.value === 'Redding' ? 'Sundial' : activeSite.value;
-            const currentYear = new Date().getFullYear();
-            const monthStr = brand.month || activeMonth.value;
-
-            let textToCopy = `Store: ${storeName}\n`;
-            textToCopy += `Promo Period: ${monthStr} ${currentYear}\n`;
-            textToCopy += `Total Credit Requested: ${formatCurrency(brand.total)}\n\n`;
-            textToCopy += `Promotion Details:\n`;
-            
-            brand.credits.forEach(c => {
-                const type = c.creditType || 'Promo';
-                const dates = c.dates || 'N/A';
-                const amt = formatCurrency(c.amount);
-                textToCopy += `- ${type} (${dates}): ${amt}\n`;
-            });
-            
-            textToCopy += `\n*Itemized POS report attached to submission.`;
-
-            try {
-                await navigator.clipboard.writeText(textToCopy);
-                alert(`✅ Text Copied to Clipboard!\n\nSimply paste into the DIME "Promotion Details" box.\n\nOpening the DIME Portal now...`);
-                window.open('https://form.jotform.com/252994629916172', '_blank'); 
-            } catch (err) {
-                console.error('Failed to copy text: ', err);
-                alert('Failed to copy to clipboard. Please check your browser permissions.');
-            }
-        };
-
-                const scrollMonths = (direction) => {
-                    const container = document.getElementById('monthScrollContainer');
-                    if (container) {
-                        const scrollAmount = direction === 'left' ? -200 : 200;
-                        container.scrollBy({ left: scrollAmount, behavior: 'smooth' });
-                    }
-                };
-
-                const scrollWorkbookTabs = (direction) => {
-                    const container = document.getElementById('workbookTabContainer');
-                    if (container) {
-                        const scrollAmount = direction === 'left' ? -300 : 300;
-                        container.scrollBy({ left: scrollAmount, behavior: 'smooth' });
-                    }
-                };
-
-                const showWorkbookSyncModal = ref(false);
-        const workbookPasteData = ref('');
-
-        const openWorkbookSyncModal = () => {
-            workbookPasteData.value = '';
-            showWorkbookSyncModal.value = true;
-            refreshIcons();
-        };
-
-        const processWorkbookSync = async () => {
-            if (!workbookPasteData.value.trim()) return;
-            
-            // Basic parser for Workbook V9 Summary Page
-            // Expecting: Month [TAB] Total
-            const rows = workbookPasteData.value.trim().split(/\r?\n/);
-            const lastRow = rows[rows.length - 1].split('\t');
-            
-            if (lastRow.length < 2) {
-                alert("Format Error: Please paste at least two columns (Month and Total) from your Excel Board Report.");
-                return;
-            }
-
-            const month = lastRow[0];
-            const total = parseFloat(String(lastRow[1]).replace(/[^0-9.-]+/g,"")) || 0;
-
-            if (isNaN(total)) {
-                alert("Could not parse a valid dollar amount from the second column.");
-                return;
-            }
-
-                        try {
-                await setDoc(doc(db, "promo tracker", "Master_Workbook_V9_Board_Report"), {
-                    reportMonth: month,
-                    total: total,
-                    updatedAt: Date.now(),
-                    updatedBy: loggedInUser.value,
-                    site: activeSite.value
-                });
-                
-                logSystemAction("UPDATE", `Synced Workbook V9 Totals: ${month} - ${formatCurrency(total)}`);
-                showWorkbookSyncModal.value = false;
-                alert(`Success! The Master Workbook balance has been updated to ${formatCurrency(total)}.`);
-            } catch (error) {
-                console.error("Sync Error:", error);
-                alert("Failed to sync totals to the cloud. Check your permissions.");
-            }
-        };
-
-                const repopulateFromMasterWorkbook = async () => {
-            if (!masterWorkbook.value || !masterWorkbook.value.data) {
-                return alert("No workbook data found in the cloud. Please load the Complete Workbook first.");
-            }
-
-            if (!confirm("⚠️ CRITICAL ACTION: This will PERMANENTLY DELETE all current active credits and re-populate them from the Master Workbook to ensure 100% parity. This cannot be undone. Proceed?")) return;
-
-            try {
-                const batch = writeBatch(db);
-                let creditsCreated = 0;
-                let creditsDeleted = 0;
-                let brandsAdded = 0;
-
-                // 1. Clear out ALL existing (non-archived) credits first to prevent duplicates
-                // We use the full promoCredits list we currently have in memory
-                promoCredits.value.forEach(c => {
-                    if (!c.archived) {
-                        batch.delete(doc(db, "promoCredits", c.id));
-                        creditsDeleted++;
-                    }
-                });
-
-                // 2. Loop through all sheets in the workbook
-                for (const sheetName of Object.keys(masterWorkbook.value.data)) {
-                    // We only want the monthly sheets (e.g., "August 2026")
-                    if (!sheetName.includes('2026')) continue;
-
-                    const monthName = sheetName.split(' ')[0]; // "August"
-                    const rows = masterWorkbook.value.data[sheetName] || [];
-
-                    rows.forEach(row => {
-                        const vendor = row["Brand"] || row[0];
-                        if (!vendor || vendor === "Brand" || vendor.toLowerCase().includes('total')) return; 
-
-                        // Prepare the Credit Record
-                        const sites = ["Redding", "Red-Bluff"];
-                        sites.forEach(siteKey => {
-                            const siteName = siteKey === "Red-Bluff" ? "Red Bluff" : "Redding";
-                            // Get amount, cleaning dollar signs and commas
-                            const rawAmt = row[siteKey] || row[sites.indexOf(siteKey) + 1];
-                            const amt = parseFloat(String(rawAmt || 0).replace(/[^0-9.-]+/g,"")) || 0;
-
-                            if (amt > 0) {
-                                const creditRef = doc(collection(db, "promoCredits"));
-                                
-                                // Determine status based on presence of Approved amount or Date Applied
-                                const approvedAmt = parseFloat(String(row["Credits Approved"] || 0).replace(/[^0-9.-]+/g,"")) || 0;
-                                const isApplied = (approvedAmt > 0) || (!!row["Date Applied"] && row["Date Applied"] !== 'N/A');
-
-                                batch.set(creditRef, {
-                                    site: siteName,
-                                    trackingMonth: monthName,
-                                    vendor: vendor,
-                                    distributor: 'Workbook Sync',
-                                    creditType: row["Promo Credits "] || 'Promo',
-                                    dates: row["Date Requested"] || 'Workbook Import',
-                                    amount: amt,
-                                    dateRequested: row["Date Requested"] || '',
-                                    dateReceived: row["Date Applied"] || '',
-                                    invoice: 'WB-V9-SYNC',
-                                    status: isApplied ? "Applied" : "Pending",
-                                    createdAt: Date.now(),
-                                    archived: false
-                                });
-                                creditsCreated++;
-                            }
-                        });
-
-                        // Ensure Brand exists in Directory
-                        if (!masterBrands.value.find(b => (b.vendor || '').toLowerCase() === vendor.toLowerCase())) {
-                            const brandRef = doc(collection(db, "brands"));
-                            batch.set(brandRef, {
-                                vendor: vendor,
-                                distributor: 'Auto-Imported (Workbook)',
-                                createdAt: Date.now()
-                            });
-                            brandsAdded++;
-                        }
-                    });
-                }
-
-                                await batch.commit();
-                logSystemAction("IMPORT", `Master Wipe & Sync: Deleted ${creditsDeleted}, Created ${creditsCreated} credits.`);
-                alert(`Sync Complete!\n\n- Old records cleared: ${creditsDeleted}\n- New records imported: ${creditsCreated}\n- New brands discovered: ${brandsAdded}\n\nYour tracker is now a perfect mirror of the Master Workbook.`);
-            } catch (err) {
-                console.error("Repopulation Error:", err);
-                alert("Failed to repopulate data: " + err.message);
-            }
-        };
-
-                const updateWorkbookFromSales = async () => {
-                    if (!masterWorkbook.value || !masterWorkbook.value.data) {
-                        return alert("Master Workbook not loaded. Please go to the Workbook Viewer tab and click 'Load Complete Workbook' first.");
-                    }
-            
-                    const unsynced = treesSalesData.value.filter(s => s.status === 'Unsynced');
-                    if (unsynced.length === 0) return alert("No unsynced sales found to push to workbook.");
-
-                    if (!confirm(`This will merge ${unsynced.length} sales items into the Master Workbook V9 (Cloud Document). New brand totals will be ADDED to existing values. Continue?`)) return;
-
-                    try {
-                        // Clone the workbook data
-                        const updatedData = JSON.parse(JSON.stringify(masterWorkbook.value.data));
-                        const currentYear = "2026"; 
-                        let updatesCount = 0;
-
-                        unsynced.forEach(sale => {
-                            const sheetName = `${sale.month} ${currentYear}`;
-                            if (!updatedData[sheetName]) return; 
-
-                            const rows = updatedData[sheetName];
-                            const cleanBrand = (sale.brand || '').toLowerCase().trim();
-                    
-                            let brandRow = rows.find(r => {
-                                const rowBrand = (r["Brand"] || r[0] || '').toLowerCase().trim();
-                                return rowBrand === cleanBrand;
-                            });
-
-                            if (!brandRow) {
-                                // Create new row object with correct schema if brand missing
-                                brandRow = { 
-                                    "Brand": sale.brand, 
-                                    "Redding": 0, 
-                                    "Red-Bluff": 0, 
-                                    "Promo Credits ": 0,
-                                    "Treez Total": 0 
-                                };
-                                rows.push(brandRow);
-                            }
-
-                            const siteKey = sale.detectedSite === "Redding" ? "Redding" : "Red-Bluff";
-                    
-                            // "Without changing existing data" -> Sum the new sales into the existing cells
-                            const currentSiteVal = parseFloat(String(brandRow[siteKey] || 0).replace(/[^0-9.-]+/g,"")) || 0;
-                            brandRow[siteKey] = currentSiteVal + (sale.owed || 0);
-
-                            const currentTreezTotal = parseFloat(String(brandRow["Treez Total"] || 0).replace(/[^0-9.-]+/g,"")) || 0;
-                            brandRow["Treez Total"] = currentTreezTotal + (sale.owed || 0);
-                    
-                            updatesCount++;
-                        });
-
-                        // Update the specific sheet document instead of the whole workbook
-                            const sheetDocId = sheetName.replace(/\//g, '_');
-                            await setDoc(doc(db, "workbook_v9_sheets", sheetDocId), {
-                                sheetName: sheetName,
-                                rows: updatedData[sheetName],
-                                updatedAt: Date.now()
-                            });
-
-                            // Update summary metadata
-                            await setDoc(doc(db, "promo tracker", "Master_Workbook_V9_Board_Report"), {
-                                lastModified: Date.now(),
-                                modifiedBy: loggedInUser.value
-                            }, { merge: true });
-
-                            // Mark sales as Synced
-                            const batch = writeBatch(db);
-                        unsynced.forEach(sale => {
-                            batch.update(doc(db, "treesSales", sale.id), { status: 'Synced' });
-                        });
-                        await batch.commit();
-
-                        logSystemAction("UPDATE", `Merged ${unsynced.length} sales items into Master Workbook Document`);
-                        alert(`Success! Updated ${updatesCount} line items in the Master Workbook. All sales marked as synced.`);
-                    } catch (err) {
-                        console.error("Workbook Update Error:", err);
-                        alert("Failed to update workbook document: " + err.message);
-                    }
-                };
-
-        const sageAuditData = computed(() => {
-            if (!masterWorkbook.value || !masterWorkbook.value.data) return [];
-            
-            const rawSageRows = masterWorkbook.value.data["GL Raw by Store"] || [];
-            if (rawSageRows.length === 0) return [];
-
-            const sageMap = {};
-
-            rawSageRows.forEach(row => {
-                const brand = row["Mapped Brand"] || row[5] || 'Unmapped';
-                if (brand === "Mapped Brand" || !brand) return;
-
-                if (!sageMap[brand]) {
-                    sageMap[brand] = {
-                        brand: brand,
-                        totalApplied: 0,
-                        transactions: [],
-                        sites: { "Redding": 0, "Red Bluff": 0 }
-                    };
-                }
-
-                const amt = parseFloat(String(row["Credit"] || row[4] || 0).replace(/[^0-9.-]+/g,"")) || 0;
-                const site = detectSiteFromName(row["Store"] || row[1] || row["Location"] || row[2]);
-                const date = row["Posted dt."] || row[0] || 'Unknown';
-                const memo = row["Memo/Description"] || row[3] || '';
-
-                sageMap[brand].totalApplied += amt;
-                sageMap[brand].sites[site] += amt;
-                sageMap[brand].transactions.push({
-                    date: date,
-                    site: site,
-                    memo: memo,
-                    amount: amt
-                });
-            });
-
-            return Object.values(sageMap).sort((a, b) => b.totalApplied - a.totalApplied);
-        });
-
-        return {
-            isManagerUnlocked, isSuperAdmin, loggedInUser, emailInput, passwordInput, authError, activeSite, activeTab,
-            treesSalesData, masterBrands, selectedBrands, allBrandsSelected, toggleAllBrands,
-            deleteSelectedBrands, updateBrandField, promoCredits, calendarMonths, activeMonth,
-            searchQueryInput, searchQuery, showPromoModal, showBrandDropdown, editingId, showReportModal,
-            showResolutionModal, resolutionCredit, resolutionForm, markAsSent, markReportGroupAsSent,
-            openResolutionModal, submitResolution, monthlyReportSummaries, downloadMonthlyReport,
-            groupedPendingReports, draftEmail, archiveAndExportAnnualReport, showImportModal,
-            rawPasteData, pastedGrid, mappedHeaders, showBrandImportModal, brandPasteData, brandPastedGrid,
-            brandMappedHeaders, brandAvailableHeaders, availableHeaders, form, handleLogin, forceLock,
-            filteredBrands, selectBrand, formatCurrency, filteredCredits, filteredTreesSalesData,
-            displayTreesSalesData, totalPending, totalApplied, unsyncedSalesCount, openPromoModal,
-            totalTreesOwedYTD, totalTreesPending,
-            closePromoModal, handleFileUpload, saveCredit, editCredit, deleteCredit, openImportModal,
-                        closeImportModal, resetImport, displayGrid, processRawPaste, processImport, regenerateBrandSummary,
-            regenerateMonthReports, handleTreesCsvUpload, handleSageCsvUpload, pushToMainTracker, resetBrandImport,
-            processBrandRawPaste, processBrandImport, systemLogs, refreshIcons, clearAllSalesData,
-            detectMonthInString, drawCharts, openDimeHelper, exportVendorsAndBrandsCSV,
-            masterLedgerData, selectedLedgerVendor, refreshLedger, openLegacyVerification, ledgerTotals,
-            masterWorkbook, showWorkspaceMenu, showAdminMenu, workspaceTabs, selectWorkspace, activeWorkspaceInfo,
-                        scrollMonths, scrollWorkbookTabs, workbookSchema, activeWorkbookSheet, isWorkbookLoaded,
-            auditRange, brandAuditData, draftAuditEmail, sageAuditData, activeWorkbookHeaders,
-            showWorkbookSyncModal, workbookPasteData, openWorkbookSyncModal, processWorkbookSync,
-                        repopulateFromMasterWorkbook, updateWorkbookFromSales, loadWorkbookFromStorage
-        };
-
-    }
-}).mount('#app');
+                    const masterRecord = masterBrands.value.find(b => (b.vendor || '').toLowerCase() === data.brand.to
