@@ -122,9 +122,13 @@ createApp({
                     return allCredits;
                 });
 
-        // 3. DASHBOARD & LEDGER (Now strictly powered by Workbook)
+                // 3. DASHBOARD & LEDGER (Now strictly powered by Workbook)
         const treesSalesData = ref([]); 
         const auditRange = ref({ start: '', end: '' });
+
+        const selectedLedgerVendor = ref(null);
+        const masterLedgerData = ref([]);
+        const ledgerTotals = ref({ generated: 0, recovered: 0, outstanding: 0, variance: 0 });
 
 
         const refreshLedger = async () => {
@@ -522,20 +526,24 @@ createApp({
                 }
             });
 
-            // 2. Pull Manual Entry Data
-            brand.credits.forEach(c => {
-                if (String(c.creditType).includes('Aggregated POS Sales')) return; 
-                
-                const safeLoc = `"${String(c.site || '').replace(/"/g, '""')}"`;
-                const safeDate = `"${String(c.dates || '').replace(/"/g, '""')}"`;
-                const safeBrand = `"${String(c.vendor || '').replace(/"/g, '""')}"`;
-                const safeProd = `"${String(c.creditType || '').replace(/"/g, '""')}"`; 
-                const safeTrack = `"${String(c.invoice || '').replace(/"/g, '""')}"`;
-                
-                csvContent += `${safeLoc},${safeDate},${safeBrand},${safeProd},${safeTrack},"-","-","-","-","-","${formatCurrency(c.amount)}","Manual Entry"\n`;
-                csvTotal += parseFloat(c.amount) || 0;
-                if (c.dates) promoDates.add(c.dates);
-            });
+                    // 2. Pull Manual Entry Data
+            const processManualCredits = (credits) => {
+                credits.forEach(c => {
+                    if (String(c.creditType).includes('Aggregated POS Sales')) return; 
+                    
+                    const safeLoc = `"${String(c.site || '').replace(/"/g, '""')}"`;
+                    const safeDate = `"${String(c.dates || '').replace(/"/g, '""')}"`;
+                    const safeBrand = `"${String(c.vendor || '').replace(/"/g, '""')}"`;
+                    const safeProd = `"${String(c.creditType || '').replace(/"/g, '""')}"`; 
+                    const safeTrack = `"${String(c.invoice || '').replace(/"/g, '""')}"`;
+                    
+                    csvContent += `${safeLoc},${safeDate},${safeBrand},${safeProd},${safeTrack},"-","-","-","-","-","${formatCurrency(c.amount)}","Manual Entry"\n`;
+                    csvTotal += parseFloat(c.amount) || 0;
+                    if (c.dates) promoDates.add(c.dates);
+                });
+            };
+
+            if (brand.credits) processManualCredits(brand.credits);
 
             csvContent += `,,,,,,,,,, "TOTAL:", "${formatCurrency(csvTotal)}"\n`;
 
