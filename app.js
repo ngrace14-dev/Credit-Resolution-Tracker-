@@ -57,7 +57,7 @@ createApp({
         const authError = ref('');
         const activeSite = ref('Red Bluff');
                 const activeTab = ref('Ledger');
-        const promoCredits = ref([]); 
+                const promoCreditsList = ref([]); // Rename the ref to avoid collision with computed
         const calendarMonths = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
                 const activeMonth = ref('August');
                 const masterBrands = ref([]);
@@ -66,7 +66,7 @@ createApp({
                 // 1. DATA SOURCE: Master Workbook Fragments
                 const masterWorkbook = ref({ data: {}, summary: {} });
 
-                // 2. COMPUTED: Promo Credits (Mirrors Workbook Sheets exactly)
+                // 2. COMPUTED: promoCredits (This name is what all components expect)
                 const promoCredits = computed(() => {
                     const allCredits = [];
                     if (!masterWorkbook.value || !masterWorkbook.value.data) return [];
@@ -113,6 +113,12 @@ createApp({
                             });
                         });
                     });
+                    
+                    // Also include any manual credits from Firestore that aren't synced to workbook
+                    promoCreditsList.value.forEach(c => {
+                        if (c.invoice !== 'WB-V9-SYNC') allCredits.push(c);
+                    });
+
                     return allCredits;
                 });
 
