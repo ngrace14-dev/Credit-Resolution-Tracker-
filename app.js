@@ -384,76 +384,59 @@ createApp({
                 }));
         });
 
-        // REFACTORED FOR DIME REQUIREMENTS
-        const downloadMonthlyReport = (report) => {
+                // REFACTORED FOR DIME REQUIREMENTS
+        const downloadMonthlyReport = (brand) => {
             let csvContent = "Location,Date & Time,Brand,Product Name,Transaction ID,Quantity Sold,Unit Price,Total Before Tax,Discount Title,Discount Amount,Credit Owed,Entry Type\n";
             let csvTotal = 0;
-            const reportMonth = report.month || activeMonth.value;
+            const reportMonth = brand.month || activeMonth.value;
             const cleanStr = (str) => String(str || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
     
-            const matchedRawSales = treesSalesData.value.filter(sale => {
-                const brandMatch = cleanStr(sale.brand) === cleanStr(report.vendor);
-                const siteMatch = cleanStr(sale.detectedSite) === cleanStr(activeSite.value);
-                const monthMatch = cleanStr(sale.month) === cleanStr(reportMonth);
-                return brandMatch && siteMatch && monthMatch;
+            // NEW: Source itemized data from BOTH Trees Sales and Workbook Sheets
+            const itemizedSales = [];
+
+            // 1. Check Raw Trees Sales
+            treesSalesData.value.forEach(sale => {
+                if (cleanStr(sale.brand) === cleanStr(brand.vendor) && 
+                    cleanStr(sale.detectedSite) === cleanStr(activeSite.value) && 
+                    cleanStr(sale.month) === cleanStr(reportMonth)) {
+                    itemizedSales.push({
+                        loc: sale.detectedSite,
+                        date: sale.dateClosed,
+                        brand: sale.brand,
+                        prod: sale.productName,
+                        track: sale.trackingId,
+                        qty: sale.unitsSold,
+                        price: sale.unitPrice,
+                        preTax: (sale.unitsSold || 0) * (sale.unitPrice || 0),
+                        discTitle: sale.discountTitle,
+                        discAmt: sale.discountAmount,
+                        owed: sale.owed,
+                        type: "POS Itemized"
+                    });
+                }
             });
 
-            if (matchedRawSales.length > 0) {
-                matchedRawSales.forEach(sale => {
-                    const safeLoc = `"${String(sale.detectedSite || '').replace(/"/g, '""')}"`;
-                    const safeDate = `"${String(sale.dateClosed || '').replace(/"/g, '""')}"`;
-                    const safeBrand = `"${String(sale.brand || '').replace(/"/g, '""')}"`;
-                    const safeProd = `"${String(sale.productName || '').replace(/"/g, '""')}"`;
-                    const safeTrack = `"${String(sale.trackingId || '').replace(/"/g, '""')}"`;
-                    const safeQty = `"${sale.unitsSold || 0}"`;
-                    const safePrice = `"${formatCurrency(sale.unitPrice || 0)}"`;
-                    const safePreTax = `"${formatCurrency((sale.unitsSold || 0) * (sale.unitPrice || 0))}"`;
-                    const safeDiscTitle = `"${String(sale.discountTitle || '').replace(/"/g, '""')}"`;
-                    const safeDiscAmount = `"${formatCurrency(sale.discountAmount || 0)}"`;
-                    const safeOwed = `"${formatCurrency(sale.owed || 0)}"`;
-                    const safeType = `"POS Itemized"`;
-                    
-                    csvContent += `${safeLoc},${safeDate},${safeBrand},${safeProd},${safeTrack},${safeQty},${safePrice},${safePreTax},${safeDiscTitle},${safeDiscAmount},${safeOwed},${safeType}\n`;
-                    csvTotal += parseFloat(sale.owed) || 0;
-                });
-            }
-
-            const creditsToExport = report.credits || [];
-            creditsToExport.forEach(c => {
+            // 2. Add manual credits from promoCredits collection
+            brand.credits.forEach(c => {
                 const isAggregated = c.creditType && String(c.creditType).includes('Aggregated POS Sales');
                 if (!isAggregated) {
-                    const safeLoc = `"${String(c.site || '').replace(/"/g, '""')}"`;
-                    const safeDate = `"${String(c.dates || '').replace(/"/g, '""')}"`;
-                    const safeBrand = `"${String(c.vendor || '').replace(/"/g, '""')}"`;
-                    const safeProd = `"${String(c.creditType || '').replace(/"/g, '""')}"`; 
-                    const safeTrack = `"${String(c.invoice || '').replace(/"/g, '""')}"`;
-                    const safeQty = `"-"`;
-                    const safePrice = `"-"`;
-                    const safePreTax = `"-"`;
-                    const safeDiscTitle = `"-"`;
-                    const safeDiscAmount = `"-"`;
-                    const safeOwed = `"${formatCurrency(c.amount)}"`;
-                    const safeType = `"Manual Entry"`; 
-                    
-                    csvContent += `${safeLoc},${safeDate},${safeBrand},${safeProd},${safeTrack},${safeQty},${safePrice},${safePreTax},${safeDiscTitle},${safeDiscAmount},${safeOwed},${safeType}\n`;
-                    csvTotal += parseFloat(c.amount) || 0;
-                } else if (matchedRawSales.length === 0) {
-                    const safeLoc = `"${String(c.site || '').replace(/"/g, '""')}"`;
-                    const safeDate = `"${String(c.dates || '').replace(/"/g, '""')}"`;
-                    const safeBrand = `"${String(c.vendor || '').replace(/"/g, '""')}"`;
-                    const safeProd = `"${String(c.creditType || '').replace(/"/g, '""')}"`; 
-                    const safeTrack = `"${String(c.invoice || '').replace(/"/g, '""')}"`;
-                    const safeQty = `"-"`;
-                    const safePrice = `"-"`;
-                    const safePreTax = `"-"`;
-                    const safeDiscTitle = `"-"`;
-                    const safeDiscAmount = `"-"`;
-                    const safeOwed = `"${formatCurrency(c.amount)}"`;
-                    const safeType = `"Summary (Raw Data Missing)"`; 
-                    
-                    csvContent += `${safeLoc},${safeDate},${safeBrand},${safeProd},${safeTrack},${safeQty},${safePrice},${safePreTax},${safeDiscTitle},${safeDiscAmount},${safeOwed},${safeType}\n`;
-                    csvTotal += parseFloat(c.amount) || 0;
+                    itemizedSales.push({
+                        loc: c.site,
+                        date: c.dates,
+                        brand: c.vendor,
+                        prod: c.creditType,
+                        track: c.invoice,
+                        qty: "-", price: "-", preTax: "-", discTitle: "-", discAmt: "-",
+                        owed: c.amount,
+                        type: "Manual Entry"
+                    });
                 }
+            });
+
+            // Build CSV
+            itemizedSales.forEach(s => {
+                csvContent += `"${s.loc}","${s.date}","${s.brand}","${s.prod}","${s.track}","${s.qty}","${formatCurrency(s.price)}","${formatCurrency(s.preTax)}","${s.discTitle}","${formatCurrency(s.discAmt)}","${formatCurrency(s.owed)}","${s.type}"\n`;
+                csvTotal += parseFloat(s.owed) || 0;
             });
 
             csvContent += `,,,,,,,,,, "TOTAL:", "${formatCurrency(csvTotal)}"\n`;
@@ -463,8 +446,8 @@ createApp({
             const link = document.createElement("a");
             link.setAttribute("href", url);
             const currentYear = new Date().getFullYear();
-            const reportName = report.vendor ? String(report.vendor).replace(/[^a-zA-Z0-9]/g, '_') : (reportMonth || 'Month');
-            link.setAttribute("download", `${activeSite.value.replace(/\s/g, '_')}_Breakdown_${reportName}_${currentYear}.csv`);
+            const reportName = String(brand.vendor).replace(/[^a-zA-Z0-9]/g, '_');
+            link.setAttribute("download", `${activeSite.value.replace(/\s/g, '_')}_Report_${reportName}_${reportMonth}_${currentYear}.csv`);
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
@@ -1051,7 +1034,7 @@ createApp({
                     { name: 'Sales', icon: 'inbox', label: 'Discovery Intake', group: 'Workbook' },
                     { name: 'Recovery', icon: 'dollar-sign', group: 'Workbook' },
                     { name: 'Ledger', icon: 'book-open', group: 'Workbook' },
-                                        { name: 'Reports', icon: 'building', label: 'Store Rec', group: 'Workbook' },
+                                        { name: 'Reports', icon: 'mail-open', label: 'Monthly Reports', group: 'Workbook' },
                     { name: 'BrandAudit', icon: 'clipboard-check', label: 'Brand Audit', group: 'Workbook' },
                     { name: 'Validation', icon: 'check-square', label: 'Workbook Validation', group: 'Workbook' },
                     { name: 'Tracker', icon: 'clock', label: 'Legacy Tracker', group: 'Workbook' },
