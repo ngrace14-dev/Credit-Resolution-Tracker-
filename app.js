@@ -2881,33 +2881,39 @@ RREDCO`;
             }
         };
                 const sendEmailDraft = () => {
-            if (!selectedBrandForEmail.value) return;
-            const brand = selectedBrandForEmail.value;
+                    if (!selectedBrandForEmail.value) return;
+                    const brand = selectedBrandForEmail.value;
             
-            // Consistently trigger Cumulative Statement CSV download for all modes
-            const csvContent = generateAuditStatementCSV(brand);
-            const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
-            const url = URL.createObjectURL(blob);
-            const link = document.createElement("a");
-            link.setAttribute("href", url);
-            const currentYear = new Date().getFullYear();
-            link.setAttribute("download", `${brand.vendor.replace(/\s/g, '_')}_Statement_${currentYear}.csv`);
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
+                    // 1. Consistently trigger Cumulative Statement CSV download
+                    const csvContent = generateAuditStatementCSV(brand);
+                    const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
+                    const url = URL.createObjectURL(blob);
+                    const link = document.createElement("a");
+                    link.setAttribute("href", url);
+                    const currentYear = new Date().getFullYear();
+                    link.setAttribute("download", `${brand.vendor.replace(/\s/g, '_')}_Statement_${currentYear}.csv`);
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
 
-            const cleanEmails = String(brand.email || '').split(/[,;\s]+/).map(e => e.trim()).filter(Boolean).join(',');
-            const mailtoUrl = `mailto:${cleanEmails}?cc=accounting@rredco.com&subject=${encodeURIComponent(emailDraftSubject.value)}&body=${encodeURIComponent(emailDraftBody.value)}`;
+                    // 2. Construct Mailto Link (Optimized for Outlook/Mail Clients)
+                    const recipient = brand.email || '';
+                    const subject = encodeURIComponent(`Statement of Account – Cumulative Promotional Credits Owed (${brand.vendor || brand})`);
+                    const body = encodeURIComponent(emailDraftBody.value);
             
-            if (mailtoUrl.length > 2000) {
-                alert("The email body is too long for the automatic mail client trigger. Please click 'Copy to Clipboard' and paste directly into your email client.");
-            } else {
-                window.location.href = mailtoUrl;
-            }
+                    // Construct the mailto protocol link (including CC as per original app requirements)
+                    const mailtoLink = `mailto:${recipient}?cc=accounting@rredco.com&subject=${subject}&body=${body}`;
             
-            showEmailDraftModal.value = false;
-            logSystemAction("EXPORT", `Dispatched Cumulative Statement Email for ${brand.vendor}`);
-        };
+                    // 3. Trigger the system's default mail client
+                    if (mailtoLink.length > 2000) {
+                        alert("The email body is too long for the automatic mail client trigger. Please click 'Copy to Clipboard' and paste directly into your email client.");
+                    } else {
+                        window.location.href = mailtoLink;
+                    }
+            
+                    showEmailDraftModal.value = false;
+                    logSystemAction("EXPORT", `Dispatched Cumulative Statement Email for ${brand.vendor}`);
+                };
 
         const copyEmailToClipboard = async () => {
             const fullText = `Subject: ${emailDraftSubject.value}\n\n${emailDraftBody.value}`;
