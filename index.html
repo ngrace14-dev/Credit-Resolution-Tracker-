@@ -1269,7 +1269,7 @@
                             </button>
                         </div>
 
-                        <!-- Date Range Selectors (Shown only when in Audit Statement mode) -->
+                                                <!-- Date Range Selectors (Shown only when in Audit Statement mode) -->
                         <div v-if="emailReportMode === 'audit_statement'" class="flex items-center gap-2">
                             <span class="text-xs text-gray-400">Audit Period:</span>
                             <select 
@@ -1285,6 +1285,15 @@
                                 class="bg-gray-800 text-white text-xs border border-gray-700 rounded-lg px-2 py-1 focus:border-emerald-500 outline-none">
                                 <option v-for="m in calendarMonths" :key="m" :value="m">{{ m }}</option>
                             </select>
+
+                            <!-- Quick Select Buttons (Added for consistency with Audit Panel) -->
+                            <div class="flex items-center gap-1.5 ml-2 border-l border-gray-700 pl-3">
+                                <button type="button" @click="auditStartMonth='January'; auditEndMonth='March'; refreshEmailDraft();" class="px-2 py-1 bg-gray-800 hover:bg-emerald-600 rounded text-[10px] font-bold transition-colors text-white">Q1</button>
+                                <button type="button" @click="auditStartMonth='April'; auditEndMonth='June'; refreshEmailDraft();" class="px-2 py-1 bg-gray-800 hover:bg-emerald-600 rounded text-[10px] font-bold transition-colors text-white">Q2</button>
+                                <button type="button" @click="auditStartMonth='July'; auditEndMonth='September'; refreshEmailDraft();" class="px-2 py-1 bg-gray-800 hover:bg-emerald-600 rounded text-[10px] font-bold transition-colors text-white">Q3</button>
+                                <button type="button" @click="auditStartMonth='October'; auditEndMonth='December'; refreshEmailDraft();" class="px-2 py-1 bg-gray-800 hover:bg-emerald-600 rounded text-[10px] font-bold transition-colors text-white">Q4</button>
+                                <button type="button" @click="auditStartMonth='January'; auditEndMonth='December'; refreshEmailDraft();" class="px-2 py-1 bg-emerald-700 hover:bg-emerald-500 rounded text-[10px] font-bold transition-colors text-white shadow-sm">YTD</button>
+                            </div>
                         </div>
                     </div>
 
