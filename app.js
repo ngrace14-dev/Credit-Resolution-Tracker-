@@ -2795,33 +2795,32 @@ const handleSageCsvUpload = async (e) => {
 
 
                                                                 const generateStandardEmail = (brand) => {
-            const vendorName = brand.vendor || brand;
-            const reportData = calculateMonthlyReport(vendorName);
+                                                                    const vendorName = brand.vendor || brand;
+                                                                    const reportData = calculateMonthlyReport(vendorName);
             
-            // Format currency to match your baseplate style
-            const formatCurrency = (val) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(val || 0);
+                                                                    // Format currency to match your baseplate style
+                                                                    const formatCurrency = (val) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(val || 0);
             
-            // Filter table rows based on the active site toggle
-            let tableRows = '';
-            let totalGenerated = 0;
+                                                                    // Filter table rows based on the active site toggle
+                                                                    let tableRows = '';
+                                                                    let totalGenerated = 0;
             
-            if (!activeSite.value || activeSite.value === 'All') {
-                tableRows = `Red Bluff       | ${formatCurrency(reportData.redBluffGenerated)}\nRedding         | ${formatCurrency(reportData.reddingGenerated)}`;
-                totalGenerated = reportData.totalGenerated;
-            } else if (activeSite.value === 'Redding') {
-                tableRows = `Redding         | ${formatCurrency(reportData.reddingGenerated)}`;
-                totalGenerated = reportData.reddingGenerated;
-            } else {
-                tableRows = `Red Bluff       | ${formatCurrency(reportData.redBluffGenerated)}`;
-                totalGenerated = reportData.redBluffGenerated;
-            }
+                                                                    if (!activeSite.value || activeSite.value === 'All') {
+                                                                        tableRows = `Red Bluff       | ${formatCurrency(reportData.redBluffGenerated)}\nRedding         | ${formatCurrency(reportData.reddingGenerated)}`;
+                                                                        totalGenerated = reportData.totalGenerated;
+                                                                    } else if (activeSite.value === 'Redding') {
+                                                                        tableRows = `Redding         | ${formatCurrency(reportData.reddingGenerated)}`;
+                                                                        totalGenerated = reportData.reddingGenerated;
+                                                                    } else {
+                                                                        tableRows = `Red Bluff       | ${formatCurrency(reportData.redBluffGenerated)}`;
+                                                                        totalGenerated = reportData.redBluffGenerated;
+                                                                    }
 
-            // Capture the selected date range from your UI dropdowns
-            const startPeriod = startMonth.value || 'January';
-            const endPeriod = endMonth.value || 'October';
+                                                                    // Capture the selected date range from your UI dropdowns
+                                                                    const startPeriod = startMonth.value || 'January';
+                                                                    const endPeriod = endMonth.value || 'October';
 
-            const subject = `Promotional Credit Summary – ${vendorName} – ${startPeriod} to ${endPeriod}`;
-            const body = `Hi ${vendorName} Team,
+                                                                    const body = `Hi ${vendorName} Team,
 
 I hope this email finds you well.
 
@@ -2848,18 +2847,53 @@ Best regards,
 Nicholas G.
 RREDCO`;
 
-            return { subject, body };
-        };
+                                                                    return body;
+                                                                };
 
-        const refreshEmailDraft = () => {
-            if (!selectedBrandForEmail.value) return;
-            const brand = selectedBrandForEmail.value;
+                                                                const generateAuditFindingEmail = (brand) => {
+                                                                    const vendorName = brand.vendor || brand;
+                                                                    const reportData = calculateMonthlyReport(vendorName);
+                                                                    const formatCurrency = (val) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(val || 0);
             
-                        // Both Standard and Audit modes now use the Cumulative logic for consistency
-            const { subject, body } = generateStandardEmail(brand);
-            emailDraftSubject.value = subject;
-            emailDraftBody.value = body;
-        };
+                                                                    const startPeriod = startMonth.value || 'January';
+                                                                    const endPeriod = endMonth.value || 'October';
+
+                                                                    return `Hi ${vendorName} Team,
+
+I hope this finds you well.
+
+We have completed an internal audit of promotional credits for ${vendorName} for the period of ${startPeriod} 2026 through ${endPeriod} 2026. 
+
+Based on our POS data and recorded collections, our records indicate an outstanding balance of ${formatCurrency(reportData.balance)}.
+
+Total Generated: ${formatCurrency(reportData.totalGenerated)}
+Total Collected: ${formatCurrency(reportData.totalRecovered)}
+Remaining Balance: ${formatCurrency(reportData.balance)}
+
+Attached is a detailed statement showing the month-by-month breakdown of these figures. We would like to reconcile this balance with your records. Please let us know if you require any additional documentation to process these outstanding credits.
+
+We value our partnership and look forward to resolving this balance.
+
+Best regards,
+
+Nicholas G.
+RREDCO`;
+                                                                };
+
+                                                                const refreshEmailDraft = () => {
+                                                                    if (!selectedBrandForEmail.value) return;
+                                                                    const brand = selectedBrandForEmail.value;
+                                                                    const startPeriod = startMonth.value || 'January';
+                                                                    const endPeriod = endMonth.value || 'October';
+                                                                    // Set the uniform subject line without the brand name
+                                                                    emailDraftSubject.value = `Promo Credit Statement (${startPeriod} 2026 - ${endPeriod} 2026)`;
+                                                                    if (emailReportMode.value === 'standard') {
+                                                                        emailDraftBody.value = generateStandardEmail(brand);
+                                                                    } else {
+                                                                        emailDraftBody.value = generateAuditFindingEmail(brand);
+                                                                    }
+                                                                };
+
 
                                 const openEmailDraft = (brand) => {
             // 1. Open the preview modal for the selected brand
