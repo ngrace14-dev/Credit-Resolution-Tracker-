@@ -651,7 +651,7 @@ createApp({
             return match ? String(match["Standardized POS Name (CSV)"] || '').trim() : clean;
         };
 
-                const generateAuditStatementCSV = (brand) => {
+                        const generateAuditStatementCSV = (brand) => {
             const targetSite = activeSite.value;
             const targetBrand = brand.vendor;
             const standardizedTarget = getStandardizedBrandName(targetBrand).trim().toLowerCase();
@@ -663,9 +663,10 @@ createApp({
             let runningTotalGenerated = 0;
             let cumulativeApplied = 0;
             
-            // FIX: Array slicing inclusive logic
+            // FIX: Array slicing inclusive logic with safety
+            const startIdx = 0;
             const endIdx = calendarMonths.indexOf(activeMonth.value);
-            const monthsToProcess = calendarMonths.slice(0, endIdx + 1);
+            const monthsToProcess = calendarMonths.slice(startIdx, Math.max(startIdx, endIdx) + 1);
             
             monthsToProcess.forEach(month => {
                 let monthlyGenerated = 0;
@@ -674,27 +675,25 @@ createApp({
                 // 1. Get Generated Credits from monthly sheet
                 const sheetName = `${month} ${currentYear}`;
                 const monthlyRows = masterWorkbook.value.data[sheetName] || [];
-                const siteCol = targetSite === "Redding" ? "Redding" : "Red-Bluff";
                 
                 monthlyRows.forEach(row => {
-                    // FIX: Dynamic Key Identification for Brand
-                    const brandKey = Object.keys(row).find(k => k.trim().toLowerCase().includes('brand'));
+                    const rowKeys = Object.keys(row);
+                    const brandKey = rowKeys.find(k => k.trim().toLowerCase().includes('brand'));
                     const rowBrand = brandKey ? row[brandKey] : row[0];
                     if (!rowBrand) return;
                     
                     if (getStandardizedBrandName(rowBrand).trim().toLowerCase() === standardizedTarget) {
                         let rawAmt = 0;
-                        const rowKeys = Object.keys(row);
-                        const exactKey = rowKeys.find(k => k.trim().toLowerCase() === targetSite.toLowerCase() || k.trim().toLowerCase() === siteCol.toLowerCase());
+                        // FIX: Dynamic Store Key Lookup (Resilient to 'Red-Bluff' vs 'Red Bluff' vs 'Redding ')
+                        const siteKey = rowKeys.find(k => k.trim().toLowerCase() === targetSite.toLowerCase() || (targetSite === 'Red Bluff' && k.trim().toLowerCase() === 'red-bluff'));
                         
-                        if (exactKey) {
-                            const val = String(row[exactKey]).trim().toLowerCase();
+                        if (siteKey) {
+                            const val = String(row[siteKey]).trim().toLowerCase();
                             if (val === 'x') {
-                                // FIX: Dynamic Key Identification for Promo Credits
                                 const promoKey = rowKeys.find(k => k.trim().toLowerCase().includes('promo credits'));
                                 rawAmt = promoKey ? row[promoKey] : 0;
                             } else {
-                                rawAmt = row[exactKey];
+                                rawAmt = row[siteKey];
                             }
                         }
                         monthlyGenerated += parseFloat(String(rawAmt || 0).replace(/[^0-9.-]+/g, "")) || 0;
@@ -740,6 +739,7 @@ createApp({
             
             return csvLines.join("\n");
         };
+
 
 
                 const downloadMonthlyReport = (brand) => {
@@ -2720,56 +2720,62 @@ const handleSageCsvUpload = async (e) => {
             if (startIdx === -1 || endIdx === -1 || startIdx > endIdx) return allMonths.slice(0, 9);
             return allMonths.slice(startIdx, endIdx + 1);
         };
-                const calculateBrandAudit = (brandName) => {
-                    if (!brandName) return { redGen: 0, redRec: 0, rbGen: 0, rbRec: 0, gen: 0, rec: 0, bal: 0 };
-                    let redGen = 0, redRec = 0, rbGen = 0, rbRec = 0;
+                        const calculateBrandAudit = (brandName) => {
+            if (!brandName) return { redGen: 0, redRec: 0, rbGen: 0, rbRec: 0, gen: 0, rec: 0, bal: 0 };
+            let redGen = 0, redRec = 0, rbGen = 0, rbRec = 0;
             
-                    const startIdx = calendarMonths.indexOf(auditStartMonth.value || 'January');
-                    const endIdx = calendarMonths.indexOf(auditEndMonth.value || 'September');
-                    // FIX: Explicitly include the end month using + 1
-                    const monthsToAudit = calendarMonths.slice(startIdx, endIdx + 1);
+            const startIdx = calendarMonths.indexOf(auditStartMonth.value || 'January');
+            const endIdx = calendarMonths.indexOf(auditEndMonth.value || 'September');
+            // FIX: Math.max + index offset logic for inclusive 2026 range
+            const monthsToAudit = calendarMonths.slice(startIdx, Math.max(startIdx, endIdx) + 1);
             
-                    const standardizedTarget = getStandardizedBrandName(brandName).trim().toLowerCase();
+            const standardizedTarget = getStandardizedBrandName(brandName).trim().toLowerCase();
 
-                    if (masterWorkbook.value && masterWorkbook.value.data) {
-                        monthsToAudit.forEach(m => {
-                            const sheetName = `${m} 2026`;
-                            const rows = masterWorkbook.value.data[sheetName] || [];
-                            rows.forEach(row => {
-                                // FIX: Dynamic Key Identification for Brand
-                                const brandKey = Object.keys(row).find(k => k.trim().toLowerCase().includes('brand'));
-                                const rowBrand = brandKey ? row[brandKey] : row[0];
+            if (masterWorkbook.value && masterWorkbook.value.data) {
+                monthsToAudit.forEach(m => {
+                    const sheetName = `${m} 2026`;
+                    const rows = masterWorkbook.value.data[sheetName] || [];
+                    rows.forEach(row => {
+                        const rowKeys = Object.keys(row);
+                        // FIX: Dynamic Key Identification for Brand
+                        const brandKey = rowKeys.find(k => k.trim().toLowerCase().includes('brand'));
+                        const rowBrand = brandKey ? row[brandKey] : row[0];
                         
-                                if (rowBrand && getStandardizedBrandName(rowBrand).trim().toLowerCase() === standardizedTarget) {
-                                    // FIX: Dynamic Key Identification for Promo Credits
-                                    const promoKey = Object.keys(row).find(k => k.trim().toLowerCase().includes('promo credits'));
-                                    const promoAmt = promoKey ? parseFloat(String(row[promoKey]).replace(/[^0-9.-]+/g, "")) || 0 : 0;
+                        if (rowBrand && getStandardizedBrandName(rowBrand).trim().toLowerCase() === standardizedTarget) {
+                            // FIX: Dynamic Key Identification for Promo Credits
+                            const promoKey = rowKeys.find(k => k.trim().toLowerCase().includes('promo credits'));
+                            const promoAmt = promoKey ? parseFloat(String(row[promoKey]).replace(/[^0-9.-]+/g, "")) || 0 : 0;
                             
-                                    if (row["Redding"] && String(row["Redding"]).trim().toLowerCase() === 'x') redGen += promoAmt;
-                                    if (row["Red-Bluff"] && String(row["Red-Bluff"]).trim().toLowerCase() === 'x') rbGen += promoAmt;
-                                }
-                            });
-                        });
-                        const sageRows = masterWorkbook.value.data["GL Raw by Store"] || [];
-                        sageRows.forEach(row => {
-                            const rowBrand = row["Mapped Brand"] || '';
-                            if (getStandardizedBrandName(rowBrand).trim().toLowerCase() === standardizedTarget) {
-                                const dateStr = row["Posted dt."] || '';
-                                const month = detectMonthFromDate(dateStr);
-                                if (monthsToAudit.includes(month)) {
-                                    const amt = parseFloat(String(row["Credit"] || 0).replace(/[^0-9.-]+/g, "")) || 0;
-                                    const site = detectSiteFromName(row["Store"] || row["Location"]);
-                                    if (site === 'Redding') redRec += amt;
-                                    if (site === 'Red Bluff') rbRec += amt;
-                                }
-                            }
-                        });
+                            // FIX: Resilient Store Lookups
+                            const rKey = rowKeys.find(k => k.trim().toLowerCase() === 'redding');
+                            const rbKey = rowKeys.find(k => k.trim().toLowerCase() === 'red-bluff' || k.trim().toLowerCase() === 'red bluff');
+
+                            if (rKey && String(row[rKey]).trim().toLowerCase() === 'x') redGen += promoAmt;
+                            if (rbKey && String(row[rbKey]).trim().toLowerCase() === 'x') rbGen += promoAmt;
+                        }
+                    });
+                });
+                const sageRows = masterWorkbook.value.data["GL Raw by Store"] || [];
+                sageRows.forEach(row => {
+                    const rowBrand = row["Mapped Brand"] || '';
+                    if (getStandardizedBrandName(rowBrand).trim().toLowerCase() === standardizedTarget) {
+                        const dateStr = row["Posted dt."] || '';
+                        const month = detectMonthFromDate(dateStr);
+                        if (monthsToAudit.includes(month)) {
+                            const amt = parseFloat(String(row["Credit"] || 0).replace(/[^0-9.-]+/g, "")) || 0;
+                            const site = detectSiteFromName(row["Store"] || row["Location"]);
+                            if (site === 'Redding') redRec += amt;
+                            if (site === 'Red Bluff') rbRec += amt;
+                        }
                     }
-                    let gen = redGen + rbGen;
-                    let rec = redRec + rbRec;
-                    let bal = gen - rec;
-                    return { redGen, redRec, rbGen, rbRec, gen, rec, bal };
-                };
+                });
+            }
+            let gen = redGen + rbGen;
+            let rec = redRec + rbRec;
+            let bal = gen - rec;
+            return { redGen, redRec, rbGen, rbRec, gen, rec, bal };
+        };
+
 
 
                 const generateAuditFindingEmail = (brand) => {
