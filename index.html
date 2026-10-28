@@ -1001,9 +1001,15 @@
                     <h2 class="text-xl font-bold text-gray-900 leading-tight">Sage Quarterly Audit</h2>
                     <p class="text-sm text-gray-500 mt-1">Cross-reference Sage Applied Credits (GL Raw) against Workbook Discovery.</p>
                 </div>
-                <button @click="exportYTDVariancePDF" class="bg-gray-900 hover:bg-gray-800 text-amber-500 px-5 py-2.5 rounded-xl font-bold shadow-lg flex items-center gap-2 transition-all border border-amber-500/20">
-                    <i data-lucide="file-text" class="w-4 h-4"></i> Export YTD Variance PDF
-                </button>
+                                <div class="flex gap-2">
+                    <button @click="exportBrandCSVReports()" class="bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 px-4 py-2 rounded-lg flex items-center gap-2 text-sm font-bold shadow-sm transition-colors">
+                        <i data-lucide="file-spreadsheet" class="w-4 h-4 text-emerald-600"></i> Export Brand CSVs
+                    </button>
+                    <button @click="exportYTDVariancePDF" class="bg-gray-900 hover:bg-gray-800 text-amber-500 px-5 py-2.5 rounded-xl font-bold shadow-lg flex items-center gap-2 transition-all border border-amber-500/20">
+                        <i data-lucide="file-text" class="w-4 h-4"></i> Export YTD Variance PDF
+                    </button>
+                </div>
+
             </div>
 
 
@@ -1061,11 +1067,17 @@
                                         {{ brand.transactions.length }} Events
                                     </span>
                                 </td>
-                                <td class="text-center">
-                                    <button class="text-gray-400 hover:text-emerald-600 transition-colors" @click="alert('Showing transaction detail for ' + brand.brand + ':\n\n' + brand.transactions.map(t => t.date + ' - ' + formatCurrency(t.amount) + ' - ' + t.memo).join('\n'))">
-                                        <i data-lucide="eye" class="w-4 h-4"></i>
-                                    </button>
+                                                                <td class="text-center">
+                                    <div class="flex items-center justify-center gap-2">
+                                        <button class="text-gray-400 hover:text-emerald-600 transition-colors" @click="alert('Showing transaction detail for ' + brand.brand + ':\n\n' + brand.transactions.map(t => t.date + ' - ' + formatCurrency(t.amount) + ' - ' + t.memo).join('\n'))">
+                                            <i data-lucide="eye" class="w-4 h-4"></i>
+                                        </button>
+                                        <button class="text-gray-400 hover:text-amber-600 transition-colors" @click="exportBrandCSVReports(brand.brand)" title="Export Brand CSV">
+                                            <i data-lucide="file-spreadsheet" class="w-4 h-4"></i>
+                                        </button>
+                                    </div>
                                 </td>
+
                             </tr>
                         </tbody>
                     </table>

@@ -928,9 +928,96 @@ createApp({
                     }
                 }
             });
-            doc.save(`YTD_Variance_Report_${targetSite}_${currentYear}.pdf`);
+                        doc.save(`YTD_Variance_Report_${targetSite}_${currentYear}.pdf`);
             logSystemAction("EXPORT", `Generated YTD Variance PDF for ${targetSite}`);
         };
+
+        const exportBrandCSVReports = (selectedBrand = null) => {
+            const targetSite = activeSite.value;
+            const brands = {};
+            // 1. Accumulate POS Generated Data from Master Workbook Sheets
+            if (masterWorkbook.value && masterWorkbook.value.data) {
+                Object.keys(masterWorkbook.value.data).forEach(sheetName => {
+                    const monthStr = sheetName.split(" ")[0];
+                    const monthIdx = calendarMonths.indexOf(monthStr);
+                    if (monthIdx !== -1 && sheetName.includes('2026')) {
+                        const rows = masterWorkbook.value.data[sheetName] || [];
+                        rows.forEach(row => {
+                            const siteCol = targetSite === "Redding" ? "Redding" : "Red-Bluff";
+                            const rawSiteVal = row[siteCol];
+                            if (rawSiteVal && String(rawSiteVal).trim().toLowerCase() === 'x') {
+                                const brand = row["Brand"] || 'Unknown';
+                                if (brand === "Brand" || brand.toLowerCase().includes('total')) return;
+                                if (!brands[brand]) {
+                                    brands[brand] = { name: brand, months: Array(12).fill(0), collections: Array(12).fill(0) };
+                                }
+                                const promoAmt = row["Promo Credits "] || row["Promo Credits"] || 0;
+                                brands[brand].months[monthIdx] += parseFloat(String(promoAmt).replace(/[^0-9.-]+/g, "")) || 0;
+                            }
+                        });
+                    }
+                });
+                // 2. Accumulate Sage GL Activity for Collections
+                const sageRows = masterWorkbook.value.data["GL Raw by Store"] || [];
+                sageRows.forEach(row => {
+                    const site = detectSiteFromName(row["Store"] || row["Location"]);
+                    if (site !== targetSite) return;
+                    const dateStr = row["Posted dt."] || '';
+                    const month = detectMonthFromDate(dateStr);
+                    const monthIdx = calendarMonths.indexOf(month);
+                    const brand = row["Mapped Brand"] || 'Unmapped';
+                    if (monthIdx !== -1) {
+                        if (!brands[brand]) {
+                            brands[brand] = { name: brand, months: Array(12).fill(0), collections: Array(12).fill(0) };
+                        }
+                        const amt = parseFloat(String(row["Credit"] || 0).replace(/[^0-9.-]+/g, "")) || 0;
+                        brands[brand].collections[monthIdx] += amt;
+                    }
+                });
+            }
+            // 3. Build CSV String
+            const headers = ['Brand/Vendor', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec', 'YTD Total'];
+            let csvContent = headers.join(',') + '\n';
+            const brandList = selectedBrand
+                ? [brands[selectedBrand]].filter(Boolean)
+                : Object.values(brands).sort((a, b) => a.name.localeCompare(b.name));
+            brandList.forEach(b => {
+                let ytdGen = 0;
+                let ytdColl = 0;
+                const genRow = [b.name];
+                const collRow = ['Collected (GL)'];
+                const varRow = ['Balance Owed'];
+                for (let i = 0; i < 12; i++) {
+                    const gen = b.months[i];
+                    const coll = b.collections[i];
+                    const diff = gen - coll;
+                    genRow.push(gen.toFixed(2));
+                    collRow.push(coll.toFixed(2));
+                    varRow.push(diff.toFixed(2));
+                    ytdGen += gen;
+                    ytdColl += coll;
+                }
+                genRow.push(ytdGen.toFixed(2));
+                collRow.push(ytdColl.toFixed(2));
+                varRow.push((ytdGen - ytdColl).toFixed(2));
+                csvContent += genRow.join(',') + '\n';
+                csvContent += collRow.join(',') + '\n';
+                csvContent += varRow.join(',') + '\n\n'; // Blank row spacer between brands
+            });
+            // 4. Download Trigger
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            const fileName = selectedBrand
+                ? `${selectedBrand.replace(/\s+/g, '_')}_Audit_${targetSite}_2026.csv`
+                : `All_Brands_Variance_Audit_${targetSite}_2026.csv`;
+            link.setAttribute('href', url);
+            link.setAttribute('download', fileName);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        };
+
 
 
         const drawCharts = () => {
@@ -2580,8 +2667,9 @@ const handleSageCsvUpload = async (e) => {
             auditRange, brandAuditData, draftAuditEmail, sageAuditData, activeWorkbookHeaders,
             showWorkbookSyncModal, workbookPasteData, openWorkbookSyncModal, processWorkbookSync,
                         repopulateFromMasterWorkbook, updateWorkbookFromSales, loadWorkbookFromStorage,
-            exportYTDVariancePDF
+                        exportYTDVariancePDF, exportBrandCSVReports
         };
+
 
 
     }
