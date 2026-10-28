@@ -2708,8 +2708,8 @@ const handleSageCsvUpload = async (e) => {
 
                 // --- AUDIT MODE & EMAIL DRAFT LOGIC ---
         const emailReportMode = ref('standard');
-        const auditStartMonth = ref('January');
-        const auditEndMonth = ref('September');
+                const startMonth = ref('January');
+        const endMonth = ref('September');
         const showEmailDraftModal = ref(false);
         const selectedBrandForEmail = ref(null);
         const emailDraftSubject = ref('');
@@ -2721,19 +2721,19 @@ const handleSageCsvUpload = async (e) => {
             if (startIdx === -1 || endIdx === -1 || startIdx > endIdx) return allMonths.slice(0, 9);
             return allMonths.slice(startIdx, endIdx + 1);
         };
-                                                const calculateBrandAudit = (brandName) => {
-            if (!brandName) return { redGen: 0, redRec: 0, rbGen: 0, rbRec: 0, gen: 0, rec: 0, bal: 0 };
+                                                                                                const calculateMonthlyReport = (brandName) => {
+            if (!brandName) return { reddingGenerated: 0, reddingRecovered: 0, redBluffGenerated: 0, redBluffRecovered: 0, totalGenerated: 0, totalRecovered: 0, balance: 0 };
             let redGen = 0, redRec = 0, rbGen = 0, rbRec = 0;
             
-            const startIdx = calendarMonths.indexOf(auditStartMonth.value || 'January');
-            const endIdx = calendarMonths.indexOf(auditEndMonth.value || 'September');
+            const startIdx = calendarMonths.indexOf(startMonth.value || 'January');
+            const endIdx = calendarMonths.indexOf(endMonth.value || 'September');
             // Math.max guarantees we don't get negative lengths, +1 ensures the end month is included
-            const monthsToAudit = calendarMonths.slice(startIdx, Math.max(startIdx, endIdx) + 1);
+            const monthsToProcess = calendarMonths.slice(startIdx, Math.max(startIdx, endIdx) + 1);
             
             const standardizedTarget = getStandardizedBrandName(brandName).trim().toLowerCase();
 
             if (masterWorkbook.value && masterWorkbook.value.data) {
-                monthsToAudit.forEach(m => {
+                monthsToProcess.forEach(m => {
                     const sheetName = `${m} 2026`;
                     const rows = masterWorkbook.value.data[sheetName] || [];
                     rows.forEach(row => {
@@ -2763,7 +2763,7 @@ const handleSageCsvUpload = async (e) => {
                     if (getStandardizedBrandName(rowBrand).trim().toLowerCase() === standardizedTarget) {
                         const dateStr = row["Posted dt."] || '';
                         const month = detectMonthFromDate(dateStr);
-                        if (monthsToAudit.includes(month)) {
+                        if (monthsToProcess.includes(month)) {
                             const amt = parseFloat(String(row["Credit"] || 0).replace(/[^0-9.-]+/g, "")) || 0;
                             const site = detectSiteFromName(row["Store"] || row["Location"]);
                             if (site === 'Redding') redRec += amt;
@@ -2775,7 +2775,15 @@ const handleSageCsvUpload = async (e) => {
             let gen = redGen + rbGen;
             let rec = redRec + rbRec;
             let bal = gen - rec;
-            return { redGen, redRec, rbGen, rbRec, gen, rec, bal };
+            return { 
+                reddingGenerated: redGen, 
+                reddingRecovered: redRec, 
+                redBluffGenerated: rbGen, 
+                redBluffRecovered: rbRec, 
+                totalGenerated: gen, 
+                totalRecovered: rec, 
+                balance: bal 
+            };
         };
 
 
@@ -2786,57 +2794,58 @@ const handleSageCsvUpload = async (e) => {
 
 
 
-                                const generateAuditFindingEmail = (brand) => {
-            const auditData = calculateBrandAudit(brand.vendor);
+                                                                const generateStandardEmail = (brand) => {
+            const vendorName = brand.vendor || brand;
+            const reportData = calculateMonthlyReport(vendorName);
             
+            // Format currency to match your baseplate style
+            const formatCurrency = (val) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(val || 0);
+            
+            // Filter table rows based on the active site toggle
             let tableRows = '';
-            let finalGen = 0, finalRec = 0, finalBal = 0;
-
-            if (activeSite.value === 'Redding' || activeSite.value === 'All' || !activeSite.value) {
-                tableRows += `Redding        | ${formatCurrency(auditData.redGen)} | ${formatCurrency(auditData.redRec)} | ${formatCurrency(auditData.redGen - auditData.redRec)}\n`;
-                finalGen += auditData.redGen;
-                finalRec += auditData.redRec;
-                finalBal += (auditData.redGen - auditData.redRec);
-            }
-
-            if (activeSite.value === 'Red Bluff' || activeSite.value === 'All' || !activeSite.value) {
-                tableRows += `Red Bluff      | ${formatCurrency(auditData.rbGen)} | ${formatCurrency(auditData.rbRec)} | ${formatCurrency(auditData.rbGen - auditData.rbRec)}\n`;
-                finalGen += auditData.rbGen;
-                finalRec += auditData.rbRec;
-                finalBal += (auditData.rbGen - auditData.rbRec);
-            }
-
-            const tableText = 
-`Store Location | Credits Generated | Credits Received | Outstanding Balance
----------------------------------------------------------------------------
-${tableRows}---------------------------------------------------------------------------
-TOTAL          | ${formatCurrency(finalGen)} | ${formatCurrency(finalRec)} | ${formatCurrency(finalBal)}`;
-
-            const userName = loggedInUser.value || 'Accounting Team';
+            let totalGenerated = 0;
             
-            const subject = `Statement of Account – Cumulative Promotional Credits Owed (${brand.vendor})`;
-            const body = `Hi ${brand.vendor} Team,
+            if (!activeSite.value || activeSite.value === 'All') {
+                tableRows = `Red Bluff       | ${formatCurrency(reportData.redBluffGenerated)}\nRedding         | ${formatCurrency(reportData.reddingGenerated)}`;
+                totalGenerated = reportData.totalGenerated;
+            } else if (activeSite.value === 'Redding') {
+                tableRows = `Redding         | ${formatCurrency(reportData.reddingGenerated)}`;
+                totalGenerated = reportData.reddingGenerated;
+            } else {
+                tableRows = `Red Bluff       | ${formatCurrency(reportData.redBluffGenerated)}`;
+                totalGenerated = reportData.redBluffGenerated;
+            }
+
+            // Capture the selected date range from your UI dropdowns
+            const startPeriod = startMonth.value || 'January';
+            const endPeriod = endMonth.value || 'October';
+
+            const subject = `Promotional Credit Summary – ${vendorName} – ${startPeriod} to ${endPeriod}`;
+            const body = `Hi ${vendorName} Team,
 
 I hope this email finds you well.
 
-As part of our financial reconciliation, we have completed an audit of all promotional discounts generated at our retail registers against credit reimbursements received and posted to our accounting system (SAGE) for the period of ${auditStartMonth.value} 2026 through ${auditEndMonth.value} 2026.
+Attached is our standard promotional credit summary for discounts generated at our retail registers for the period of ${startPeriod} 2026 through ${endPeriod} 2026.
 
+Our records indicate a total of ${formatCurrency(totalGenerated)} in promotional credits generated across our retail locations during this period.
 
-Our records indicate a remaining unapplied promo credit balance of ${formatCurrency(finalBal)} across our retail locations.
+Below is the summary of promotional credits generated by store location for ${vendorName}:
 
-Below is the YTD summary of promotional credits generated vs. reimbursements received by store location for ${brand.vendor}:
+Store Location | Credits Generated 
+---------------------------------------------------------------------------
+${tableRows}
+---------------------------------------------------------------------------
+TOTAL          | ${formatCurrency(totalGenerated)}
 
-${tableText}
+(Note: A full chronological breakdown of credits generated for each store is included in the attached summary report).
 
-(Note: A full month-by-month chronological breakdown of credits generated, applied, and the remaining unapplied balance for each store is included in the attached summary report).
-
-Please review this cumulative statement with your Accounts Receivable/Accounting team and let us know when we can expect a credit memo or offset applied to our upcoming inventory invoices to clear this balance.
+Please review this statement with your Accounts Receivable/Accounting team and let us know when we can expect a credit memo or offset applied to our upcoming inventory invoices for these generated credits.
 
 We truly appreciate your partnership and support in keeping our promotional credits moving forward!
 
 Best regards,
 
-${userName}
+Nicholas G.
 RREDCO`;
 
             return { subject, body };
@@ -2846,8 +2855,8 @@ RREDCO`;
             if (!selectedBrandForEmail.value) return;
             const brand = selectedBrandForEmail.value;
             
-            // Both Standard and Audit modes now use the Cumulative logic for consistency
-            const { subject, body } = generateAuditFindingEmail(brand);
+                        // Both Standard and Audit modes now use the Cumulative logic for consistency
+            const { subject, body } = generateStandardEmail(brand);
             emailDraftSubject.value = subject;
             emailDraftBody.value = body;
         };
@@ -2929,7 +2938,7 @@ RREDCO`;
                 alert("Failed to copy to clipboard.");
             }
         };
-        watch([auditStartMonth, auditEndMonth, emailReportMode], () => {
+        watch([startMonth, endMonth, emailReportMode], () => {
             if (showEmailDraftModal.value) refreshEmailDraft();
             if (emailReportMode.value === 'audit_statement') {
                 nextTick(() => { if (typeof refreshIcons === 'function') refreshIcons(); });
@@ -2963,7 +2972,7 @@ RREDCO`;
             showWorkbookSyncModal, workbookPasteData, openWorkbookSyncModal, processWorkbookSync,
                         repopulateFromMasterWorkbook, updateWorkbookFromSales, loadWorkbookFromStorage,
                         exportYTDVariancePDF, exportBrandCSVReports,
-            emailReportMode, auditStartMonth, auditEndMonth, showEmailDraftModal, selectedBrandForEmail,
+            emailReportMode,             startMonth, endMonth, showEmailDraftModal, selectedBrandForEmail,
             emailDraftSubject, emailDraftBody, openEmailDraft, refreshEmailDraft, sendEmailDraft, copyEmailToClipboard
         };
 
