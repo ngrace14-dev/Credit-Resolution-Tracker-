@@ -190,9 +190,20 @@
                         </div>
                         <div class="flex items-center gap-3">
                             <span class="text-lg font-extrabold text-emerald-400 bg-white/10 px-3 py-1 rounded-lg border border-white/10">{{ formatCurrency(monthGroup.total) }}</span>
-                            <button @click="regenerateMonthReports(monthGroup)" class="bg-gray-800 text-amber-500 hover:bg-gray-700 px-3 py-1.5 rounded-lg font-bold text-xs shadow transition-colors flex items-center gap-1.5 border border-gray-700">
+                                                        <button @click="regenerateMonthReports(monthGroup)" class="bg-gray-800 text-amber-500 hover:bg-gray-700 px-3 py-1.5 rounded-lg font-bold text-xs shadow transition-colors flex items-center gap-1.5 border border-gray-700">
                                 <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i> Regenerate Month
                             </button>
+
+                            <!-- Audit Mode Toggle -->
+                            <label class="flex items-center cursor-pointer gap-2 group ml-2">
+                                <span class="text-[10px] font-black uppercase tracking-tighter text-gray-400 group-hover:text-emerald-400 transition-colors">Audit Mode</span>
+                                <div class="relative">
+                                    <input type="checkbox" v-model="emailReportMode" :true-value="'audit_statement'" :false-value="'standard'" class="sr-only peer">
+                                    <div class="w-9 h-5 bg-gray-700 rounded-full peer peer-checked:bg-emerald-500 transition-colors border border-gray-600 shadow-inner"></div>
+                                    <div class="absolute left-1 top-1 bg-white w-3 h-3 rounded-full transition-transform peer-checked:translate-x-4 shadow-sm"></div>
+                                </div>
+                            </label>
+
                             <button @click="downloadMonthlyReport(monthGroup)" class="bg-emerald-600 text-white hover:bg-emerald-500 px-3 py-1.5 rounded-lg font-bold text-xs shadow transition-colors flex items-center gap-1.5">
                                 <i data-lucide="download" class="w-3.5 h-3.5"></i> Full Month CSV
                             </button>
