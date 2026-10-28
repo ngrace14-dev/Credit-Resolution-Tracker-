@@ -2818,10 +2818,15 @@ const handleSageCsvUpload = async (e) => {
 
 
                 watch([auditStartMonth, auditEndMonth, emailReportMode], () => {
-            if (showEmailDraftModal.value) {
-                refreshEmailDraft();
-            }
-        });
+                    if (showEmailDraftModal.value) {
+                        refreshEmailDraft();
+                    }
+                    if (emailReportMode.value === 'audit_statement') {
+                        nextTick(() => {
+                            refreshIcons();
+                        });
+                    }
+                });
 
         return {
             isManagerUnlocked, isSuperAdmin, loggedInUser, emailInput, passwordInput, authError, activeSite, activeTab,
