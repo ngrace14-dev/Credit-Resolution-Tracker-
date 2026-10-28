@@ -2720,7 +2720,7 @@ const handleSageCsvUpload = async (e) => {
             if (startIdx === -1 || endIdx === -1 || startIdx > endIdx) return allMonths.slice(0, 9);
             return allMonths.slice(startIdx, endIdx + 1);
         };
-                                const calculateBrandAudit = (brandName) => {
+                                                const calculateBrandAudit = (brandName) => {
             if (!brandName) return { redGen: 0, redRec: 0, rbGen: 0, rbRec: 0, gen: 0, rec: 0, bal: 0 };
             let redGen = 0, redRec = 0, rbGen = 0, rbRec = 0;
             
@@ -2776,94 +2776,10 @@ const handleSageCsvUpload = async (e) => {
             return { redGen, redRec, rbGen, rbRec, gen, rec, bal };
         };
 
-        const generateAuditStatementCSV = (brand) => {
-            const targetSite = activeSite.value;
-            const targetBrand = brand.vendor;
-            const standardizedTarget = getStandardizedBrandName(targetBrand).trim().toLowerCase();
-            const currentYear = "2026";
-            
-            // Period,Location,Brand,New_Credits_Generated,Running_Total_Generated,Credits_Applied,Cumulative_Applied,Remaining_Unapplied_Balance,Status
-            let csvLines = ["Period,Location,Brand,New_Credits_Generated,Running_Total_Generated,Credits_Applied,Cumulative_Applied,Remaining_Unapplied_Balance,Status"];
-            
-            let runningTotalGenerated = 0;
-            let cumulativeApplied = 0;
-            
-            // FIX: Array slicing inclusive logic with safety
-            const startIdx = 0;
-            const endIdx = calendarMonths.indexOf(activeMonth.value);
-            const monthsToProcess = calendarMonths.slice(startIdx, Math.max(startIdx, endIdx) + 1);
-            
-            monthsToProcess.forEach(month => {
-                let monthlyGenerated = 0;
-                let monthlyApplied = 0;
-                
-                // 1. Get Generated Credits from monthly sheet
-                const sheetName = `${month} ${currentYear}`;
-                const monthlyRows = masterWorkbook.value.data[sheetName] || [];
-                
-                monthlyRows.forEach(row => {
-                    // 1. Dynamically find keys
-                    const keys = Object.keys(row);
-                    const brandKey = keys.find(k => k.trim().toLowerCase().includes('brand'));
-                    const promoKey = keys.find(k => k.trim().toLowerCase().includes('promo credits'));
-                    const reddingKey = keys.find(k => k.trim().toLowerCase().includes('redding'));
-                    const redBluffKey = keys.find(k => k.trim().toLowerCase().includes('red-bluff') || k.trim().toLowerCase().includes('red bluff'));
-                    const rowBrand = brandKey ? String(row[brandKey]).trim() : String(row[0] || '').trim();
-                    
-                    if (rowBrand && getStandardizedBrandName(rowBrand).toLowerCase() === standardizedTarget) {
-                        const promoAmt = promoKey ? parseFloat(String(row[promoKey]).replace(/[^0-9.-]+/g, "")) || 0 : 0;
-                        
-                        // 2. Safely evaluate store markers
-                        const isRedding = reddingKey && String(row[reddingKey]).trim().toLowerCase() === 'x';
-                        const isRedBluff = redBluffKey && String(row[redBluffKey]).trim().toLowerCase() === 'x';
-                        
-                        let rawAmt = 0;
-                        if (targetSite === 'Redding' && isRedding) rawAmt = promoAmt;
-                        if (targetSite === 'Red Bluff' && isRedBluff) rawAmt = promoAmt;
-                        
-                        monthlyGenerated += rawAmt;
-                    }
-                });
-                
-                // 2. Get Applied Credits from GL Raw by Store
-                const glRows = masterWorkbook.value.data["GL Raw by Store"] || [];
-                glRows.forEach(row => {
-                    const rowStore = detectSiteFromName(row["Store"] || row["Location"]);
-                    if (rowStore !== targetSite) return;
-                    
-                    const rowBrand = row["Mapped Brand"] || '';
-                    if (getStandardizedBrandName(rowBrand).trim().toLowerCase() === standardizedTarget) {
-                        const dateStr = row["Posted dt."] || '';
-                        if (detectMonthFromDate(dateStr) === month) {
-                            const amt = parseFloat(String(row["Credit"] || 0).replace(/[^0-9.-]+/g, "")) || 0;
-                            monthlyApplied += amt;
-                        }
-                    }
-                });
-                
-                runningTotalGenerated += monthlyGenerated;
-                cumulativeApplied += monthlyApplied;
-                const balance = runningTotalGenerated - cumulativeApplied;
-                
-                let status = "No Activity";
-                if (balance <= 0.01 && (monthlyGenerated > 0 || monthlyApplied > 0)) {
-                    status = "Reconciled / Settled";
-                } else if (monthlyApplied > 0 && balance > 0.01) {
-                    status = "Partial Payment";
-                } else if (monthlyGenerated > 0 && monthlyApplied === 0) {
-                    status = "Outstanding";
-                }
-                
-                csvLines.push(`${month} ${currentYear},"${targetSite}","${targetBrand}",${monthlyGenerated.toFixed(2)},${runningTotalGenerated.toFixed(2)},${monthlyApplied.toFixed(2)},${cumulativeApplied.toFixed(2)},${balance.toFixed(2)},"${status}"`);
-            });
-            
-            // Append YTD Total row
-            const finalBalance = runningTotalGenerated - cumulativeApplied;
-            const finalStatus = finalBalance > 0.01 ? "ACTION REQUIRED" : "Settled";
-            csvLines.push(`YTD Total,"${targetSite}","${targetBrand}",${runningTotalGenerated.toFixed(2)},${runningTotalGenerated.toFixed(2)},${cumulativeApplied.toFixed(2)},${cumulativeApplied.toFixed(2)},${finalBalance.toFixed(2)},"${finalStatus}"`);
-            
-            return csvLines.join("\n");
-        };
+
+        // Duplicate generateAuditStatementCSV removed
+
+
 
 
 
