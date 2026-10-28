@@ -820,103 +820,95 @@ createApp({
         let chartBrandsInstance = null;
         let chartStoresInstance = null;
 
-                const exportYTDVariancePDF = () => {
+                        const exportYTDVariancePDF = () => {
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF('l', 'mm', 'a4');
             const currentYear = new Date().getFullYear();
-            
+            const targetSite = activeSite.value;
             // PDF Header
             doc.setFontSize(20);
             doc.setTextColor(16, 185, 129); // Emerald-500
             doc.text(`YTD VENDOR VARIANCE AUDIT - ${currentYear}`, 14, 20);
-            
             doc.setFontSize(10);
             doc.setTextColor(100);
             doc.text(`Generated on: ${new Date().toLocaleString()}`, 14, 26);
-            doc.text(`Store Location: ${activeSite.value}`, 14, 31);
-
+            doc.text(`Store Location: ${targetSite}`, 14, 31);
             // Column Setup
             const tableHeaders = [
                 ['Brand/Vendor', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec', 'YTD Total']
             ];
-
             const tableData = [];
             const brands = {};
-
-                        // 1. DATA SOURCE: Parse Workbook Sheets directly (Source of Truth)
-            const targetSite = activeSite.value;
-            Object.keys(masterWorkbook.value.data).forEach(sheetName => {
-                const monthStr = sheetName.split(" ")[0];
-                const monthIdx = calendarMonths.indexOf(monthStr);
-
-                if (monthIdx !== -1 && sheetName.includes('2026')) {
-                    const rows = masterWorkbook.value.data[sheetName] || [];
-
-                    rows.forEach(row => {
-                        // Use exact column names from the sheet
-                        const siteCol = targetSite === "Redding" ? "Redding" : "Red-Bluff";
-                        const rawSiteVal = row[siteCol];
-
-                        // If the cell has an 'x' (case insensitive), capture the promo credit
-                        if (rawSiteVal && String(rawSiteVal).trim().toLowerCase() === 'x') {
-                            const brand = row["Brand"] || 'Unknown';
-                            if (brand === "Brand" || brand.toLowerCase().includes('total')) return;
-
-                            if (!brands[brand]) {
-                                brands[brand] = { name: brand, months: Array(12).fill(0), collections: Array(12).fill(0) };
+            // 1. DATA SOURCE: Parse Workbook Sheets for POS Generated Promos
+            if (masterWorkbook.value && masterWorkbook.value.data) {
+                Object.keys(masterWorkbook.value.data).forEach(sheetName => {
+                    const monthStr = sheetName.split(" ")[0];
+                    const monthIdx = calendarMonths.indexOf(monthStr);
+                    if (monthIdx !== -1 && sheetName.includes('2026')) {
+                        const rows = masterWorkbook.value.data[sheetName] || [];
+                        rows.forEach(row => {
+                            const siteCol = targetSite === "Redding" ? "Redding" : "Red-Bluff";
+                            const rawSiteVal = row[siteCol];
+                            if (rawSiteVal && String(rawSiteVal).trim().toLowerCase() === 'x') {
+                                const brand = row["Brand"] || 'Unknown';
+                                if (brand === "Brand" || brand.toLowerCase().includes('total')) return;
+                                if (!brands[brand]) {
+                                    brands[brand] = { name: brand, months: Array(12).fill(0), collections: Array(12).fill(0) };
+                                }
+                                const promoAmt = row["Promo Credits "] || row["Promo Credits"] || 0;
+                                brands[brand].months[monthIdx] += parseFloat(String(promoAmt).replace(/[^0-9.-]+/g, "")) || 0;
                             }
-
-                            // Safely grab the Promo Credits column (accounting for trailing spaces in your headers)
-                            const promoAmt = row["Promo Credits "] || row["Promo Credits"] || 0;
-                            brands[brand].months[monthIdx] += parseFloat(String(promoAmt).replace(/[^0-9.-]+/g, "")) || 0;
-
-                            // Also capture collections on this exact row
-                            const approvedKey = Object.keys(row).find(k => k.toLowerCase().includes('approved') || k.toLowerCase().includes('applied'));
-                            if (approvedKey) {
-                                brands[brand].collections[monthIdx] += parseFloat(String(row[approvedKey] || 0).replace(/[^0-9.-]+/g, "")) || 0;
-                            }
+                        });
+                    }
+                });
+                // 2. Add Sage GL Activity for definitive collections
+                const sageRows = masterWorkbook.value.data["GL Raw by Store"] || [];
+                sageRows.forEach(row => {
+                    const site = detectSiteFromName(row["Store"] || row["Location"]);
+                    if (site !== targetSite) return;
+                    const dateStr = row["Posted dt."] || '';
+                    const month = detectMonthFromDate(dateStr);
+                    const monthIdx = calendarMonths.indexOf(month);
+                    const brand = row["Mapped Brand"] || 'Unmapped';
+                    if (monthIdx !== -1) {
+                        if (!brands[brand]) {
+                            brands[brand] = { name: brand, months: Array(12).fill(0), collections: Array(12).fill(0) };
                         }
-                    });
-                }
-            });
-
-
+                        const amt = parseFloat(String(row["Credit"] || 0).replace(/[^0-9.-]+/g, "")) || 0;
+                        brands[brand].collections[monthIdx] += amt;
+                    }
+                });
+            }
             // 3. Format rows for jsPDF AutoTable
             Object.values(brands).sort((a, b) => a.name.localeCompare(b.name)).forEach(b => {
                 const row = [b.name];
                 let ytdTotal = 0;
-                
-                for(let i=0; i<12; i++) {
-                    const variance = b.months[i] - b.collections[i];
-                    row.push(formatCurrency(b.months[i])); // Monthly Generated
+                for (let i = 0; i < 12; i++) {
+                    row.push(formatCurrency(b.months[i]));
                     ytdTotal += b.months[i];
                 }
                 row.push(formatCurrency(ytdTotal));
                 tableData.push(row);
-
                 // Add Sub-row for Collections
                 const collRow = ['   ↳ Collected (GL)'];
                 let ytdColl = 0;
-                for(let i=0; i<12; i++) {
+                for (let i = 0; i < 12; i++) {
                     collRow.push(formatCurrency(b.collections[i]));
                     ytdColl += b.collections[i];
                 }
                 collRow.push(formatCurrency(ytdColl));
                 tableData.push(collRow);
-
                 // Add Sub-row for Variance
                 const varRow = ['   ↳ Balance Owed'];
-                for(let i=0; i<12; i++) {
+                for (let i = 0; i < 12; i++) {
                     const diff = b.months[i] - b.collections[i];
                     varRow.push(formatCurrency(diff));
                 }
                 varRow.push(formatCurrency(ytdTotal - ytdColl));
                 tableData.push(varRow);
-                
                 // Spacer row
                 tableData.push(['', '', '', '', '', '', '', '', '', '', '', '', '', '']);
             });
-
             doc.autoTable({
                 head: tableHeaders,
                 body: tableData,
@@ -924,22 +916,22 @@ createApp({
                 theme: 'striped',
                 headStyles: { fillColor: [17, 24, 39], textColor: [245, 158, 11], fontSize: 8 },
                 bodyStyles: { fontSize: 7 },
-                columnStyles: { 
+                columnStyles: {
                     0: { fontStyle: 'bold', cellWidth: 35 },
                     13: { fontStyle: 'bold', fillColor: [243, 244, 246] }
                 },
                 didParseCell: function(data) {
                     if (data.row.index % 4 === 1) data.cell.styles.textColor = [16, 185, 129]; // Collections Green
                     if (data.row.index % 4 === 2) {
-                        const val = parseFloat(data.cell.text[0].replace(/[^0-9.-]+/g,""));
+                        const val = parseFloat(data.cell.text[0].replace(/[^0-9.-]+/g, ""));
                         if (val > 0) data.cell.styles.textColor = [239, 68, 68]; // Owed Red
                     }
                 }
             });
-
-            doc.save(`YTD_Variance_Report_${activeSite.value}_${currentYear}.pdf`);
-            logSystemAction("EXPORT", `Generated YTD Variance PDF for ${activeSite.value}`);
+            doc.save(`YTD_Variance_Report_${targetSite}_${currentYear}.pdf`);
+            logSystemAction("EXPORT", `Generated YTD Variance PDF for ${targetSite}`);
         };
+
 
         const drawCharts = () => {
 
