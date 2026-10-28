@@ -2974,7 +2974,7 @@ RREDCO`;
             showWorkbookSyncModal, workbookPasteData, openWorkbookSyncModal, processWorkbookSync,
                         repopulateFromMasterWorkbook, updateWorkbookFromSales, loadWorkbookFromStorage,
                         exportYTDVariancePDF, exportBrandCSVReports,
-            emailReportMode,             startMonth, endMonth, showEmailDraftModal, selectedBrandForEmail,
+            emailReportMode,             auditStartMonth: startMonth, auditEndMonth: endMonth, showEmailDraftModal, selectedBrandForEmail,
             emailDraftSubject, emailDraftBody, openEmailDraft, refreshEmailDraft, sendEmailDraft, copyEmailToClipboard
         };
 
