@@ -268,12 +268,9 @@
                                 </div>
                             </div>
 
-                                                        <!-- Action Buttons Attached to Each Brand -->
-                            <button v-if="brand.credits.some(c => c.status === 'Pending')" 
-                                @click="openEmailDraft(brand)" :disabled="!brand.email" 
-                                :class="!brand.email ? 'bg-gray-300 text-gray-500 cursor-not-allowed' : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm'" 
-                                class="flex-1 py-2 rounded-lg font-bold flex items-center justify-center gap-1.5 text-xs transition-colors">
-                                <i data-lucide="mail" class="w-3.5 h-3.5"></i> Draft Email
+                                                                                        <!-- Action Buttons Attached to Each Brand -->
+                            <button @click="openEmailDraft(brand)" class="w-full py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-lg transition-colors flex items-center justify-center gap-2 shadow">
+                                <i data-lucide="mail" class="w-4 h-4"></i> Draft Email
                             </button>
                             
                             <button v-if="brand.credits.some(c => c.status === 'Pending')"
