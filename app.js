@@ -2832,38 +2832,56 @@ ${userName}
 RREDCO`;
                                                                 };
 
-                                                                                                                                const generateAuditFindingEmail = (brand) => {
-                                                                                                                                    const vendorName = brand.vendor || brand;
-                                                                                                                                    const auditData = calculateMonthlyReport(vendorName);
-                                                                                                                                    const formatCurrency = (val) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(val || 0);
-                                                                                                                                    let tableText = '';
-                                                                                                                                    let finalBal = 0;
-                                                                                                                                    if (!activeSite.value || activeSite.value === 'All') {
-                                                                                                                                        tableText = `Red Bluff      | Generated: ${formatCurrency(auditData.redBluffGenerated)} | Received: ${formatCurrency(auditData.redBluffRecovered)} | Balance: ${formatCurrency(auditData.redBluffGenerated - auditData.redBluffRecovered)}\nRedding        | Generated: ${formatCurrency(auditData.reddingGenerated)} | Received: ${formatCurrency(auditData.reddingRecovered)} | Balance: ${formatCurrency(auditData.reddingGenerated - auditData.reddingRecovered)}`;
-                                                                                                                                        finalBal = auditData.balance;
-                                                                                                                                    } else if (activeSite.value === 'Redding') {
-                                                                                                                                        tableText = `Redding        | Generated: ${formatCurrency(auditData.reddingGenerated)} | Received: ${formatCurrency(auditData.reddingRecovered)} | Balance: ${formatCurrency(auditData.reddingGenerated - auditData.reddingRecovered)}`;
-                                                                                                                                        finalBal = auditData.reddingGenerated - auditData.reddingRecovered;
-                                                                                                                                    } else {
-                                                                                                                                        tableText = `Red Bluff      | Generated: ${formatCurrency(auditData.redBluffGenerated)} | Received: ${formatCurrency(auditData.redBluffRecovered)} | Balance: ${formatCurrency(auditData.redBluffGenerated - auditData.redBluffRecovered)}`;
-                                                                                                                                        finalBal = auditData.redBluffGenerated - auditData.redBluffRecovered;
-                                                                                                                                    }
-                                                                                                                                    const startPeriod = startMonth.value || 'January';
-                                                                                                                                    const endPeriod = endMonth.value || 'September';
-                                                                                                                                    const userName = loggedInUser.value || 'Nicholas G.';
-                                                                                                                                    return `Hi ${vendorName} Team,
-I hope this email finds you well.
-As part of our financial reconciliation, we have completed an audit of all promotional discounts generated at our retail registers against credit reimbursements received and posted to our accounting system (SAGE) for the period of ${startPeriod} 2026 through ${endPeriod} 2026.
-Our records indicate a remaining unapplied promo credit balance of ${formatCurrency(finalBal)} across our retail locations.
-Below is the YTD summary of promotional credits generated vs. reimbursements received by store location for ${vendorName}:
-${tableText}
-(Note: A full month-by-month chronological breakdown of credits generated, applied, and the remaining unapplied balance for each store is included in the attached summary report).
-Please review this cumulative statement with your Accounts Receivable/Accounting team and let us know when we can expect a credit memo or offset applied to our upcoming inventory invoices to clear this balance.
-We truly appreciate your partnership and support in keeping our promotional credits moving forward!
+                                                                                                                                        const generateAuditFindingEmail = (brand) => {
+            const vendorName = brand.vendor || brand;
+            const auditData = calculateMonthlyReport(vendorName);
+            const formatCurrency = (val) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(val || 0);
+            let finalGen = 0;
+            let finalRec = 0;
+            let finalBal = 0;
+            let longSiteName = '';
+            let shortSiteName = '';
+            // Dynamically calculate totals and store names based on active UI toggle
+            if (!activeSite.value || activeSite.value === 'All') {
+                finalGen = auditData.totalGenerated;
+                finalRec = auditData.totalRecovered;
+                finalBal = auditData.balance;
+                longSiteName = 'Sundial Collective – All Locations';
+                shortSiteName = 'Combined';
+            } else if (activeSite.value === 'Redding') {
+                finalGen = auditData.reddingGenerated;
+                finalRec = auditData.reddingRecovered;
+                finalBal = auditData.reddingGenerated - auditData.reddingRecovered;
+                longSiteName = 'Sundial Collective – Redding';
+                shortSiteName = 'Redding';
+            } else {
+                finalGen = auditData.redBluffGenerated;
+                finalRec = auditData.redBluffRecovered;
+                finalBal = auditData.redBluffGenerated - auditData.redBluffRecovered;
+                longSiteName = 'Sundial Collective – Red Bluff';
+                shortSiteName = 'Red Bluff';
+            }
+            const startPeriod = startMonth.value || 'January';
+            const endPeriod = endMonth.value || 'September';
+            const userName = loggedInUser.value || 'Nicholas G.';
+            const locationText = shortSiteName === 'Combined' ? 'combined locations' : `${shortSiteName} location`;
+            return `Hi ${vendorName} Team,
+I hope you're doing well!
+As part of our ongoing financial review, we recently reconciled our promotional credits for ${longSiteName} for the period of ${startPeriod} through ${endPeriod} 2026. This included comparing promotional discounts issued at our retail registers against vendor credits received and applied to our account.
+Our reconciliation identified an outstanding promotional credit balance of ${formatCurrency(finalBal)} for your products at our ${locationText}.
+Promotional Credit Summary – ${startPeriod} through ${endPeriod} 2026
+${longSiteName}
+- Total Credits Generated: ${formatCurrency(finalGen)}
+- Total Credits Received: ${formatCurrency(finalRec)}
+- Outstanding Balance: ${formatCurrency(finalBal)}
+For your convenience, we have attached a detailed monthly reconciliation showing the promotional credits generated, reimbursements received, and remaining outstanding balance.
+Please review the attached summary with your Accounting or Accounts Receivable team and let us know when we can expect the outstanding credits to be issued or applied toward upcoming inventory invoices.
+If any credits have already been issued that are not reflected in our records, please provide copies so we can update our reconciliation accordingly.
+We appreciate your continued partnership and assistance in keeping our promotional credits current. Thank you for your support!
 Best regards,
 ${userName}
 RREDCO`;
-                                                                                                                                };
+        };
 
                                                                                                                                 const refreshEmailDraft = () => {
                                                                                                                                     if (!selectedBrandForEmail.value) return;
