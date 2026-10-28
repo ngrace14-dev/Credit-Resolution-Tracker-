@@ -2889,13 +2889,15 @@ RREDCO`;
                                                                                                                                     return body;
                                                                                                                                 };
 
-                                                                const refreshEmailDraft = () => {
+                                                                                                                                const refreshEmailDraft = () => {
                                                                     if (!selectedBrandForEmail.value) return;
                                                                     const brand = selectedBrandForEmail.value;
+                                                                    // Explicitly grab the active values from the date dropdowns
                                                                     const startPeriod = startMonth.value || 'January';
-                                                                    const endPeriod = endMonth.value || 'October';
-                                                                    // Set the uniform subject line without the brand name
+                                                                    const endPeriod = endMonth.value || 'September';
+                                                                    // Uniform dynamic subject line
                                                                     emailDraftSubject.value = `Promo Credit Statement (${startPeriod} 2026 - ${endPeriod} 2026)`;
+                                                                    // Inject the selected body
                                                                     if (emailReportMode.value === 'standard') {
                                                                         emailDraftBody.value = generateStandardEmail(brand);
                                                                     } else {
