@@ -401,8 +401,15 @@ createApp({
 
         const showPromoModal = ref(false);
         const showBrandDropdown = ref(false);
-        const editingId = ref(null);
+                const editingId = ref(null);
         const showReportModal = ref(false);
+        const emailReportMode = ref('standard'); // 'standard' | 'audit_statement'
+        const auditStartMonth = ref('January'); // Default Start Month
+        const auditEndMonth = ref('September'); // Default End Month
+        const showEmailDraftModal = ref(false);
+        const selectedBrandForEmail = ref(null);
+        const emailDraftSubject = ref('');
+        const emailDraftBody = ref('');
 
         const showResolutionModal = ref(false);
         const resolutionCredit = ref(null);
@@ -709,7 +716,174 @@ createApp({
             logSystemAction("EXPORT", `Downloaded Detailed Report for ${reportName}`);
         };
 
-                const draftAuditEmail = (brand) => {
+                const getAuditedMonthsList = (startMonth, endMonth) => {
+            const allMonths = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+            const startIdx = allMonths.indexOf(startMonth);
+            const endIdx = allMonths.indexOf(endMonth);
+            if (startIdx === -1 || endIdx === -1 || startIdx > endIdx) return allMonths.slice(0, 9); // Fallback Jan-Sep
+            return allMonths.slice(startIdx, endIdx + 1);
+        };
+
+                const generateAuditFindingEmail = (brandName, repName = "Vendor Representative") => {
+            let redGen = 0, redRec = 0;
+            let rbGen = 0, rbRec = 0;
+            const monthsToAudit = getAuditedMonthsList(auditStartMonth.value, auditEndMonth.value);
+
+            // Format Month Label for Email Header/Table (e.g. "Jan – Sep" or "Jul – Oct")
+            const allMonths = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+            const shortMonths = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+            const startShort = shortMonths[allMonths.indexOf(auditStartMonth.value)] || 'Jan';
+            const endShort = shortMonths[allMonths.indexOf(auditEndMonth.value)] || 'Sep';
+            const dateRangeLabel = `${startShort} – ${endShort}`;
+
+            // 1. Accumulate POS Generated from Master Workbook Sheets
+            if (masterWorkbook.value && masterWorkbook.value.data) {
+                monthsToAudit.forEach(m => {
+                    const sheetName = `${m} 2026`;
+                    const rows = masterWorkbook.value.data[sheetName] || [];
+                    rows.forEach(row => {
+                        if (row["Brand"] && row["Brand"].trim().toLowerCase() === brandName.trim().toLowerCase()) {
+                            const promoAmt = parseFloat(String(row["Promo Credits "] || row["Promo Credits"] || 0).replace(/[^0-9.-]+/g, "")) || 0;
+                            if (row["Redding"] && String(row["Redding"]).trim().toLowerCase() === 'x') {
+                                redGen += promoAmt;
+                            }
+                            if (row["Red-Bluff"] && String(row["Red-Bluff"]).trim().toLowerCase() === 'x') {
+                                rbGen += promoAmt;
+                            }
+                        }
+                    });
+                });
+
+                // 2. Accumulate Sage GL Activity
+                const sageRows = masterWorkbook.value.data["GL Raw by Store"] || [];
+                sageRows.forEach(row => {
+                    const mappedBrand = row["Mapped Brand"] || '';
+                    if (mappedBrand.trim().toLowerCase() === brandName.trim().toLowerCase()) {
+                        const dateStr = row["Posted dt."] || '';
+                        const month = detectMonthFromDate(dateStr);
+                        if (monthsToAudit.includes(month)) {
+                            const amt = parseFloat(String(row["Credit"] || 0).replace(/[^0-9.-]+/g, "")) || 0;
+                            const site = detectSiteFromName(row["Store"] || row["Location"]);
+                            if (site === 'Redding') redRec += amt;
+                            if (site === 'Red Bluff') rbRec += amt;
+                        }
+                    }
+                });
+            }
+
+            const redBal = redGen - redRec;
+            const rbBal = rbGen - rbRec;
+            const ytdGen = redGen + rbGen;
+            const ytdRec = redRec + rbRec;
+            const ytdBal = ytdGen - ytdRec;
+
+            const subject = `Statement of Account – Outstanding Promotional Credits Owed (${brandName})`;
+            const body = `Hi ${repName},
+
+I hope this email finds you well.
+
+As part of our financial reconciliation, we have completed an audit of all promotional discounts generated at our retail registers (Treez POS) against credit reimbursements received and posted to our accounting system (SAGE) for the period of ${auditStartMonth.value} 2026 through ${auditEndMonth.value} 2026.
+
+Our records indicate a remaining unapplied promo credit balance of ${formatCurrency(ytdBal)} across our retail locations.
+
+Below is the breakdown of promotional credits generated vs. reimbursements received by store location and month for ${brandName}:
+
+REDDING (${dateRangeLabel})
+- Credits Generated (POS): ${formatCurrency(redGen)}
+- Credits Received (GL):   ${formatCurrency(redRec)}
+- Outstanding Balance:    ${formatCurrency(redBal)}
+
+RED BLUFF (${dateRangeLabel})
+- Credits Generated (POS): ${formatCurrency(rbGen)}
+- Credits Received (GL):   ${formatCurrency(rbRec)}
+- Outstanding Balance:    ${formatCurrency(rbBal)}
+
+TOTAL OUTSTANDING: ${formatCurrency(ytdBal)}
+
+(Note: A full month-by-month breakdown for each store is included in the attached summary report).
+
+Please review this statement with your Accounts Receivable/Accounting team and let us know when we can expect a credit memo or offset applied to our upcoming inventory invoices to clear this balance.
+
+We truly appreciate your partnership and support in keeping our promotional credits moving forward!
+
+Best regards,
+
+[Your Name]
+[Your Title]
+[Company / Store Name]`;
+
+            return { subject, body };
+        };
+
+        const refreshEmailDraft = () => {
+            if (!selectedBrandForEmail.value) return;
+            const brand = selectedBrandForEmail.value;
+            
+            if (emailReportMode.value === 'audit_statement') {
+                const { subject, body } = generateAuditFindingEmail(brand.vendor, brand.rep || 'Vendor Representative');
+                emailDraftSubject.value = subject;
+                emailDraftBody.value = body;
+            } else {
+                const storeName = activeSite.value === 'Redding' ? 'Sundial' : activeSite.value;
+                const currentYear = new Date().getFullYear();
+                const monthStr = brand.month || activeMonth.value;
+                const periodStr = `${monthStr} ${currentYear}`;
+                
+                emailDraftSubject.value = `Credit Report - ${storeName} Promotions - ${periodStr}`;
+                
+                let body = `Hello ${brand.vendor},\n\n`;
+                body += `Please find the attached itemized breakdown for vendor credits owed to ${storeName} for the period of ${periodStr}.\n\n`;
+                body += `Total Credit Requested: ${formatCurrency(brand.total || 0)}\n\n`;
+                body += `Please let us know if you have any questions or once this credit has been applied to our account.\n\n`;
+                body += `Best regards,\n\n${storeName} Accounting Team\n`;
+                
+                emailDraftBody.value = body;
+            }
+            refreshIcons();
+        };
+
+        const openEmailDraft = (brand) => {
+            selectedBrandForEmail.value = brand;
+            showEmailDraftModal.value = true;
+            refreshEmailDraft();
+        };
+
+                const sendEmailDraft = () => {
+            if (!selectedBrandForEmail.value) return;
+            const brand = selectedBrandForEmail.value;
+            const cleanEmails = String(brand.email || '').split(/[,;\s]+/).map(e => e.trim()).filter(Boolean).join(',');
+            
+            // Standard mode still triggers CSV download + Mailto
+            if (emailReportMode.value === 'standard') {
+                draftEmail(brand);
+                showEmailDraftModal.value = false;
+                return;
+            }
+
+            const mailtoUrl = `mailto:${cleanEmails}?cc=accounting@rredco.com&subject=${encodeURIComponent(emailDraftSubject.value)}&body=${encodeURIComponent(emailDraftBody.value)}`;
+            
+            // Critical check for URL length (mailto limit ~2000 chars)
+            if (mailtoUrl.length > 2000) {
+                alert("The email body is too long for the automatic mail client trigger. Please use the 'Copy to Clipboard' button and paste manually into your email app.");
+                return;
+            }
+
+            window.location.href = mailtoUrl;
+            showEmailDraftModal.value = false;
+            logSystemAction("EXPORT", `Sent ${emailReportMode.value} email to ${brand.vendor}`);
+        };
+
+        const copyEmailToClipboard = async () => {
+            const fullText = `Subject: ${emailDraftSubject.value}\n\n${emailDraftBody.value}`;
+            try {
+                await navigator.clipboard.writeText(fullText);
+                alert("Email content copied to clipboard! You can now paste it directly into your email client.");
+            } catch (err) {
+                alert("Failed to copy to clipboard.");
+            }
+        };
+
+        const draftAuditEmail = (brand) => {
             if (!brand.email) {
                 alert(`No email mapped for ${brand.vendor}. Please add one in the Brand Directory first.`);
                 return;
@@ -2643,6 +2817,12 @@ const handleSageCsvUpload = async (e) => {
         });
 
 
+                watch([auditStartMonth, auditEndMonth, emailReportMode], () => {
+            if (showEmailDraftModal.value) {
+                refreshEmailDraft();
+            }
+        });
+
         return {
             isManagerUnlocked, isSuperAdmin, loggedInUser, emailInput, passwordInput, authError, activeSite, activeTab,
             treesSalesData, masterBrands, selectedBrands, allBrandsSelected, toggleAllBrands,
@@ -2660,14 +2840,16 @@ const handleSageCsvUpload = async (e) => {
                         closeImportModal, resetImport, displayGrid, processRawPaste, processImport, regenerateBrandSummary,
             regenerateMonthReports, handleTreesCsvUpload, handleSageCsvUpload, pushToMainTracker, resetBrandImport,
             processBrandRawPaste, processBrandImport, systemLogs, refreshIcons, clearAllSalesData,
-            detectMonthInString, drawCharts, openDimeHelper, exportVendorsAndBrandsCSV,
+            detectMonthInString, drawCharts, detectMonthFromDate, detectSiteFromName, openDimeHelper, exportVendorsAndBrandsCSV,
             masterLedgerData, selectedLedgerVendor, refreshLedger, openLegacyVerification, ledgerTotals,
                         masterWorkbook, showWorkspaceMenu, showAdminMenu, workspaceTabs, selectWorkspace, activeWorkspaceInfo,
                         scrollMonths, scrollWorkbookTabs, workbookSchema, activeWorkbookSheet, isWorkbookLoaded,
-            auditRange, brandAuditData, draftAuditEmail, sageAuditData, activeWorkbookHeaders,
+                        auditRange, brandAuditData, draftAuditEmail, sageAuditData, activeWorkbookHeaders,
             showWorkbookSyncModal, workbookPasteData, openWorkbookSyncModal, processWorkbookSync,
                         repopulateFromMasterWorkbook, updateWorkbookFromSales, loadWorkbookFromStorage,
-                        exportYTDVariancePDF, exportBrandCSVReports
+                        exportYTDVariancePDF, exportBrandCSVReports,
+            emailReportMode, auditStartMonth, auditEndMonth, showEmailDraftModal, selectedBrandForEmail,
+            emailDraftSubject, emailDraftBody, openEmailDraft, refreshEmailDraft, sendEmailDraft, copyEmailToClipboard
         };
 
 
