@@ -1240,18 +1240,11 @@ createApp({
         let unsubscribeSales = null;
         let unsubscribeCredits = null;
 
-                const setupFilteredListeners = () => {
-            // Kill old listeners
+                                const setupFilteredListeners = () => {
             if (unsubscribeSales) unsubscribeSales();
             
-            // We only need raw sales intake, as credits now come from workbook computed
-            let salesQ = query(collection(db, "treesSales"), where("detectedSite", "==", activeSite.value));
-
-            if (activeMonth.value !== 'All') {
-                salesQ = query(salesQ, where("month", "==", activeMonth.value));
-            }
-
-            salesQ = query(salesQ, limit(2000));
+            // Fetch ALL sales for the site (YTD) so we can calculate true YTD totals
+            let salesQ = query(collection(db, "treesSales"), where("detectedSite", "==", activeSite.value), limit(5000));
 
             unsubscribeSales = onSnapshot(salesQ, (snapshot) => {
                 const fetchedSales = [];
@@ -1499,12 +1492,18 @@ createApp({
                                             }
                                         }, (err) => console.error("Sheets Listener Error:", err));
 
-                                        // 2. Master Workbook Metadata
-                                        onSnapshot(doc(db, "promo tracker", "Master_Workbook_V9_Board_Report"), (docSnap) => {
-                                            if (docSnap.exists()) {
-                                                masterWorkbook.value.summary = docSnap.data();
-                                            }
-                                        });
+                                                                                // 2. Master Workbook Metadata (Reactive to Site)
+                                        watch(activeSite, (newSite) => {
+                                            const docId = `Board_Report_${newSite.replace(/\s/g, '_')}`;
+                                            onSnapshot(doc(db, "promo tracker", docId), (docSnap) => {
+                                                if (docSnap.exists()) {
+                                                    masterWorkbook.value.summary = docSnap.data();
+                                                } else {
+                                                    masterWorkbook.value.summary = { total: 0, reportMonth: 'N/A' };
+                                                }
+                                            });
+                                        }, { immediate: true });
+
 
                                                                                 // 3. Optimized Sales Listener (Discovery Intake)
                                         setupFilteredListeners();
@@ -2270,11 +2269,9 @@ const handleSageCsvUpload = async (e) => {
             refreshIcons();
         };
 
-        const processWorkbookSync = async () => {
+                const processWorkbookSync = async () => {
             if (!workbookPasteData.value.trim()) return;
             
-            // Basic parser for Workbook V9 Summary Page
-            // Expecting: Month [TAB] Total
             const rows = workbookPasteData.value.trim().split(/\r?\n/);
             const lastRow = rows[rows.length - 1].split('\t');
             
@@ -2291,8 +2288,10 @@ const handleSageCsvUpload = async (e) => {
                 return;
             }
 
-                        try {
-                await setDoc(doc(db, "promo tracker", "Master_Workbook_V9_Board_Report"), {
+            try {
+                // Isolated doc per site
+                const docId = `Board_Report_${activeSite.value.replace(/\s/g, '_')}`;
+                await setDoc(doc(db, "promo tracker", docId), {
                     reportMonth: month,
                     total: total,
                     updatedAt: Date.now(),
@@ -2300,9 +2299,9 @@ const handleSageCsvUpload = async (e) => {
                     site: activeSite.value
                 });
                 
-                logSystemAction("UPDATE", `Synced Workbook V9 Totals: ${month} - ${formatCurrency(total)}`);
+                logSystemAction("UPDATE", `Synced Workbook V9 Totals for ${activeSite.value}: ${month} - ${formatCurrency(total)}`);
                 showWorkbookSyncModal.value = false;
-                alert(`Success! The Master Workbook balance has been updated to ${formatCurrency(total)}.`);
+                alert(`Success! The ${activeSite.value} Master Workbook balance has been updated to ${formatCurrency(total)}.`);
             } catch (error) {
                 console.error("Sync Error:", error);
                 alert("Failed to sync totals to the cloud. Check your permissions.");
@@ -2480,15 +2479,25 @@ const handleSageCsvUpload = async (e) => {
                     }
                 };
 
-                const sageAuditData = computed(() => {
+                                const sageAuditData = computed(() => {
             if (!masterWorkbook.value || !masterWorkbook.value.data) return [];
             
             const rawSageRows = masterWorkbook.value.data["GL Raw by Store"] || [];
             if (rawSageRows.length === 0) return [];
 
             const sageMap = {};
+            const targetSite = activeSite.value;
+            const targetMonth = activeMonth.value;
 
             rawSageRows.forEach(row => {
+                const site = detectSiteFromName(row["Store"] || row[1] || row["Location"] || row[2]);
+                const dateStr = row["Posted dt."] || row[0] || 'Unknown';
+                const month = detectMonthFromDate(dateStr);
+
+                // FILTER: Only include rows matching selected site and month
+                if (site !== targetSite) return;
+                if (targetMonth !== 'All' && month !== targetMonth) return;
+
                 const brand = row["Mapped Brand"] || row[5] || 'Unmapped';
                 if (brand === "Mapped Brand" || !brand) return;
 
@@ -2503,24 +2512,24 @@ const handleSageCsvUpload = async (e) => {
                 }
 
                 const amt = parseFloat(String(row["Credit"] || row[4] || 0).replace(/[^0-9.-]+/g,"")) || 0;
-                const site = detectSiteFromName(row["Store"] || row[1] || row["Location"] || row[2]);
-                const date = row["Posted dt."] || row[0] || 'Unknown';
                 const memo = row["Memo/Description"] || row[3] || '';
 
                 sageMap[brand].totalApplied += amt;
                 sageMap[brand].sites[site] += amt;
                 sageMap[brand].transactions.push({
-                    date: date,
+                    date: dateStr,
                     site: site,
                     memo: memo,
                     amount: amt
                 });
             });
 
-                        // Integrate Generated Promos (POS) for comparison in the grid
+            // Integrate Generated Promos (POS) for comparison in the grid
             promoCredits.value.forEach(c => {
+                if (c.site !== targetSite) return;
+                if (targetMonth !== 'All' && c.trackingMonth !== targetMonth) return;
+
                 const brand = c.vendor || 'Unknown';
-                // FIX: Ensure brand exists in the map so we capture unpaid debts
                 if (!sageMap[brand]) {
                     sageMap[brand] = {
                         brand: brand,

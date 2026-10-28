@@ -733,14 +733,14 @@
                 <div class="bg-gray-900 rounded-xl p-5 flex-1 shadow-md flex items-center justify-between border border-gray-800">
                                         <div>
                         <div class="text-[10px] md:text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">System Trust Score (Parity)</div>
-                        <div class="text-3xl font-extrabold text-emerald-400">{{ (ledgerTotals.generated > 0) ? (((ledgerTotals.generated - Math.abs(ledgerTotals.generated - (masterWorkbook?.total || 0))) / ledgerTotals.generated) * 100).toFixed(1) : '100' }}%</div>
+                                                <div class="text-3xl font-extrabold text-emerald-400">{{ (ledgerTotals.generated > 0) ? (((ledgerTotals.generated - Math.abs(ledgerTotals.generated - (masterWorkbook.summary?.total || 0))) / ledgerTotals.generated) * 100).toFixed(1) : '100' }}%</div>
                     </div>
                     <i data-lucide="shield-check" class="w-12 h-12 text-emerald-500/20"></i>
                 </div>
                                 <div class="bg-white rounded-xl p-5 flex-1 shadow-sm flex items-center justify-between border border-gray-200">
                     <div>
                         <div class="text-[10px] md:text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Total Workbook Balance (Manual)</div>
-                        <div class="text-2xl font-extrabold text-gray-900">{{ formatCurrency(masterWorkbook?.total || 0) }}</div>
+                        <div class="text-2xl font-extrabold text-gray-900">{{ formatCurrency(masterWorkbook.summary?.total || 0) }}</div>
                     </div>
                 </div>
                 <div class="bg-white rounded-xl p-5 flex-1 shadow-sm flex items-center justify-between border border-gray-200">
@@ -751,10 +751,11 @@
                 </div>
                                 <div class="bg-white border-l-4 border-red-500 rounded-xl p-5 flex-1 shadow-sm flex flex-col justify-center">
                     <div class="text-[10px] md:text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Net Variance</div>
-                    <div class="text-2xl font-extrabold" :class="(ledgerTotals.generated - (masterWorkbook?.total || 0)) === 0 ? 'text-emerald-600' : 'text-red-600'">
-                        {{ formatCurrency(ledgerTotals.generated - (masterWorkbook?.total || 0)) }}
+                    <div class="text-2xl font-extrabold" :class="(ledgerTotals.generated - (masterWorkbook.summary?.total || 0)) === 0 ? 'text-emerald-600' : 'text-red-600'">
+                        {{ formatCurrency(ledgerTotals.generated - (masterWorkbook.summary?.total || 0)) }}
                     </div>
                 </div>
+
             </div>
 
             <!-- COMPARISON GRID -->
@@ -775,22 +776,23 @@
                             </tr>
                         </thead>
                                                 <tbody>
-                            <tr v-if="!masterWorkbook" class="hover:bg-gray-50">
+                                                        <tr v-if="!masterWorkbook.summary" class="hover:bg-gray-50">
                                 <td colspan="5" class="text-center py-10 text-gray-500 font-medium bg-gray-50">No Board Report Loaded.</td>
                             </tr>
                             <tr v-else class="hover:bg-gray-50">
-                                <td class="font-bold text-gray-900">{{ masterWorkbook.reportMonth || 'Current' }}</td>
-                                <td class="text-right font-mono bg-amber-50/20">{{ formatCurrency(masterWorkbook.total) }}</td>
+                                <td class="font-bold text-gray-900">{{ masterWorkbook.summary.reportMonth || 'Current' }}</td>
+                                <td class="text-right font-mono bg-amber-50/20">{{ formatCurrency(masterWorkbook.summary.total) }}</td>
                                 <td class="text-right font-mono text-gray-600">{{ formatCurrency(ledgerTotals.generated) }}</td>
-                                <td class="text-right font-bold" :class="(ledgerTotals.generated - masterWorkbook.total) === 0 ? 'text-emerald-600' : 'text-red-600'">
-                                    {{ formatCurrency(ledgerTotals.generated - masterWorkbook.total) }}
+                                <td class="text-right font-bold" :class="(ledgerTotals.generated - masterWorkbook.summary.total) === 0 ? 'text-emerald-600' : 'text-red-600'">
+                                    {{ formatCurrency(ledgerTotals.generated - masterWorkbook.summary.total) }}
                                 </td>
                                 <td class="text-center">
-                                    <span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase" :class="(ledgerTotals.generated - masterWorkbook.total) === 0 ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'">
-                                        {{ (ledgerTotals.generated - masterWorkbook.total) === 0 ? 'Balanced' : 'Investigation Required' }}
+                                    <span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase" :class="(ledgerTotals.generated - masterWorkbook.summary.total) === 0 ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'">
+                                        {{ (ledgerTotals.generated - masterWorkbook.summary.total) === 0 ? 'Balanced' : 'Investigation Required' }}
                                     </span>
                                 </td>
                             </tr>
+
                         </tbody>
                     </table>
                 </div>
