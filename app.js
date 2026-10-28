@@ -843,41 +843,43 @@ createApp({
             const tableData = [];
             const brands = {};
 
-            // 1. Accumulate Data (POS Generated vs GL Collected)
-            promoCredits.value.filter(c => c.site === activeSite.value).forEach(c => {
-                const brand = c.vendor || 'Unknown';
-                if (!brands[brand]) {
-                    brands[brand] = { name: brand, months: Array(12).fill(0), collections: Array(12).fill(0) };
-                }
-                const monthIdx = calendarMonths.indexOf(c.trackingMonth);
-                if (monthIdx !== -1) {
-                    brands[brand].months[monthIdx] += (parseFloat(c.amount) || 0);
-                    if (c.status === 'Applied') {
-                        brands[brand].collections[monthIdx] += (parseFloat(c.amount) || 0);
-                    }
+                        // 1. DATA SOURCE: Parse Workbook Sheets directly (Source of Truth)
+            const targetSite = activeSite.value;
+            Object.keys(masterWorkbook.value.data).forEach(sheetName => {
+                const monthStr = sheetName.split(" ")[0];
+                const monthIdx = calendarMonths.indexOf(monthStr);
+
+                if (monthIdx !== -1 && sheetName.includes('2026')) {
+                    const rows = masterWorkbook.value.data[sheetName] || [];
+
+                    rows.forEach(row => {
+                        // Use exact column names from the sheet
+                        const siteCol = targetSite === "Redding" ? "Redding" : "Red-Bluff";
+                        const rawSiteVal = row[siteCol];
+
+                        // If the cell has an 'x' (case insensitive), capture the promo credit
+                        if (rawSiteVal && String(rawSiteVal).trim().toLowerCase() === 'x') {
+                            const brand = row["Brand"] || 'Unknown';
+                            if (brand === "Brand" || brand.toLowerCase().includes('total')) return;
+
+                            if (!brands[brand]) {
+                                brands[brand] = { name: brand, months: Array(12).fill(0), collections: Array(12).fill(0) };
+                            }
+
+                            // Safely grab the Promo Credits column (accounting for trailing spaces in your headers)
+                            const promoAmt = row["Promo Credits "] || row["Promo Credits"] || 0;
+                            brands[brand].months[monthIdx] += parseFloat(String(promoAmt).replace(/[^0-9.-]+/g, "")) || 0;
+
+                            // Also capture collections on this exact row
+                            const approvedKey = Object.keys(row).find(k => k.toLowerCase().includes('approved') || k.toLowerCase().includes('applied'));
+                            if (approvedKey) {
+                                brands[brand].collections[monthIdx] += parseFloat(String(row[approvedKey] || 0).replace(/[^0-9.-]+/g, "")) || 0;
+                            }
+                        }
+                    });
                 }
             });
 
-            // 2. Add Sage GL Activity for definitive collections
-            const sageRows = masterWorkbook.value.data["GL Raw by Store"] || [];
-            sageRows.forEach(row => {
-                const site = detectSiteFromName(row["Store"] || row["Location"]);
-                if (site !== activeSite.value) return;
-
-                const dateStr = row["Posted dt."] || '';
-                const month = detectMonthFromDate(dateStr);
-                const monthIdx = calendarMonths.indexOf(month);
-                const brand = row["Mapped Brand"] || 'Unmapped';
-                
-                                if (monthIdx !== -1) {
-                    // FIX: Initialize the brand if they only appear in the Sage GL
-                    if (!brands[brand]) {
-                        brands[brand] = { name: brand, months: Array(12).fill(0), collections: Array(12).fill(0) };
-                    }
-                    const amt = parseFloat(String(row["Credit"] || 0).replace(/[^0-9.-]+/g,"")) || 0;
-                    brands[brand].collections[monthIdx] += amt;
-                }
-            });
 
             // 3. Format rows for jsPDF AutoTable
             Object.values(brands).sort((a, b) => a.name.localeCompare(b.name)).forEach(b => {
