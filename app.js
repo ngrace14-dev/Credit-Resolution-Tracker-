@@ -777,40 +777,38 @@ createApp({
             const ytdRec = redRec + rbRec;
             const ytdBal = ytdGen - ytdRec;
 
-            const subject = `Statement of Account – Outstanding Promotional Credits Owed (${brandName})`;
+                        const subject = `Statement of Account – Outstanding Promotional Credits Owed (${brandName})`;
+            const storeSignature = activeSite.value === 'All' || !activeSite.value 
+            ? 'RREDCO' 
+            : `RREDCO - ${activeSite.value}`;
             const body = `Hi ${repName},
-
 I hope this email finds you well.
-
-As part of our financial reconciliation, we have completed an audit of all promotional discounts generated at our retail registers (Treez POS) against credit reimbursements received and posted to our accounting system (SAGE) for the period of ${auditStartMonth.value} 2026 through ${auditEndMonth.value} 2026.
-
+As part of our financial reconciliation, we have completed an audit of all promotional discounts generated at our retail registers against credit reimbursements received and posted to our accounting system for the period of ${auditStartMonth.value} 2026 through ${auditEndMonth.value} 2026.
 Our records indicate a remaining unapplied promo credit balance of ${formatCurrency(ytdBal)} across our retail locations.
-
 Below is the breakdown of promotional credits generated vs. reimbursements received by store location and month for ${brandName}:
-
-REDDING (${dateRangeLabel})
-- Credits Generated (POS): ${formatCurrency(redGen)}
-- Credits Received (GL):   ${formatCurrency(redRec)}
-- Outstanding Balance:    ${formatCurrency(redBal)}
-
-RED BLUFF (${dateRangeLabel})
-- Credits Generated (POS): ${formatCurrency(rbGen)}
-- Credits Received (GL):   ${formatCurrency(rbRec)}
-- Outstanding Balance:    ${formatCurrency(rbBal)}
-
-TOTAL OUTSTANDING: ${formatCurrency(ytdBal)}
-
+Store Location | Month | Credits Generated | Credits Received | Outstanding Balance
+-----------------------------------------------------------------------------------
+Redding | ${dateRangeLabel} | ${formatCurrency(redGen)} | ${formatCurrency(redRec)} | ${formatCurrency(redBal)}
+Red Bluff | ${dateRangeLabel} | ${formatCurrency(rbGen)} | ${formatCurrency(rbRec)} | ${formatCurrency(rbBal)}
+TOTAL | ${dateRangeLabel} | ${formatCurrency(ytdGen)} | ${formatCurrency(ytdRec)} | ${formatCurrency(ytdBal)}
 (Note: A full month-by-month breakdown for each store is included in the attached summary report).
-
+How to Filter the Attached Report by Store, Month, or Discount Percentage
+We work with over 300 vendors across our locations, many of whom run multiple promotions across different store locations, months, and discount tiers. To keep our processing efficient and avoid clogging your inbox with dozens of attachments, we provide all transaction details for the entire year to date in a single, multi-location Excel-compatible CSV file.
+If your team requires transactions to be separated by Store Location (Redding vs. Red Bluff), Month (e.g., July vs. August), or Discount Percentage (e.g., 30%, 40%, 50%) for internal submissions, you can easily filter the attached report in Excel using these steps:
+Open the CSV file in Excel.
+2. Turn on Filters: Click anywhere in the data, go to the Data tab at the top, and click Filter (this adds dropdown arrows to the column headers).
+3. Filter by Store Location: Locate the Store / Location column, click the dropdown arrow, uncheck "Select All", and select the specific store (e.g., Redding or Red Bluff) you want to view.
+4. Filter by Month: Locate the Date / Month column, click the dropdown arrow, and check the specific month you want to isolate.
+5. Filter by Promotion / Discount: Locate Column I – Discount Title, click the dropdown arrow, and select the specific discount tier or promo name you want to isolate.
+6. Copy the Filtered Data: Highlight the visible data, press Alt + ; (to select visible cells only), and press Ctrl + C to copy.
+7. Save a Separate Report: Paste the copied data into a new Excel sheet, select File > Save As, choose Excel Workbook (.xlsx), and name the file accordingly (e.g., ${brandName} 30% Promotion – ${activeSite.value === 'All' ? 'Redding' : activeSite.value} – ${auditEndMonth.value} 2026).
+8. Repeat for any additional stores, months, or promotion percentages as needed.
 Please review this statement with your Accounts Receivable/Accounting team and let us know when we can expect a credit memo or offset applied to our upcoming inventory invoices to clear this balance.
-
 We truly appreciate your partnership and support in keeping our promotional credits moving forward!
-
 Best regards,
-
-[Your Name]
-[Your Title]
-[Company / Store Name]`;
+Nicholas Grace
+Accounting Specialist
+${storeSignature}`;
 
             return { subject, body };
         };
