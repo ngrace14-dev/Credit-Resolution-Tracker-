@@ -2852,10 +2852,33 @@ RREDCO`;
             emailDraftBody.value = body;
         };
 
-        const openEmailDraft = (brand) => {
+                const openEmailDraft = (brand) => {
+            // 1. Existing modal logic
             selectedBrandForEmail.value = brand;
             showEmailDraftModal.value = true;
             refreshEmailDraft();
+
+            // 2. Auto-download the CSV attachment
+            try {
+                const csvContent = generateAuditStatementCSV(brand);
+                const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement("a");
+                link.setAttribute("href", url);
+                
+                // Format filename: e.g., "Red_Bluff_Statement_3_Bros_2026.csv"
+                const siteName = (activeSite.value && activeSite.value !== 'All') ? activeSite.value.replace(/\s+/g, '_') : 'Combined';
+                const safeVendorName = String(brand.vendor).replace(/[^a-zA-Z0-9_-]/g, '_');
+                link.setAttribute("download", `${siteName}_Statement_${safeVendorName}_2026.csv`);
+                
+                link.style.visibility = 'hidden';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                URL.revokeObjectURL(url);
+            } catch (error) {
+                console.error("Failed to generate or download CSV:", error);
+            }
         };
                 const sendEmailDraft = () => {
             if (!selectedBrandForEmail.value) return;
