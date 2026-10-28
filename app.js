@@ -2791,7 +2791,7 @@ ${storeSignature}`;
             masterLedgerData, selectedLedgerVendor, refreshLedger, openLegacyVerification, ledgerTotals,
                         masterWorkbook, showWorkspaceMenu, showAdminMenu, workspaceTabs, selectWorkspace, activeWorkspaceInfo,
                         scrollMonths, scrollWorkbookTabs, workbookSchema, activeWorkbookSheet, isWorkbookLoaded,
-                        auditRange, brandAuditData, draftAuditEmail, sageAuditData, activeWorkbookHeaders,
+                        auditRange, brandAuditData, sageAuditData, activeWorkbookHeaders,
             showWorkbookSyncModal, workbookPasteData, openWorkbookSyncModal, processWorkbookSync,
                         repopulateFromMasterWorkbook, updateWorkbookFromSales, loadWorkbookFromStorage,
                         exportYTDVariancePDF, exportBrandCSVReports,
