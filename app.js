@@ -2357,9 +2357,9 @@ const handleSageCsvUpload = async (e) => {
             try {
                 await batch.commit();
                 logSystemAction("UPDATE", `Synced and aggregated ${creditsCreated} vendor credits`);
-                alert(`Success! Aggregated ${creditsCreated} vendor credits and pushed them to Firebase.`);
-                activeTab.value = 'Tracker'; 
+                                alert(`Success! Aggregated ${creditsCreated} vendor credits and pushed them to Firebase.`);
             } catch (err) { 
+ 
                 console.error(err);
                 alert("Failed to sync aggregated credits to the cloud."); 
             }

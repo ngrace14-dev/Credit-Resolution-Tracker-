@@ -189,10 +189,11 @@
                             <p class="text-xs text-gray-300 mt-0.5">{{ monthGroup.brandList.length }} Brands • {{ monthGroup.count }} Total Entries</p>
                         </div>
                         <div class="flex items-center gap-3">
-                            <span class="text-lg font-extrabold text-emerald-400 bg-white/10 px-3 py-1 rounded-lg border border-white/10">{{ formatCurrency(monthGroup.total) }}</span>
-                                                        <button @click="regenerateMonthReports(monthGroup)" class="bg-gray-800 text-amber-500 hover:bg-gray-700 px-3 py-1.5 rounded-lg font-bold text-xs shadow transition-colors flex items-center gap-1.5 border border-gray-700">
+                                                        <span class="text-lg font-extrabold text-emerald-400 bg-white/10 px-3 py-1 rounded-lg border border-white/10">{{ formatCurrency(monthGroup.total) }}</span>
+                                                        <button type="button" @click.prevent="regenerateMonthReports(monthGroup)" class="bg-gray-800 text-amber-500 hover:bg-gray-700 px-3 py-1.5 rounded-lg font-bold text-xs shadow transition-colors flex items-center gap-1.5 border border-gray-700">
                                 <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i> Regenerate Month
                             </button>
+
 
                             <!-- Audit Mode Toggle -->
                             <label class="flex items-center cursor-pointer gap-2 group ml-2">
