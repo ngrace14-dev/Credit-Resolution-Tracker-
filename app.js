@@ -2850,35 +2850,44 @@ RREDCO`;
                                                                     return body;
                                                                 };
 
-                                                                const generateAuditFindingEmail = (brand) => {
-                                                                    const vendorName = brand.vendor || brand;
-                                                                    const reportData = calculateMonthlyReport(vendorName);
-                                                                    const formatCurrency = (val) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(val || 0);
-            
-                                                                    const startPeriod = startMonth.value || 'January';
-                                                                    const endPeriod = endMonth.value || 'October';
+                                                                                                                                const generateAuditFindingEmail = (brand) => {
+                                                                                                                                    const auditData = calculateMonthlyReport(brand.vendor || brand); // Using your new calculate function
+                                                                                                                                    // Format currency to match your baseplate style
+                                                                                                                                    const formatCurrency = (val) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(val || 0);
 
-                                                                    return `Hi ${vendorName} Team,
+                                                                                                                                    // Accumulate table rows and final balance
+                                                                                                                                    let tableText = '';
+                                                                                                                                    let finalBal = 0;
 
-I hope this finds you well.
+                                                                                                                                    if (!activeSite.value || activeSite.value === 'All') {
+                                                                                                                                        tableText = `Red Bluff       | Generated: ${formatCurrency(auditData.redBluffGenerated)} | Received: ${formatCurrency(auditData.redBluffRecovered)} | Balance: ${formatCurrency(auditData.redBluffGenerated - auditData.redBluffRecovered)}\nRedding         | Generated: ${formatCurrency(auditData.reddingGenerated)} | Received: ${formatCurrency(auditData.reddingRecovered)} | Balance: ${formatCurrency(auditData.reddingGenerated - auditData.reddingRecovered)}`;
+                                                                                                                                        finalBal = auditData.balance;
+                                                                                                                                    } else if (activeSite.value === 'Redding') {
+                                                                                                                                        tableText = `Redding         | Generated: ${formatCurrency(auditData.reddingGenerated)} | Received: ${formatCurrency(auditData.reddingRecovered)} | Balance: ${formatCurrency(auditData.reddingGenerated - auditData.reddingRecovered)}`;
+                                                                                                                                        finalBal = auditData.reddingGenerated - auditData.reddingRecovered;
+                                                                                                                                    } else {
+                                                                                                                                        tableText = `Red Bluff       | Generated: ${formatCurrency(auditData.redBluffGenerated)} | Received: ${formatCurrency(auditData.redBluffRecovered)} | Balance: ${formatCurrency(auditData.redBluffGenerated - auditData.redBluffRecovered)}`;
+                                                                                                                                        finalBal = auditData.redBluffGenerated - auditData.redBluffRecovered;
+                                                                                                                                    }
 
-We have completed an internal audit of promotional credits for ${vendorName} for the period of ${startPeriod} 2026 through ${endPeriod} 2026. 
-
-Based on our POS data and recorded collections, our records indicate an outstanding balance of ${formatCurrency(reportData.balance)}.
-
-Total Generated: ${formatCurrency(reportData.totalGenerated)}
-Total Collected: ${formatCurrency(reportData.totalRecovered)}
-Remaining Balance: ${formatCurrency(reportData.balance)}
-
-Attached is a detailed statement showing the month-by-month breakdown of these figures. We would like to reconcile this balance with your records. Please let us know if you require any additional documentation to process these outstanding credits.
-
-We value our partnership and look forward to resolving this balance.
-
+                                                                                                                                    // Capture the selected date range from your UI dropdowns
+                                                                                                                                    const startPeriod = startMonth.value || 'January';
+                                                                                                                                    const endPeriod = endMonth.value || 'October';
+                                                                                                                                    const userName = loggedInUser.value || 'Accounting Team';
+                                                                                                                                    const body = `Hi ${brand.vendor || brand} Team,
+I hope this email finds you well.
+As part of our financial reconciliation, we have completed an audit of all promotional discounts generated at our retail registers against credit reimbursements received and posted to our accounting system (SAGE) for the period of ${startPeriod} 2026 through ${endPeriod} 2026.
+Our records indicate a remaining unapplied promo credit balance of ${formatCurrency(finalBal)} across our retail locations.
+Below is the YTD summary of promotional credits generated vs. reimbursements received by store location for ${brand.vendor || brand}:
+${tableText}
+(Note: A full month-by-month chronological breakdown of credits generated, applied, and the remaining unapplied balance for each store is included in the attached summary report).
+Please review this cumulative statement with your Accounts Receivable/Accounting team and let us know when we can expect a credit memo or offset applied to our upcoming inventory invoices to clear this balance.
+We truly appreciate your partnership and support in keeping our promotional credits moving forward!
 Best regards,
-
-Nicholas G.
+${userName}
 RREDCO`;
-                                                                };
+                                                                                                                                    return body;
+                                                                                                                                };
 
                                                                 const refreshEmailDraft = () => {
                                                                     if (!selectedBrandForEmail.value) return;
