@@ -1234,39 +1234,45 @@
             </div>
         </main>
 
-        <!-- EMAIL DRAFT MODAL -->
-        <div v-if="isManagerUnlocked && showEmailDraftModal" class="fixed inset-0 bg-black/60 flex items-center justify-center z-[100] backdrop-blur-sm p-2" @click.self="showEmailDraftModal = false">
-            <div class="bg-white rounded-2xl shadow-2xl w-full max-w-4xl flex flex-col overflow-hidden max-h-[95vh]">
-                <div class="px-6 py-4 border-b bg-gray-50 flex justify-between items-center shrink-0">
+                        <!-- EMAIL DRAFT PREVIEW MODAL -->
+        <div v-if="showEmailDraftModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4">
+            <div class="bg-gray-900 border border-gray-800 rounded-xl shadow-2xl w-full max-w-2xl flex flex-col max-h-[90vh]">
+                <!-- Modal Header -->
+                <div class="flex items-center justify-between px-6 py-4 border-b border-gray-800">
                     <div>
-                        <h2 class="font-bold text-lg text-gray-900 flex items-center gap-2">
-                            <i data-lucide="mail" class="w-5 h-5 text-emerald-600"></i> Draft Email Report
-                        </h2>
-                        <p class="text-xs text-gray-500">Review and customize the email before sending.</p>
+                        <h3 class="text-lg font-bold text-gray-100 flex items-center gap-2">
+                            <i data-lucide="mail" class="w-5 h-5 text-emerald-400"></i> Email Draft Preview
+                        </h3>
+                        <p class="text-xs text-gray-400 mt-0.5" v-if="selectedBrandForEmail">
+                            Recipient: <span class="text-emerald-400 font-semibold">{{ selectedBrandForEmail.vendor }}</span>
+                            <span v-if="selectedBrandForEmail.email" class="text-gray-500"> ({{ selectedBrandForEmail.email }})</span>
+                        </p>
                     </div>
-                    <button @click="showEmailDraftModal = false" class="text-gray-400 hover:text-red-600 transition-colors"><i data-lucide="x" class="w-5 h-5"></i></button>
+                    <button @click="showEmailDraftModal = false" class="text-gray-400 hover:text-white transition-colors p-1 rounded-lg hover:bg-gray-800">
+                        <i data-lucide="x" class="w-5 h-5"></i>
+                    </button>
                 </div>
-                
-                <div class="p-6 overflow-y-auto flex-1">
-                    <!-- Email Draft Controls Header -->
-                    <div class="flex flex-wrap items-center justify-between gap-3 bg-gray-900 p-3 rounded-xl border border-gray-800 mb-4">
+                <div class="p-6 overflow-y-auto space-y-4 flex-1">
+                    <!-- Controls Bar (Mode & Period Selectors) -->
+                    <div class="flex flex-wrap items-center justify-between gap-3 bg-gray-950/60 p-3 rounded-xl border border-gray-800">
                         <!-- Mode Toggle Buttons -->
                         <div class="flex items-center bg-gray-800 p-1 rounded-lg border border-gray-700">
                             <button 
+                                type="button"
                                 @click="emailReportMode = 'standard'; refreshEmailDraft();"
                                 :class="emailReportMode === 'standard' ? 'bg-amber-500 text-black font-semibold' : 'text-gray-400 hover:text-white'"
                                 class="px-3 py-1.5 rounded-md text-xs transition-all">
                                 Standard Draft
                             </button>
                             <button 
+                                type="button"
                                 @click="emailReportMode = 'audit_statement'; refreshEmailDraft();"
                                 :class="emailReportMode === 'audit_statement' ? 'bg-emerald-500 text-black font-semibold' : 'text-gray-400 hover:text-white'"
                                 class="px-3 py-1.5 rounded-md text-xs transition-all">
                                 Audit Finding Statement
                             </button>
                         </div>
-
-                                                <!-- Date Range Selectors (Shown only when in Audit Statement mode) -->
+                        <!-- Date Range & Quick Select (Audit Mode Only) -->
                         <div v-if="emailReportMode === 'audit_statement'" class="flex items-center gap-2">
                             <span class="text-xs text-gray-400">Audit Period:</span>
                             <select 
@@ -1282,8 +1288,6 @@
                                 class="bg-gray-800 text-white text-xs border border-gray-700 rounded-lg px-2 py-1 focus:border-emerald-500 outline-none">
                                 <option v-for="m in calendarMonths" :key="m" :value="m">{{ m }}</option>
                             </select>
-
-                            <!-- Quick Select Buttons (Added for consistency with Audit Panel) -->
                             <div class="flex items-center gap-1.5 ml-2 border-l border-gray-700 pl-3">
                                 <button type="button" @click="auditStartMonth='January'; auditEndMonth='March'; refreshEmailDraft();" class="px-2 py-1 bg-gray-800 hover:bg-emerald-600 rounded text-[10px] font-bold transition-colors text-white">Q1</button>
                                 <button type="button" @click="auditStartMonth='April'; auditEndMonth='June'; refreshEmailDraft();" class="px-2 py-1 bg-gray-800 hover:bg-emerald-600 rounded text-[10px] font-bold transition-colors text-white">Q2</button>
@@ -1293,27 +1297,30 @@
                             </div>
                         </div>
                     </div>
-
-                    <div class="space-y-4">
-                        <div>
-                            <label class="text-[11px] font-bold text-gray-500 uppercase tracking-wide block mb-1">Subject</label>
-                            <input type="text" v-model="emailDraftSubject" class="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm font-bold focus:ring-2 focus:ring-emerald-500 outline-none">
-                        </div>
-                        <div>
-                            <label class="text-[11px] font-bold text-gray-500 uppercase tracking-wide block mb-1">Body</label>
-                            <textarea v-model="emailDraftBody" rows="15" class="w-full border border-gray-300 rounded-lg px-4 py-3 text-sm font-mono focus:ring-2 focus:ring-emerald-500 outline-none resize-none"></textarea>
-                        </div>
+                    <!-- Subject Input -->
+                    <div>
+                        <label class="block text-xs font-bold uppercase tracking-wider text-gray-400 mb-1">Subject</label>
+                        <input type="text" v-model="emailDraftSubject" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 outline-none focus:border-emerald-500 font-medium">
+                    </div>
+                    <!-- Body Textarea -->
+                    <div>
+                        <label class="block text-xs font-bold uppercase tracking-wider text-gray-400 mb-1">Message Body</label>
+                        <textarea v-model="emailDraftBody" rows="14" class="w-full bg-gray-800 border border-gray-700 rounded-lg p-3 text-xs text-gray-200 font-mono outline-none focus:border-emerald-500 resize-none leading-relaxed"></textarea>
                     </div>
                 </div>
-
-                                <div class="px-6 py-4 border-t bg-gray-50 flex gap-3 shrink-0">
-                    <button @click="showEmailDraftModal = false" class="flex-1 py-2.5 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded-lg font-bold transition-colors">Cancel</button>
-                    <button @click="copyEmailToClipboard" class="flex-1 py-2.5 bg-amber-500 hover:bg-amber-600 text-black rounded-lg font-bold shadow-md flex items-center justify-center gap-2">
+                <!-- Modal Footer Actions -->
+                <div class="px-6 py-4 border-t border-gray-800 flex items-center justify-between bg-gray-900/50">
+                    <button type="button" @click="copyEmailToClipboard" class="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-200 rounded-lg text-xs font-bold transition-colors border border-gray-700 flex items-center gap-2">
                         <i data-lucide="copy" class="w-4 h-4"></i> Copy to Clipboard
                     </button>
-                    <button @click="sendEmailDraft" class="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold shadow-md flex items-center justify-center gap-2">
-                        <i data-lucide="send" class="w-4 h-4"></i> {{ emailReportMode === 'standard' ? 'Download CSV & Open Mail' : 'Open Mail Client' }}
-                    </button>
+                    <div class="flex items-center gap-3">
+                        <button type="button" @click="showEmailDraftModal = false" class="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg text-xs font-bold transition-colors">
+                            Cancel
+                        </button>
+                        <button type="button" @click="sendEmailDraft" class="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition-colors flex items-center gap-2 shadow">
+                            <i data-lucide="send" class="w-4 h-4"></i> {{ emailReportMode === 'standard' ? 'Download CSV & Open Mail' : 'Open in Mail Client' }}
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
