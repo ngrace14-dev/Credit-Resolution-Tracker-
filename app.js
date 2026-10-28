@@ -2897,18 +2897,17 @@ RREDCO`;
                     document.body.removeChild(link);
 
                     // 2. Construct Mailto Link (Optimized for Outlook/Mail Clients)
-                    const recipient = brand.email || '';
-                    const subject = encodeURIComponent(`Statement of Account – Cumulative Promotional Credits Owed (${brand.vendor || brand})`);
-                    const body = encodeURIComponent(emailDraftBody.value);
+                    const cleanEmails = String(brand.email || '').split(/[,;\s]+/).map(e => e.trim()).filter(Boolean).join(',');
+                    const mailtoUrl = `mailto:${cleanEmails}?cc=accounting@rredco.com&subject=${encodeURIComponent(emailDraftSubject.value)}&body=${encodeURIComponent(emailDraftBody.value)}`;
             
-                    // Construct the mailto protocol link (including CC as per original app requirements)
-                    const mailtoLink = `mailto:${recipient}?cc=accounting@rredco.com&subject=${subject}&body=${body}`;
-            
-                    // 3. Trigger the system's default mail client
-                    if (mailtoLink.length > 2000) {
+                    if (mailtoUrl.length > 2000) {
                         alert("The email body is too long for the automatic mail client trigger. Please click 'Copy to Clipboard' and paste directly into your email client.");
                     } else {
-                        window.location.href = mailtoLink;
+                        // Add a slight delay so the browser doesn't cancel the mailto request 
+                        // due to the preceding CSV download action.
+                        setTimeout(() => {
+                            window.location.href = mailtoUrl;
+                        }, 150); 
                     }
             
                     showEmailDraftModal.value = false;
