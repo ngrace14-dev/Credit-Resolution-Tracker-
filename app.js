@@ -2786,19 +2786,31 @@ const handleSageCsvUpload = async (e) => {
 
 
 
-                const generateAuditFindingEmail = (brand) => {
+                                const generateAuditFindingEmail = (brand) => {
             const auditData = calculateBrandAudit(brand.vendor);
-            const reddingGen = auditData.redGen;
-            const reddingRec = auditData.redRec;
-            const reddingBal = auditData.redGen - auditData.redRec;
             
-            const redBluffGen = auditData.rbGen;
-            const redBluffRec = auditData.rbRec;
-            const redBluffBal = auditData.rbGen - auditData.rbRec;
-            
-            const totalYTDGen = reddingGen + redBluffGen;
-            const totalYTDRec = reddingRec + redBluffRec;
-            const totalYTDVariance = totalYTDGen - totalYTDRec;
+            let tableRows = '';
+            let finalGen = 0, finalRec = 0, finalBal = 0;
+
+            if (activeSite.value === 'Redding' || activeSite.value === 'All' || !activeSite.value) {
+                tableRows += `Redding        | ${formatCurrency(auditData.redGen)} | ${formatCurrency(auditData.redRec)} | ${formatCurrency(auditData.redGen - auditData.redRec)}\n`;
+                finalGen += auditData.redGen;
+                finalRec += auditData.redRec;
+                finalBal += (auditData.redGen - auditData.redRec);
+            }
+
+            if (activeSite.value === 'Red Bluff' || activeSite.value === 'All' || !activeSite.value) {
+                tableRows += `Red Bluff      | ${formatCurrency(auditData.rbGen)} | ${formatCurrency(auditData.rbRec)} | ${formatCurrency(auditData.rbGen - auditData.rbRec)}\n`;
+                finalGen += auditData.rbGen;
+                finalRec += auditData.rbRec;
+                finalBal += (auditData.rbGen - auditData.rbRec);
+            }
+
+            const tableText = 
+`Store Location | Credits Generated | Credits Received | Outstanding Balance
+---------------------------------------------------------------------------
+${tableRows}---------------------------------------------------------------------------
+TOTAL          | ${formatCurrency(finalGen)} | ${formatCurrency(finalRec)} | ${formatCurrency(finalBal)}`;
 
             const userName = loggedInUser.value || 'Accounting Team';
             
@@ -2810,16 +2822,11 @@ I hope this email finds you well.
 As part of our financial reconciliation, we have completed an audit of all promotional discounts generated at our retail registers against credit reimbursements received and posted to our accounting system (SAGE) for the period of ${auditStartMonth.value} 2026 through ${auditEndMonth.value} 2026.
 
 
-Our records indicate a remaining unapplied promo credit balance of ${formatCurrency(totalYTDVariance)} across our retail locations.
+Our records indicate a remaining unapplied promo credit balance of ${formatCurrency(finalBal)} across our retail locations.
 
 Below is the YTD summary of promotional credits generated vs. reimbursements received by store location for ${brand.vendor}:
 
-Store Location | Credits Generated | Credits Received | Outstanding Balance
----------------------------------------------------------------------------
-Redding        | ${formatCurrency(reddingGen)} | ${formatCurrency(reddingRec)} | ${formatCurrency(reddingBal)}
-Red Bluff      | ${formatCurrency(redBluffGen)} | ${formatCurrency(redBluffRec)} | ${formatCurrency(redBluffBal)}
----------------------------------------------------------------------------
-TOTAL          | ${formatCurrency(totalYTDGen)} | ${formatCurrency(totalYTDRec)} | ${formatCurrency(totalYTDVariance)}
+${tableText}
 
 (Note: A full month-by-month chronological breakdown of credits generated, applied, and the remaining unapplied balance for each store is included in the attached summary report).
 
