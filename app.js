@@ -1,5 +1,6 @@
 // app.js
 
+
 // 1. FIREBASE IMPORTS
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-app.js";
 import { getFirestore, collection, addDoc, doc, updateDoc, deleteDoc, writeBatch, onSnapshot, setDoc, query, where, orderBy, limit } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js";
@@ -651,7 +652,7 @@ createApp({
             return match ? String(match["Standardized POS Name (CSV)"] || '').trim() : clean;
         };
 
-                        const generateAuditStatementCSV = (brand) => {
+                                                const generateAuditStatementCSV = (brand) => {
             const targetSite = activeSite.value;
             const targetBrand = brand.vendor;
             const standardizedTarget = getStandardizedBrandName(targetBrand).trim().toLowerCase();
@@ -663,9 +664,9 @@ createApp({
             let runningTotalGenerated = 0;
             let cumulativeApplied = 0;
             
-            // FIX: Array slicing inclusive logic with safety
-            const startIdx = 0;
-            const endIdx = calendarMonths.indexOf(activeMonth.value);
+            // DYNAMIC DATE RANGE: Use startMonth and endMonth values from the UI
+            const startIdx = calendarMonths.indexOf(startMonth.value || 'January');
+            const endIdx = calendarMonths.indexOf(endMonth.value || 'September');
             const monthsToProcess = calendarMonths.slice(startIdx, Math.max(startIdx, endIdx) + 1);
             
             monthsToProcess.forEach(month => {
@@ -2865,20 +2866,20 @@ RREDCO`;
                                                                                                                                 };
 
                                                                                                                                 const refreshEmailDraft = () => {
-                                                                    if (!selectedBrandForEmail.value) return;
-                                                                    const brand = selectedBrandForEmail.value;
-                                                                    // Explicitly grab the active values from the date dropdowns
-                                                                    const startPeriod = startMonth.value || 'January';
-                                                                    const endPeriod = endMonth.value || 'September';
-                                                                    // Uniform dynamic subject line
-                                                                    emailDraftSubject.value = `Promo Credit Statement (${startPeriod} 2026 - ${endPeriod} 2026)`;
-                                                                    // Inject the selected body
-                                                                    if (emailReportMode.value === 'standard') {
-                                                                        emailDraftBody.value = generateStandardEmail(brand);
-                                                                    } else {
-                                                                        emailDraftBody.value = generateAuditFindingEmail(brand);
-                                                                    }
-                                                                };
+                                                                                                                                    if (!selectedBrandForEmail.value) return;
+                                                                                                                                    const brand = selectedBrandForEmail.value;
+                                                                                                                                    // Explicitly grab the active values from the date dropdowns
+                                                                                                                                    const startPeriod = startMonth.value || 'January';
+                                                                                                                                    const endPeriod = endMonth.value || 'September';
+                                                                                                                                    // Uniform dynamic subject line matching the report range
+                                                                                                                                    emailDraftSubject.value = `Promo Credit Statement (${startPeriod} 2026 - ${endPeriod} 2026)`;
+                                                                                                                                    // Inject the selected body
+                                                                                                                                    if (emailReportMode.value === 'standard') {
+                                                                                                                                        emailDraftBody.value = generateStandardEmail(brand);
+                                                                                                                                    } else {
+                                                                                                                                        emailDraftBody.value = generateAuditFindingEmail(brand);
+                                                                                                                                    }
+                                                                                                                                };
 
 
                                 const openEmailDraft = (brand) => {
@@ -2888,9 +2889,11 @@ RREDCO`;
             // 2. Populate subject and body preview (NO CSV download here)
             refreshEmailDraft();
         };
-                const sendEmailDraft = () => {
+                                const sendEmailDraft = () => {
                     if (!selectedBrandForEmail.value) return;
                     const brand = selectedBrandForEmail.value;
+                    const startPeriod = startMonth.value || 'January';
+                    const endPeriod = endMonth.value || 'September';
             
                     // 1. Consistently trigger Cumulative Statement CSV download
                     const csvContent = generateAuditStatementCSV(brand);
@@ -2899,7 +2902,7 @@ RREDCO`;
                     const link = document.createElement("a");
                     link.setAttribute("href", url);
                     const currentYear = new Date().getFullYear();
-                    link.setAttribute("download", `${brand.vendor.replace(/\s/g, '_')}_Statement_${currentYear}.csv`);
+                    link.setAttribute("download", `${brand.vendor.replace(/\s/g, '_')}_Statement_${startPeriod}_to_${endPeriod}_2026.csv`);
                     document.body.appendChild(link);
                     link.click();
                     document.body.removeChild(link);
