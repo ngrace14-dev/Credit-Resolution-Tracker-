@@ -190,12 +190,10 @@
                         </div>
                         <div class="flex items-center gap-3">
                                                         <span class="text-lg font-extrabold text-emerald-400 bg-white/10 px-3 py-1 rounded-lg border border-white/10">{{ formatCurrency(monthGroup.total) }}</span>
-                                                        <button type="button" @click.prevent="regenerateMonthReports(monthGroup)" class="bg-gray-800 text-amber-500 hover:bg-gray-700 px-3 py-1.5 rounded-lg font-bold text-xs shadow transition-colors flex items-center gap-1.5 border border-gray-700">
+                                                                                    <button type="button" @click.prevent="regenerateMonthReports(monthGroup)" class="bg-gray-800 text-amber-500 hover:bg-gray-700 px-3 py-1.5 rounded-lg font-bold text-xs shadow transition-colors flex items-center gap-1.5 border border-gray-700">
                                 <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i> Regenerate Month
                             </button>
 
-
-                            <!-- Audit Mode Toggle -->
                             <label class="flex items-center cursor-pointer gap-2 group ml-2">
                                 <span class="text-[10px] font-black uppercase tracking-tighter text-gray-400 group-hover:text-emerald-400 transition-colors">Audit Mode</span>
                                 <div class="relative">
@@ -211,33 +209,31 @@
                                                 </div>
                     </div>
 
-                    <!-- Quarterly Audit Filter Panel (Pops up when Audit Mode is ON) -->
+                                        <!-- Quarterly Audit Filter Panel (Pops up when Audit Mode is ON) -->
                     <div v-if="emailReportMode === 'audit_statement'" class="mx-6 mb-6 bg-gray-800/80 border border-emerald-500/40 rounded-lg p-4 shadow-lg backdrop-blur-sm transition-all duration-300">
                         <h3 class="text-emerald-400 font-bold text-sm mb-3 flex items-center gap-2">
                             <i data-lucide="calendar" class="w-4 h-4"></i> Quarterly Audit Settings
                         </h3>
                         <div class="flex flex-wrap items-center gap-4">
-                            <!-- Manual Month Selectors -->
                             <div class="flex items-center gap-2">
                                 <label class="text-xs text-gray-400 font-bold uppercase tracking-wider">Start:</label>
-                                <select v-model="auditStartMonth" class="bg-gray-900 border border-gray-700 rounded px-2 py-1 text-sm text-gray-200 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none transition-all cursor-pointer">
+                                <select v-model="auditStartMonth" class="bg-gray-900 border border-gray-700 rounded px-2 py-1 text-sm text-gray-200 focus:border-emerald-500 outline-none cursor-pointer">
                                     <option v-for="month in calendarMonths" :key="month" :value="month">{{ month }}</option>
                                 </select>
                             </div>
                             <div class="flex items-center gap-2">
                                 <label class="text-xs text-gray-400 font-bold uppercase tracking-wider">End:</label>
-                                <select v-model="auditEndMonth" class="bg-gray-900 border border-gray-700 rounded px-2 py-1 text-sm text-gray-200 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none transition-all cursor-pointer">
+                                <select v-model="auditEndMonth" class="bg-gray-900 border border-gray-700 rounded px-2 py-1 text-sm text-gray-200 focus:border-emerald-500 outline-none cursor-pointer">
                                     <option v-for="month in calendarMonths" :key="month" :value="month">{{ month }}</option>
                                 </select>
                             </div>
-                            <!-- Quarterly Quick Select Buttons -->
                             <div class="flex items-center gap-2 border-l border-gray-700 pl-4 ml-2">
                                 <span class="text-xs text-gray-500 font-bold uppercase tracking-wider mr-1">Quick Select:</span>
-                                <button @click="auditStartMonth='January'; auditEndMonth='March'" class="px-2.5 py-1 bg-gray-700 hover:bg-emerald-600 rounded text-xs font-bold transition-colors text-white">Q1</button>
-                                <button @click="auditStartMonth='April'; auditEndMonth='June'" class="px-2.5 py-1 bg-gray-700 hover:bg-emerald-600 rounded text-xs font-bold transition-colors text-white">Q2</button>
-                                <button @click="auditStartMonth='July'; auditEndMonth='September'" class="px-2.5 py-1 bg-gray-700 hover:bg-emerald-600 rounded text-xs font-bold transition-colors text-white">Q3</button>
-                                <button @click="auditStartMonth='October'; auditEndMonth='December'" class="px-2.5 py-1 bg-gray-700 hover:bg-emerald-600 rounded text-xs font-bold transition-colors text-white">Q4</button>
-                                <button @click="auditStartMonth='January'; auditEndMonth='December'" class="px-2.5 py-1 bg-emerald-700 hover:bg-emerald-500 rounded text-xs font-bold transition-colors text-white shadow">YTD</button>
+                                <button type="button" @click="auditStartMonth='January'; auditEndMonth='March'" class="px-2.5 py-1 bg-gray-700 hover:bg-emerald-600 rounded text-xs font-bold transition-colors text-white">Q1</button>
+                                <button type="button" @click="auditStartMonth='April'; auditEndMonth='June'" class="px-2.5 py-1 bg-gray-700 hover:bg-emerald-600 rounded text-xs font-bold transition-colors text-white">Q2</button>
+                                <button type="button" @click="auditStartMonth='July'; auditEndMonth='September'" class="px-2.5 py-1 bg-gray-700 hover:bg-emerald-600 rounded text-xs font-bold transition-colors text-white">Q3</button>
+                                <button type="button" @click="auditStartMonth='October'; auditEndMonth='December'" class="px-2.5 py-1 bg-gray-700 hover:bg-emerald-600 rounded text-xs font-bold transition-colors text-white">Q4</button>
+                                <button type="button" @click="auditStartMonth='January'; auditEndMonth='December'" class="px-2.5 py-1 bg-emerald-700 hover:bg-emerald-500 rounded text-xs font-bold transition-colors text-white shadow">YTD</button>
                             </div>
                         </div>
                     </div>
