@@ -2805,7 +2805,8 @@ const handleSageCsvUpload = async (e) => {
 
 I hope this email finds you well.
 
-As part of our financial reconciliation, we have completed an audit of all promotional discounts generated at our retail registers against credit reimbursements received and posted to our accounting system (SAGE) for the period of January 2026 through the current period.
+As part of our financial reconciliation, we have completed an audit of all promotional discounts generated at our retail registers against credit reimbursements received and posted to our accounting system (SAGE) for the period of ${auditStartMonth.value} 2026 through ${auditEndMonth.value} 2026.
+
 
 Our records indicate a remaining unapplied promo credit balance of ${formatCurrency(totalYTDVariance)} across our retail locations.
 
