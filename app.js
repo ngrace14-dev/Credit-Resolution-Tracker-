@@ -677,8 +677,8 @@ createApp({
                 const monthlyRows = masterWorkbook.value.data[sheetName] || [];
                 
                 monthlyRows.forEach(row => {
-                    const rowKeys = Object.keys(row);
-                    const brandKey = rowKeys.find(k => k.trim().toLowerCase().includes('brand'));
+                                        const rowKeys = Object.keys(row);
+                    const brandKey = rowKeys.find(k => k.trim().toLowerCase() === 'brand');
                     const rowBrand = brandKey ? row[brandKey] : row[0];
                     if (!rowBrand) return;
                     
@@ -690,12 +690,13 @@ createApp({
                         if (siteKey) {
                             const val = String(row[siteKey]).trim().toLowerCase();
                             if (val === 'x') {
-                                const promoKey = rowKeys.find(k => k.trim().toLowerCase().includes('promo credits'));
+                                const promoKey = rowKeys.find(k => k.trim().toLowerCase() === 'promo credits');
                                 rawAmt = promoKey ? row[promoKey] : 0;
                             } else {
                                 rawAmt = row[siteKey];
                             }
                         }
+
                         monthlyGenerated += parseFloat(String(rawAmt || 0).replace(/[^0-9.-]+/g, "")) || 0;
                     }
                 });
@@ -2736,10 +2737,11 @@ const handleSageCsvUpload = async (e) => {
                     const sheetName = `${m} 2026`;
                     const rows = masterWorkbook.value.data[sheetName] || [];
                     rows.forEach(row => {
-                        // 1. Dynamically find keys
+                                                // 1. Dynamically find keys
                         const keys = Object.keys(row);
-                        const brandKey = keys.find(k => k.trim().toLowerCase().includes('brand'));
-                        const promoKey = keys.find(k => k.trim().toLowerCase().includes('promo credits'));
+                        const brandKey = keys.find(k => k.trim().toLowerCase() === 'brand');
+                        const promoKey = keys.find(k => k.trim().toLowerCase() === 'promo credits');
+
                         const reddingKey = keys.find(k => k.trim().toLowerCase().includes('redding'));
                         const redBluffKey = keys.find(k => k.trim().toLowerCase().includes('red-bluff') || k.trim().toLowerCase().includes('red bluff'));
                         const rowBrand = brandKey ? String(row[brandKey]).trim() : String(row[0] || '').trim();
