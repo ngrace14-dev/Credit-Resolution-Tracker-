@@ -1240,11 +1240,17 @@ createApp({
         let unsubscribeSales = null;
         let unsubscribeCredits = null;
 
-                                const setupFilteredListeners = () => {
+                                        const setupFilteredListeners = () => {
             if (unsubscribeSales) unsubscribeSales();
             
-            // Fetch ALL sales for the site (YTD) so we can calculate true YTD totals
-            let salesQ = query(collection(db, "treesSales"), where("detectedSite", "==", activeSite.value), limit(5000));
+            // Revert to per-month pull to stay under 5,000 item limits and avoid data dropouts
+            let salesQ = query(collection(db, "treesSales"), where("detectedSite", "==", activeSite.value));
+
+            if (activeMonth.value !== 'All') {
+                salesQ = query(salesQ, where("month", "==", activeMonth.value));
+            }
+
+            salesQ = query(salesQ, limit(4000));
 
             unsubscribeSales = onSnapshot(salesQ, (snapshot) => {
                 const fetchedSales = [];
@@ -1614,8 +1620,18 @@ createApp({
 
                 const displayTreesSalesData = computed(() => filteredTreesSalesData.value.slice(0, 100));
         
-        const totalTreesOwedYTD = computed(() => treesSalesData.value.filter(s => s.detectedSite === activeSite.value).reduce((sum, s) => sum + (parseFloat(s.owed) || 0), 0));
+                const totalTreesOwedYTD = computed(() => {
+            // Source from Workbook Definitive Metrics instead of raw Firestore Sales to avoid 5,000 item limit
+            let total = 0;
+            const siteKey = activeSite.value === "Redding" ? "redding" : "redBluff";
+            Object.values(definitiveBrandMetrics.value[siteKey] || {}).forEach(m => {
+                total += (m.generated || 0);
+            });
+            return total;
+        });
+
         const totalTreesPending = computed(() => treesSalesData.value.filter(s => s.detectedSite === activeSite.value && s.status === 'Unsynced').reduce((sum, s) => sum + (parseFloat(s.owed) || 0), 0));
+
         
         const totalPending = computed(() => filteredCredits.value.filter(c => c.status === 'Pending').reduce((sum, c) => sum + (parseFloat(c.amount) || 0), 0));
 
