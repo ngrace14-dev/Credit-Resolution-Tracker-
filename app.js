@@ -2899,20 +2899,26 @@ RREDCO`;
                     // 2. Construct Mailto Link (Optimized for Outlook/Mail Clients)
                     const cleanEmails = String(brand.email || '').split(/[,;\s]+/).map(e => e.trim()).filter(Boolean).join(',');
                     const mailtoUrl = `mailto:${cleanEmails}?cc=accounting@rredco.com&subject=${encodeURIComponent(emailDraftSubject.value)}&body=${encodeURIComponent(emailDraftBody.value)}`;
-            
-                    if (mailtoUrl.length > 2000) {
-                        alert("The email body is too long for the automatic mail client trigger. Please click 'Copy to Clipboard' and paste directly into your email client.");
-                    } else {
-                        // Add a slight delay so the browser doesn't cancel the mailto request 
-                        // due to the preceding CSV download action.
-                        setTimeout(() => {
-                            window.location.href = mailtoUrl;
-                        }, 150); 
-                    }
+
+                    // 3. Trigger the system's default mail client with a hidden anchor tag (more reliable than window.location)
+                    setTimeout(() => {
+                        try {
+                            const mailLink = document.createElement("a");
+                            mailLink.href = mailtoUrl;
+                            // Setting target="_top" ensures it breaks out of any Vue router restrictions
+                            mailLink.setAttribute("target", "_top"); 
+                            document.body.appendChild(mailLink);
+                            mailLink.click();
+                            document.body.removeChild(mailLink);
+                        } catch (error) {
+                            console.error("Failed to open mail client:", error);
+                            alert("Could not open Outlook automatically. Please use the 'Copy to Clipboard' button.");
+                        }
+                    }, 300); // Increased delay slightly to 300ms to guarantee the CSV download finishes first
             
                     showEmailDraftModal.value = false;
                     logSystemAction("EXPORT", `Dispatched Cumulative Statement Email for ${brand.vendor}`);
-                };
+        };
 
         const copyEmailToClipboard = async () => {
             const fullText = `Subject: ${emailDraftSubject.value}\n\n${emailDraftBody.value}`;
