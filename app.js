@@ -640,12 +640,130 @@ createApp({
             return { total: runningTotal, content: runningContent };
         };
 
-        const downloadMonthlyReport = (brand) => {
-            let csvContent = "Location,Date & Time,Brand,Product Name,Transaction ID,Quantity Sold,Unit Price,Total Before Tax,Discount Title,Discount Amount,Credit Owed,Entry Type\n";
-            let csvTotal = 0;
+                const getStandardizedBrandName = (name) => {
+            if (!name) return '';
+            const clean = String(name).trim();
+            const mappingRows = masterWorkbook.value.data["Brand_Mapping"] || [];
+            // Match legacy name to get standardized name
+            const match = mappingRows.find(r => 
+                String(r["Master Workbook Legacy Name"] || '').trim().toLowerCase() === clean.toLowerCase()
+            );
+            return match ? String(match["Standardized POS Name (CSV)"] || '').trim() : clean;
+        };
+
+        const generateAuditStatementCSV = (brand) => {
+            const targetSite = activeSite.value;
+            const targetBrand = brand.vendor;
+            const standardizedTarget = getStandardizedBrandName(targetBrand).toLowerCase();
+            const currentYear = "2026";
             
+            // Period,Location,Brand,New_Credits_Generated,Running_Total_Generated,Credits_Applied,Cumulative_Applied,Remaining_Unapplied_Balance,Status
+            let csvLines = ["Period,Location,Brand,New_Credits_Generated,Running_Total_Generated,Credits_Applied,Cumulative_Applied,Remaining_Unapplied_Balance,Status"];
+            
+            let runningTotalGenerated = 0;
+            let cumulativeApplied = 0;
+            
+            // Loop through all months up to activeMonth (or October as per instruction)
+            const activeMonthIdx = calendarMonths.indexOf(activeMonth.value);
+            const monthsToProcess = calendarMonths.slice(0, activeMonthIdx + 1);
+            
+            monthsToProcess.forEach(month => {
+                let monthlyGenerated = 0;
+                let monthlyApplied = 0;
+                
+                // 1. Get Generated Credits from monthly sheet
+                const sheetName = `${month} ${currentYear}`;
+                const monthlyRows = masterWorkbook.value.data[sheetName] || [];
+                const siteCol = targetSite === "Redding" ? "Redding" : "Red-Bluff";
+                
+                monthlyRows.forEach(row => {
+                    const rowBrand = row["Brand"] || row[0];
+                    if (!rowBrand) return;
+                    
+                    if (getStandardizedBrandName(rowBrand).toLowerCase() === standardizedTarget) {
+                        let rawAmt = 0;
+                        const rowKeys = Object.keys(row);
+                        const exactKey = rowKeys.find(k => k.trim().toLowerCase() === targetSite.toLowerCase() || k.trim().toLowerCase() === siteCol.toLowerCase());
+                        
+                        if (exactKey) {
+                            const val = String(row[exactKey]).trim().toLowerCase();
+                            if (val === 'x') {
+                                // Match header "Promo Credits " with trailing space as per instruction
+                                const promoKey = rowKeys.find(k => k.toLowerCase().includes('promo credits'));
+                                rawAmt = row[promoKey] || 0;
+                            } else {
+                                rawAmt = row[exactKey];
+                            }
+                        }
+                        monthlyGenerated += parseFloat(String(rawAmt || 0).replace(/[^0-9.-]+/g, "")) || 0;
+                    }
+                });
+                
+                // 2. Get Applied Credits from GL Raw by Store
+                const glRows = masterWorkbook.value.data["GL Raw by Store"] || [];
+                glRows.forEach(row => {
+                    const rowStore = detectSiteFromName(row["Store"] || row["Location"]);
+                    if (rowStore !== targetSite) return;
+                    
+                    const rowBrand = row["Mapped Brand"] || '';
+                    if (getStandardizedBrandName(rowBrand).toLowerCase() === standardizedTarget) {
+                        const dateStr = row["Posted dt."] || '';
+                        if (detectMonthFromDate(dateStr) === month) {
+                            const amt = parseFloat(String(row["Credit"] || 0).replace(/[^0-9.-]+/g, "")) || 0;
+                            monthlyApplied += amt;
+                        }
+                    }
+                });
+                
+                runningTotalGenerated += monthlyGenerated;
+                cumulativeApplied += monthlyApplied;
+                const balance = runningTotalGenerated - cumulativeApplied;
+                
+                let status = "No Activity";
+                if (balance <= 0.01 && (monthlyGenerated > 0 || monthlyApplied > 0)) {
+                    status = "Reconciled / Settled";
+                } else if (monthlyApplied > 0 && balance > 0.01) {
+                    status = "Partial Payment";
+                } else if (monthlyGenerated > 0 && monthlyApplied === 0) {
+                    status = "Outstanding";
+                }
+                
+                csvLines.push(`${month} ${currentYear},"${targetSite}","${targetBrand}",${monthlyGenerated.toFixed(2)},${runningTotalGenerated.toFixed(2)},${monthlyApplied.toFixed(2)},${cumulativeApplied.toFixed(2)},${balance.toFixed(2)},"${status}"`);
+            });
+            
+            // Append YTD Total row
+            const finalBalance = runningTotalGenerated - cumulativeApplied;
+            const finalStatus = finalBalance > 0.01 ? "ACTION REQUIRED" : "Settled";
+            csvLines.push(`YTD Total,"${targetSite}","${targetBrand}",${runningTotalGenerated.toFixed(2)},${runningTotalGenerated.toFixed(2)},${cumulativeApplied.toFixed(2)},${cumulativeApplied.toFixed(2)},${finalBalance.toFixed(2)},"${finalStatus}"`);
+            
+            return csvLines.join("\n");
+        };
+
+                const downloadMonthlyReport = (brand) => {
             const isFullMonth = !!brand.brandList; 
             const reportMonth = brand.month || activeMonth.value;
+
+            if (!isFullMonth) {
+                // Brand-specific report now uses the Audit-Ready Cumulative Statement format
+                const csvContent = generateAuditStatementCSV(brand);
+                const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement("a");
+                link.setAttribute("href", url);
+                const currentYear = new Date().getFullYear();
+                const safeBrandName = String(brand.vendor).replace(/[^a-zA-Z0-9]/g, '_');
+                link.setAttribute("download", `${activeSite.value.replace(/\s/g, '_')}_Statement_${safeBrandName}_${currentYear}.csv`);
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                setTimeout(() => URL.revokeObjectURL(url), 150);
+                logSystemAction("EXPORT", `Downloaded Cumulative Statement for ${brand.vendor}`);
+                return;
+            }
+
+            // Full Month CSV remains itemized as requested
+            let csvContent = "Location,Date & Time,Brand,Product Name,Transaction ID,Quantity Sold,Unit Price,Total Before Tax,Discount Title,Discount Amount,Credit Owed,Entry Type\n";
+            let csvTotal = 0;
             const cleanStr = (str) => String(str || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
     
             const itemizedSales = [];
@@ -710,6 +828,8 @@ createApp({
             logSystemAction("EXPORT", `Downloaded Detailed Report for ${reportName}`);
         };
 
+
+
                 
 
         
@@ -725,67 +845,32 @@ createApp({
             const currentYear = new Date().getFullYear();
             const monthStr = brand.month || activeMonth.value;
             const periodStr = `${monthStr} ${currentYear}`;
-            const cleanStr = (str) => String(str || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
-
-            let csvContent = "Location,Date & Time,Brand,Product Name,Transaction ID,Quantity Sold,Unit Price,Total Before Tax,Discount Title,Discount Amount,Credit Owed,Entry Type\n";
-            let csvTotal = 0;
-            const promoDates = new Set();
-
-            treesSalesData.value.forEach(sale => {
-                if (cleanStr(sale.brand) === cleanStr(brand.vendor) && 
-                    cleanStr(sale.detectedSite) === cleanStr(activeSite.value) && 
-                    cleanStr(sale.month) === cleanStr(monthStr)) {
-                    
-                    const safeLoc = `"${String(sale.detectedSite || '').replace(/"/g, '""')}"`;
-                    const safeDate = `"${String(sale.dateClosed || '').replace(/"/g, '""')}"`;
-                    const safeBrand = `"${String(sale.brand || '').replace(/"/g, '""')}"`;
-                    const safeProd = `"${String(sale.productName || '').replace(/"/g, '""')}"`;
-                    const safeTrack = `"${String(sale.trackingId || '').replace(/"/g, '""')}"`;
-                    const safeQty = `"${sale.unitsSold || 0}"`;
-                    const safePrice = `"${formatCurrency(sale.unitPrice || 0)}"`;
-                    const safePreTax = `"${formatCurrency((sale.unitsSold || 0) * (sale.unitPrice || 0))}"`;
-                    const safeDiscTitle = `"${String(sale.discountTitle || '').replace(/"/g, '""')}"`;
-                    const safeDiscAmount = `"${formatCurrency(sale.discountAmount || 0)}"`;
-                    const safeOwed = `"${formatCurrency(sale.owed || 0)}"`;
-                    
-                    csvContent += `${safeLoc},${safeDate},${safeBrand},${safeProd},${safeTrack},${safeQty},${safePrice},${safePreTax},${safeDiscTitle},${safeDiscAmount},${safeOwed},"POS Itemized"\n`;
-                    csvTotal += parseFloat(sale.owed) || 0;
-
-                    if (sale.dateClosed) promoDates.add(sale.dateClosed.split(' ')[0]);
-                }
-            });
-
-            if (brand.credits) {
-                const res = processManualCredits(brand.credits, promoDates, csvTotal, csvContent);
-                csvTotal = res.total;
-                csvContent = res.content;
-            }
-
-            csvContent += `,,,,,,,,,, "TOTAL:", "${formatCurrency(csvTotal)}"\n`;
-
+            
+            // New Calibrated CSV Summary Statement
+            const csvContent = generateAuditStatementCSV(brand);
             const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
             const url = URL.createObjectURL(blob);
             const link = document.createElement("a");
             link.setAttribute("href", url);
-            link.setAttribute("download", `${brand.vendor.replace(/\s/g, '_')}_${storeName}_Credits_${monthStr}.csv`);
+            link.setAttribute("download", `${brand.vendor.replace(/\s/g, '_')}_Statement_${activeSite.value.replace(/\s/g, '_')}_${currentYear}.csv`);
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
 
             const cleanEmails = String(brand.email || '').split(/[,;\s]+/).map(e => e.trim()).filter(Boolean).join(',');
-            const subject = `Credit Report - ${storeName} Promotions - ${periodStr}`;
+            const subject = `Promo Credit Statement - ${storeName} - ${periodStr}`;
             
             let body = `Hello ${brand.vendor},\n\n`;
-            body += `Please find the attached itemized breakdown for vendor credits owed to ${storeName} for the period of ${periodStr}.\n\n`;
-            body += `Total Credit Requested: ${formatCurrency(csvTotal)}\n`;
-            body += `Promos were active on the following dates: ${Array.from(promoDates).sort().join(', ')}\n\n`;
-            body += `Please let us know if you have any questions or once this credit has been applied to our account.\n\n`;
+            body += `Please find the attached cumulative promo credit statement for ${storeName} for the period ending ${periodStr}.\n\n`;
+            body += `This statement includes a month-by-month breakdown of credits generated vs. collections received and the remaining unapplied balance.\n\n`;
+            body += `Please let us know if you have any questions or when we can expect the remaining balance to be applied to our account.\n\n`;
             body += `Best regards,\n\n${storeName} Accounting Team\n`;
 
             window.location.href = `mailto:${cleanEmails}?cc=accounting@rredco.com&subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
             
-            logSystemAction("EXPORT", `Generated Monthly Report for ${brand.vendor}`);
+            logSystemAction("EXPORT", `Generated Dual-Use Statement for ${brand.vendor}`);
         };
+
 
         let chartMonthlyInstance = null;
         let chartDistrosInstance = null;
