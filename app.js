@@ -672,68 +672,103 @@ createApp({
                                                             let runningYTDBalance = 0;
                                                             const tableRows = [];
             
-                                                            monthsToProcess.forEach(month => {
-                                                                let monthlyGenerated = 0;
-                                                                let monthlyApplied = 0;
-                                                                let monthlyRejected = 0;
-                                                                let dateReqSet = new Set();
-                                                                let dateAppSet = new Set();
-                                                                let promoDatesSet = new Set();
-                
-                                                                // 1. Fetch Generated & Rejected Credits from Monthly Sheet
-                                                                const sheetName = `${month} ${currentYear}`;
-                                                                const monthlyRows = (masterWorkbook.value && masterWorkbook.value.data && masterWorkbook.value.data[sheetName]) || [];
-                
-                                                                monthlyRows.forEach(row => {
-                                                                    const rowKeys = Object.keys(row);
-                                                                    const brandKey = rowKeys.find(k => k.trim().toLowerCase() === 'brand');
-                                                                    const rowBrand = brandKey ? row[brandKey] : row[0];
-                                                                    if (!rowBrand) return;
-                    
-                                                                    const normalizedRowBrand = getStandardizedBrandName(rowBrand).toLowerCase();
-                                                                    if (normalizedRowBrand === standardizedTarget || String(rowBrand).trim().toLowerCase() === standardizedTarget) {
-                                                                        let rawAmt = 0;
-                        
-                                                                        if (targetSite === 'All') {
-                                                                            const reddingKey = rowKeys.find(k => k.trim().toLowerCase() === 'redding');
-                                                                            const rbKey = rowKeys.find(k => k.trim().toLowerCase() === 'red-bluff' || k.trim().toLowerCase() === 'red bluff');
-                                                                            let rAmt = 0, rbAmt = 0;
-                                                                            if (reddingKey) rAmt = String(row[reddingKey]).trim().toLowerCase() === 'x' ? (row["Promo Credits"] || row["Promo Credits "]) : row[reddingKey];
-                                                                            if (rbKey) rbAmt = String(row[rbKey]).trim().toLowerCase() === 'x' ? (row["Promo Credits"] || row["Promo Credits "]) : row[rbKey];
-                                                                            rawAmt = (parseFloat(String(rAmt || 0).replace(/[^0-9.-]+/g, "")) || 0) + (parseFloat(String(rbAmt || 0).replace(/[^0-9.-]+/g, "")) || 0);
-                                                                        } else {
-                                                                            const siteKey = rowKeys.find(k => k.trim().toLowerCase() === targetSite.toLowerCase() || (targetSite === 'Red Bluff' && (k.trim().toLowerCase() === 'red-bluff' || k.trim().toLowerCase() === 'red bluff')));
-                                                                            if (siteKey) {
-                                                                                const val = String(row[siteKey]).trim().toLowerCase();
-                                                                                if (val === 'x') {
-                                                                                    const promoKey = rowKeys.find(k => k.trim().toLowerCase() === 'promo credits' || k.trim().toLowerCase() === 'promo credits ');
-                                                                                    rawAmt = promoKey ? row[promoKey] : 0;
-                                                                                } else {
-                                                                                    rawAmt = row[siteKey];
-                                                                                }
-                                                                            }
-                                                                        }
-                        
-                                                                        const amtGen = parseFloat(String(rawAmt || 0).replace(/[^0-9.-]+/g, "")) || 0;
-                                                                        monthlyGenerated += amtGen;
-                        
-                                                                        const dReq = row["Date Requested"];
-                                                                        if (dReq && !['/', 'n/a', 'nan', ''].includes(String(dReq).trim().toLowerCase())) {
-                                                                            dateReqSet.add(String(dReq).trim());
-                                                                        }
+                                                                        monthsToProcess.forEach(month => {
+                let monthlyGenerated = 0;
+                let monthlyApplied = 0;
+                let monthlyRejected = 0;
+                let dateReqSet = new Set();
+                let dateAppSet = new Set();
+                let promoDatesSet = new Set();
 
-                                                                        // Capture "Promo Dates Ran" from workbook keys
-                                                                        const pDatesKey = rowKeys.find(k => k.toLowerCase().includes('promo credits were generated') || k.toLowerCase() === 'dates' || k.toLowerCase() === 'promo dates');
-                                                                        const pDates = pDatesKey ? row[pDatesKey] : '';
-                                                                        if (pDates && !['/', 'n/a', 'nan', ''].includes(String(pDates).trim().toLowerCase())) {
-                                                                            promoDatesSet.add(String(pDates).trim());
-                                                                        }
+                // 1. Pull promo days from Sheet1 (Master Workbook)
+                const sheet1Rows = (masterWorkbook.value && masterWorkbook.value.data && masterWorkbook.value.data["Sheet1"]) || [];
+                let inMonthSection = false;
+                const targetHeader = `--- ${month} ${currentYear} ---`.toLowerCase();
+                
+                sheet1Rows.forEach(s1Row => {
+                    const vendorValRaw = String(s1Row["Vendor"] || '').trim();
+                    const vendorValLower = vendorValRaw.toLowerCase();
+                    
+                    // Check for month header section (e.g., "--- August 2026 ---")
+                    if (vendorValLower.includes('---')) {
+                        inMonthSection = vendorValLower.includes(targetHeader);
+                        return;
+                    }
+
+                    if (inMonthSection) {
+                        const s1VendorNormalized = getStandardizedBrandName(vendorValRaw).toLowerCase();
+                        if (s1VendorNormalized === standardizedTarget) {
+                            const datesVal = String(s1Row["Dates"] || '').trim();
+                            if (datesVal && !['/', 'n/a', 'nan', ''].includes(datesVal.toLowerCase())) {
+                                promoDatesSet.add(datesVal);
+                            }
+                        }
+                    }
+                });
+
+                // 2. Pull transaction days from treesSalesData (Live Sales)
+                treesSalesData.value.forEach(sale => {
+                    const saleBrandNormalized = getStandardizedBrandName(sale.brand).toLowerCase();
+                    const saleMonth = sale.month;
+                    const saleSite = sale.detectedSite;
+                    
+                    const siteMatch = (targetSite === 'All' || saleSite === targetSite);
+                    
+                    if (saleBrandNormalized === standardizedTarget && saleMonth === month && siteMatch) {
+                        const d = new Date(sale.dateClosed);
+                        if (!isNaN(d.getTime())) {
+                            promoDatesSet.add(d.getDate().toString());
+                        }
+                    }
+                });
+                
+                // 3. Fetch Generated & Rejected Credits from Monthly Sheet
+                const sheetName = `${month} ${currentYear}`;
+                const monthlyRows = (masterWorkbook.value && masterWorkbook.value.data && masterWorkbook.value.data[sheetName]) || [];
+                
+                monthlyRows.forEach(row => {
+                    const rowKeys = Object.keys(row);
+                    const brandKey = rowKeys.find(k => k.trim().toLowerCase() === 'brand');
+                    const rowBrand = brandKey ? row[brandKey] : row[0];
+                    if (!rowBrand) return;
+                    
+                    const normalizedRowBrand = getStandardizedBrandName(rowBrand).toLowerCase();
+                    if (normalizedRowBrand === standardizedTarget || String(rowBrand).trim().toLowerCase() === standardizedTarget) {
+                        let rawAmt = 0;
                         
-                                                                        const rejKey = rowKeys.find(k => k.trim().toLowerCase() === 'credits rejected');
-                                                                        const rejectedAmt = rejKey ? (parseFloat(String(row[rejKey] || 0).replace(/[^0-9.-]+/g, "")) || 0) : 0;
-                                                                        monthlyRejected += rejectedAmt;
-                                                                    }
-                                                                });
+                        if (targetSite === 'All') {
+                            const reddingKey = rowKeys.find(k => k.trim().toLowerCase() === 'redding');
+                            const rbKey = rowKeys.find(k => k.trim().toLowerCase() === 'red-bluff' || k.trim().toLowerCase() === 'red bluff');
+                            let rAmt = 0, rbAmt = 0;
+                            if (reddingKey) rAmt = String(row[reddingKey]).trim().toLowerCase() === 'x' ? (row["Promo Credits"] || row["Promo Credits "]) : row[reddingKey];
+                            if (rbKey) rbAmt = String(row[rbKey]).trim().toLowerCase() === 'x' ? (row["Promo Credits"] || row["Promo Credits "]) : row[rbKey];
+                            rawAmt = (parseFloat(String(rAmt || 0).replace(/[^0-9.-]+/g, "")) || 0) + (parseFloat(String(rbAmt || 0).replace(/[^0-9.-]+/g, "")) || 0);
+                        } else {
+                            const siteKey = rowKeys.find(k => k.trim().toLowerCase() === targetSite.toLowerCase() || (targetSite === 'Red Bluff' && (k.trim().toLowerCase() === 'red-bluff' || k.trim().toLowerCase() === 'red bluff')));
+                            if (siteKey) {
+                                const val = String(row[siteKey]).trim().toLowerCase();
+                                if (val === 'x') {
+                                    const promoKey = rowKeys.find(k => k.trim().toLowerCase() === 'promo credits' || k.trim().toLowerCase() === 'promo credits ');
+                                    rawAmt = promoKey ? row[promoKey] : 0;
+                                } else {
+                                    rawAmt = row[siteKey];
+                                }
+                            }
+                        }
+                        
+                        const amtGen = parseFloat(String(rawAmt || 0).replace(/[^0-9.-]+/g, "")) || 0;
+                        monthlyGenerated += amtGen;
+                        
+                        const dReq = row["Date Requested"];
+                        if (dReq && !['/', 'n/a', 'nan', ''].includes(String(dReq).trim().toLowerCase())) {
+                            dateReqSet.add(String(dReq).trim());
+                        }
+                        
+                        const rejKey = rowKeys.find(k => k.trim().toLowerCase() === 'credits rejected');
+                        const rejectedAmt = rejKey ? (parseFloat(String(row[rejKey] || 0).replace(/[^0-9.-]+/g, "")) || 0) : 0;
+                        monthlyRejected += rejectedAmt;
+                    }
+                });
                 
                                                                 // 2. Fetch Applied Credits from GL Raw by Store
                                                                 const glRows = (masterWorkbook.value && masterWorkbook.value.data && masterWorkbook.value.data["GL Raw by Store"]) || [];
