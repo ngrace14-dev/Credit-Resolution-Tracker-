@@ -51,10 +51,11 @@ const { createApp, ref, computed, nextTick, onMounted, watch } = window.Vue;
 
 createApp({
         setup() {
-        const isManagerUnlocked = ref(false);
+                const isManagerUnlocked = ref(false);
         const isProcessingUpload = ref(false);
         const sageFileInput = ref(null);
         const treezFileInput = ref(null);
+        const showWorkbookSyncModal = ref(false);
         const loggedInUser = ref('');
         const emailInput = ref('');
         const passwordInput = ref('');
@@ -551,8 +552,22 @@ createApp({
             }
         };
 
-                const saveTreesDataLocal = () => {
-            localStorage.setItem('treesSalesData', JSON.stringify(treesSalesData.value));
+                        const saveTreesDataLocal = () => {
+            try {
+                localStorage.setItem('treesSalesData', JSON.stringify(treesSalesData.value));
+            } catch (e) {
+                console.warn('Storage access blocked or full:', e);
+            }
+        };
+
+        const getStoredTreesData = () => {
+            try {
+                const data = localStorage.getItem('treesSalesData');
+                return data ? JSON.parse(data) : [];
+            } catch (e) {
+                console.warn('Storage access blocked:', e);
+                return [];
+            }
         };
 
 
