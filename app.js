@@ -777,87 +777,106 @@ createApp({
                 }));
         });
 
-        const generateAuditStatementCSV = (brand) => {
-            const targetSite = activeSite.value;
-            const targetBrand = brand.vendor || brand.name || brand;
-            const standardizedTarget = getStandardizedBrandName(targetBrand).trim().toLowerCase();
-            const currentYear = "2026";
+                const generateAuditStatementCSV = (brand) => {
+                    const targetSite = activeSite.value;
+                    const targetBrand = brand.vendor || brand.name || brand;
+                    const standardizedTarget = getStandardizedBrandName(targetBrand).trim().toLowerCase();
+                    const currentYear = "2026";
             
-            let csvLines = ["Period,Location,Brand,New_Credits_Generated,Running_Total_Generated,Credits_Applied,Cumulative_Applied,Remaining_Unapplied_Balance,Status"];
-            let runningTotalGenerated = 0;
-            let cumulativeApplied = 0;
+                    let csvLines = ["Period,Location,Brand,Promo_Run_Dates,New_Credits_Generated,Running_Total_Generated,Credits_Applied,Cumulative_Applied,Remaining_Unapplied_Balance,Status"];
+                    let runningTotalGenerated = 0;
+                    let cumulativeApplied = 0;
             
-            const startIdx = calendarMonths.indexOf(startMonth.value || 'January');
-            const endIdx = calendarMonths.indexOf(endMonth.value || 'September');
-            const monthsToProcess = calendarMonths.slice(startIdx, Math.max(startIdx, endIdx) + 1);
+                    const startIdx = calendarMonths.indexOf(startMonth.value || 'January');
+                    const endIdx = calendarMonths.indexOf(endMonth.value || 'September');
+                    const monthsToProcess = calendarMonths.slice(startIdx, Math.max(startIdx, endIdx) + 1);
             
-            monthsToProcess.forEach(month => {
-                let monthlyGenerated = 0;
-                let monthlyApplied = 0;
+                    monthsToProcess.forEach(month => {
+                        let monthlyGenerated = 0;
+                        let monthlyApplied = 0;
+                        let monthlyDates = [];
                 
-                const sheetName = `${month} ${currentYear}`;
-                const monthlyRows = masterWorkbook.value?.data?.[sheetName] || [];
+                        const sheetName = `${month} ${currentYear}`;
+                        const monthlyRows = masterWorkbook.value?.data?.[sheetName] || [];
                 
-                monthlyRows.forEach(row => {
-                    const rowKeys = Object.keys(row);
-                    const brandKey = rowKeys.find(k => k.trim().toLowerCase() === 'brand');
-                    const rowBrand = brandKey ? row[brandKey] : row[0];
-                    if (!rowBrand) return;
+                        monthlyRows.forEach(row => {
+                            const rowKeys = Object.keys(row);
+                            const brandKey = rowKeys.find(k => k.trim().toLowerCase() === 'brand');
+                            const rowBrand = brandKey ? row[brandKey] : row[0];
+                            if (!rowBrand) return;
                     
-                    if (getStandardizedBrandName(rowBrand).trim().toLowerCase() === standardizedTarget) {
-                        let rawAmt = 0;
-                        const siteKey = rowKeys.find(k => k.trim().toLowerCase() === targetSite.toLowerCase() || (targetSite === 'Red Bluff' && k.trim().toLowerCase() === 'red-bluff'));
+                            if (getStandardizedBrandName(rowBrand).trim().toLowerCase() === standardizedTarget) {
+                                let rawAmt = 0;
+                                const siteKey = rowKeys.find(k => k.trim().toLowerCase() === targetSite.toLowerCase() || (targetSite === 'Red Bluff' && k.trim().toLowerCase() === 'red-bluff'));
                         
-                        if (siteKey) {
-                            const val = String(row[siteKey]).trim().toLowerCase();
-                            if (val === 'x') {
-                                const promoKey = rowKeys.find(k => k.trim().toLowerCase() === 'promo credits');
-                                rawAmt = promoKey ? row[promoKey] : 0;
-                            } else {
-                                rawAmt = row[siteKey];
+                                if (siteKey) {
+                                    const val = String(row[siteKey]).trim().toLowerCase();
+                                    if (val === 'x') {
+                                        const promoKey = rowKeys.find(k => k.trim().toLowerCase() === 'promo credits' || k.trim().toLowerCase() === 'promo credits ');
+                                        rawAmt = promoKey ? row[promoKey] : 0;
+                                    } else {
+                                        rawAmt = row[siteKey];
+                                    }
+                                }
+                        
+                                const amt = parseFloat(String(rawAmt || 0).replace(/[^0-9.-]+/g, "")) || 0;
+                        
+                                // Only capture run dates if credits were generated for the target location
+                                if (amt > 0) {
+                                    monthlyGenerated += amt;
+                                    const dateKey = rowKeys.find(k => {
+                                        const clean = k.trim().toLowerCase();
+                                        return clean === 'dates' || clean.includes('date requested') || clean === 'date';
+                                    });
+                                    const dateVal = dateKey ? row[dateKey] : (row["Dates"] || row["Date Requested"] || row["Date"] || "");
+                                    if (dateVal && !['n/a', 'workbook import', 'nan', ''].includes(String(dateVal).trim().toLowerCase())) {
+                                        monthlyDates.push(String(dateVal).replace(/,/g, " ").trim());
+                                    }
+                                }
                             }
-                        }
-                        monthlyGenerated += parseFloat(String(rawAmt || 0).replace(/[^0-9.-]+/g, "")) || 0;
-                    }
-                });
+                        });
                 
-                const glRows = masterWorkbook.value?.data?.["GL Raw by Store"] || [];
-                glRows.forEach(row => {
-                    const rowStore = detectSiteFromName(row["Store"] || row["Location"]);
-                    if (rowStore !== targetSite) return;
+                        // Fetch Applied Credits from GL Raw by Store
+                        const glRows = masterWorkbook.value?.data?.["GL Raw by Store"] || [];
+                        glRows.forEach(row => {
+                            const rowStore = detectSiteFromName(row["Store"] || row["Location"]);
+                            if (rowStore !== targetSite) return;
                     
-                    const rowBrand = row["Mapped Brand"] || '';
-                    if (getStandardizedBrandName(rowBrand).trim().toLowerCase() === standardizedTarget) {
-                        const dateStr = row["Posted dt."] || '';
-                        if (detectMonthFromDate(dateStr) === month) {
-                            const amt = parseFloat(String(row["Credit"] || 0).replace(/[^0-9.-]+/g, "")) || 0;
-                            monthlyApplied += amt;
+                            const rowBrand = row["Mapped Brand"] || '';
+                            if (getStandardizedBrandName(rowBrand).trim().toLowerCase() === standardizedTarget) {
+                                const dateStr = row["Posted dt."] || '';
+                                if (detectMonthFromDate(dateStr) === month) {
+                                    const amt = parseFloat(String(row["Credit"] || 0).replace(/[^0-9.-]+/g, "")) || 0;
+                                    monthlyApplied += amt;
+                                }
+                            }
+                        });
+                
+                        runningTotalGenerated += monthlyGenerated;
+                        cumulativeApplied += monthlyApplied;
+                        const balance = runningTotalGenerated - cumulativeApplied;
+                
+                        let status = "No Activity";
+                        if (balance <= 0.01 && (monthlyGenerated > 0 || monthlyApplied > 0)) {
+                            status = "Reconciled / Settled";
+                        } else if (monthlyApplied > 0 && balance > 0.01) {
+                            status = "Partial Payment";
+                        } else if (monthlyGenerated > 0 && monthlyApplied === 0) {
+                            status = "Outstanding";
                         }
-                    }
-                });
                 
-                runningTotalGenerated += monthlyGenerated;
-                cumulativeApplied += monthlyApplied;
-                const balance = runningTotalGenerated - cumulativeApplied;
-                
-                let status = "No Activity";
-                if (balance <= 0.01 && (monthlyGenerated > 0 || monthlyApplied > 0)) {
-                    status = "Reconciled / Settled";
-                } else if (monthlyApplied > 0 && balance > 0.01) {
-                    status = "Partial Payment";
-                } else if (monthlyGenerated > 0 && monthlyApplied === 0) {
-                    status = "Outstanding";
-                }
-                
-                csvLines.push(`${month} ${currentYear},"${targetSite}","${targetBrand}",${monthlyGenerated.toFixed(2)},${runningTotalGenerated.toFixed(2)},${monthlyApplied.toFixed(2)},${cumulativeApplied.toFixed(2)},${balance.toFixed(2)},"${status}"`);
-            });
+                        // Deduplicate identical dates within the same month
+                        const uniqueDates = [...new Set(monthlyDates)];
+                        const joinedDates = uniqueDates.length > 0 ? uniqueDates.join(" | ") : "-";
+                        csvLines.push(`${month} ${currentYear},"${targetSite}","${targetBrand}","${joinedDates}",${monthlyGenerated.toFixed(2)},${runningTotalGenerated.toFixed(2)},${monthlyApplied.toFixed(2)},${cumulativeApplied.toFixed(2)},${balance.toFixed(2)},"${status}"`);
+                    });
             
-            const finalBalance = runningTotalGenerated - cumulativeApplied;
-            const finalStatus = finalBalance > 0.01 ? "ACTION REQUIRED" : "Settled";
-            csvLines.push(`YTD Total,"${targetSite}","${targetBrand}",${runningTotalGenerated.toFixed(2)},${runningTotalGenerated.toFixed(2)},${cumulativeApplied.toFixed(2)},${cumulativeApplied.toFixed(2)},${finalBalance.toFixed(2)},"${finalStatus}"`);
+                    const finalBalance = runningTotalGenerated - cumulativeApplied;
+                    const finalStatus = finalBalance > 0.01 ? "ACTION REQUIRED" : "Settled";
+                    csvLines.push(`YTD Total,"${targetSite}","${targetBrand}","-",${runningTotalGenerated.toFixed(2)},${runningTotalGenerated.toFixed(2)},${cumulativeApplied.toFixed(2)},${cumulativeApplied.toFixed(2)},${finalBalance.toFixed(2)},"${finalStatus}"`);
             
-            return csvLines.join("\n");
-        };
+                    return csvLines.join("\n");
+                };
 
         const downloadMonthlyReport = (brand) => {
             const targetBrand = brand.vendor || brand.brand || brand.name || '';
