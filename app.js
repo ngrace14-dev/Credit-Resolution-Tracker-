@@ -52,6 +52,9 @@ const { createApp, ref, computed, nextTick, onMounted, watch } = window.Vue;
 createApp({
         setup() {
         const isManagerUnlocked = ref(false);
+        const isProcessingUpload = ref(false);
+        const sageFileInput = ref(null);
+        const treezFileInput = ref(null);
         const loggedInUser = ref('');
         const emailInput = ref('');
         const passwordInput = ref('');
@@ -217,9 +220,11 @@ createApp({
         const ledgerTotals = ref({ generated: 0, recovered: 0, outstanding: 0, variance: 0 });
 
 
+                const isRecalculating = ref(false);
         const refreshLedger = async () => {
-
-            if (!promoCredits.value) return; // Prevent execution against undefined/null
+            isRecalculating.value = true;
+            try {
+                if (!promoCredits.value) return; // Prevent execution against undefined/null
 
             // Computed ledger simulation for UI wireframe
             const ledger = {};
@@ -273,26 +278,47 @@ createApp({
             });
 
 
-                        // 2. Finalize Calculations using Definitive Extraction Rules
-                        const totals = { generated: 0, recovered: 0, outstanding: 0, variance: 0 };
-                        const siteKey = site === "Redding" ? "redding" : "redBluff";
-            
-                        Object.values(ledger).forEach(item => {
-                            // APPLY CRITICAL EXTRACTION RULES:
-                            // Treat YTD Received (GL) from Audit sheets as the definitive "Applied" value.
-                            // We use the site-specific metric when a site is selected, or 'total' if we were in a global view.
-                            const brandMetrics = definitiveBrandMetrics.value[siteKey][item.vendor];
+                                        // 2. Finalize Calculations using Definitive Extraction Rules
+                const totals = { generated: 0, recovered: 0, outstanding: 0, variance: 0 };
+                const siteKey = site === "Redding" ? "redding" : "redBluff";
                 
-                            if (brandMetrics) {
-                                item.recovered = brandMetrics.applied;
-                                // If viewing 'All' months, we also use the definitive Generated value to ensure parity
-                                if (month === 'All') {
-                                    item.generated = brandMetrics.generated;
-                                }
-                            }
+                // Add Live GL Recovery Data (to ensure immediate feedback after upload)
+                const liveGLRows = masterWorkbook.value.data["GL Raw by Store"] || [];
+                const liveGLMap = {};
+                liveGLRows.forEach(row => {
+                    const rStore = detectSiteFromName(row["Store"] || row["Location"]);
+                    if (rStore !== site) return;
+                    
+                    const rDate = row["Posted dt."];
+                    if (month !== 'All' && detectMonthFromDate(rDate) !== month) return;
 
-                            item.outstanding = item.generated - item.recovered;
-                            item.variance = 0;
+                    const rBrand = getStandardizedBrandName(row["Mapped Brand"]);
+                    const rAmt = parseFloat(row["Credit"]) || 0;
+                    liveGLMap[rBrand] = (liveGLMap[rBrand] || 0) + rAmt;
+                });
+    
+                Object.values(ledger).forEach(item => {
+                    // APPLY CRITICAL EXTRACTION RULES:
+                    // Treat YTD Received (GL) from Audit sheets as the definitive "Applied" value.
+                    // We use the site-specific metric when a site is selected, or 'total' if we were in a global view.
+                    const brandMetrics = definitiveBrandMetrics.value[siteKey][item.vendor];
+        
+                    if (brandMetrics) {
+                        item.recovered = brandMetrics.applied;
+                        // If viewing 'All' months, we also use the definitive Generated value to ensure parity
+                        if (month === 'All') {
+                            item.generated = brandMetrics.generated;
+                        }
+                    }
+
+                    // If we have live uploaded GL data, ensure it's at least as high as the audit sheets 
+                    // (to account for data uploaded since the last workbook save)
+                    if (liveGLMap[item.vendor] !== undefined) {
+                        item.recovered = Math.max(item.recovered, liveGLMap[item.vendor]);
+                    }
+
+                    item.outstanding = item.generated - item.recovered;
+                    item.variance = 0;
 
 
                 
@@ -307,6 +333,9 @@ createApp({
                 totals.variance += item.variance;
             });
 
+                        } finally {
+                isRecalculating.value = false;
+            }
             ledgerTotals.value = totals;
             masterLedgerData.value = Object.values(ledger).sort((a, b) => b.outstanding - a.outstanding);
         };
@@ -322,6 +351,185 @@ createApp({
         };
 
         
+        // Helper: Extract brand from Sage Memo string
+        const extractBrandFromSageMemo = (memo) => {
+            if (!memo) return 'Unassigned';
+            const cleanMemo = String(memo).trim();
+            // Handles formats like "Bill - Korben Labs LLC: Promo Credits" or "Bill - Kind House Inc: Promo Credits"
+            const billMatch = cleanMemo.match(/Bill\s*-\s*([^:]+):/i);
+            if (billMatch && billMatch[1]) {
+                return billMatch[1].replace(/LLC|Inc\.?|Distribution/gi, '').trim();
+            }
+            // Fallback: check if standard portfolio patterns exist
+            if (/nabifive/i.test(cleanMemo)) return "Nabifive Portfolio";
+            if (/kiva/i.test(cleanMemo)) return "Kiva";
+            if (/thirtyone|almora|heavy hitters/i.test(cleanMemo)) return "Heavy Hitters / Almora";
+            return cleanMemo;
+        };
+
+                // 1. SAGE GL 4545 UPLOAD HANDLER (Applied / Recovered Credits)
+        const handleSageGLUpload = async (event) => {
+            const file = event.target.files && event.target.files[0];
+            if (!file) return;
+            isProcessingUpload.value = true;
+            try {
+                const text = await file.text();
+                const parseCSVLine = (line) => {
+                    const result = [];
+                    let cur = '';
+                    let inQuotes = false;
+                    for (let i = 0; i < line.length; i++) {
+                        const char = line[i];
+                        if (char === '"') {
+                            inQuotes = !inQuotes;
+                        } else if (char === ',' && !inQuotes) {
+                            result.push(cur.trim());
+                            cur = '';
+                        } else {
+                            cur += char;
+                        }
+                    }
+                    result.push(cur.trim());
+                    return result.map(cell => cell.replace(/^"(.*)"$/, '$1').trim());
+                };
+
+                const rows = text.split(/\r?\n/).filter(line => line.trim()).map(parseCSVLine);
+                
+                if (rows.length < 2) {
+                    alert("The uploaded Sage GL CSV appears to be empty.");
+                    return;
+                }
+                // Identify header positions
+                const header = rows[0].map(h => h.toLowerCase());
+                const postedDtIdx = header.findIndex(h => h.includes('posted dt'));
+                const docIdx = header.findIndex(h => h === 'doc');
+                const memoIdx = header.findIndex(h => h.includes('memo') || h.includes('description'));
+                const locIdx = header.findIndex(h => h.includes('location'));
+                const creditIdx = header.findIndex(h => h.includes('credit'));
+
+                if (postedDtIdx === -1 || creditIdx === -1 || locIdx === -1) {
+                    alert("Invalid Sage GL Report. Missing required columns: Posted dt., Location, or Credit.");
+                    return;
+                }
+
+                const existingGLRows = (masterWorkbook.value?.data?.["GL Raw by Store"]) || [];
+                const newGLRows = [];
+                let skippedDuplicates = 0;
+
+                for (let i = 1; i < rows.length; i++) {
+                    const row = rows[i];
+                    if (!row || row.length <= Math.max(postedDtIdx, creditIdx, locIdx, memoIdx, docIdx)) continue;
+                    
+                    const postedDt = row[postedDtIdx];
+                    const memo = row[memoIdx] || '';
+                    const docVal = row[docIdx] || '';
+                    const loc = (row[locIdx] || '').toUpperCase();
+                    const rawCredit = row[creditIdx];
+
+                    // Ignore header summary lines and zero rows
+                    if (!postedDt || postedDt.toLowerCase().includes('total') || postedDt.toLowerCase().includes('balance forward')) continue;
+
+                    const creditAmt = parseFloat(String(rawCredit).replace(/[^0-9.-]+/g, '')) || 0;
+                    if (creditAmt <= 0) continue;
+
+                    const store = loc === 'E12' ? 'Red Bluff' : (loc === 'E11' ? 'Redding' : (loc || 'Unknown'));
+                    const extractedBrand = extractBrandFromSageMemo(memo);
+                    const standardizedBrand = getStandardizedBrandName(extractedBrand);
+
+                    // Deduplication check against existing GL records
+                    const isDuplicate = existingGLRows.some(e => 
+                        String(e["Posted dt."]).trim() === String(postedDt).trim() &&
+                        String(e["Location"]).trim().toUpperCase() === loc &&
+                        Math.abs((parseFloat(e["Credit"]) || 0) - creditAmt) < 0.01 &&
+                        String(e["Memo/Description"]).trim() === String(memo).trim()
+                    );
+
+                    if (isDuplicate) {
+                        skippedDuplicates++;
+                        continue;
+                    }
+
+                    const formattedEntry = {
+                        "Posted dt.": postedDt,
+                        "Store": store,
+                        "Location": loc,
+                        "Doc": docVal,
+                        "Memo/Description": memo,
+                        "Credit": creditAmt,
+                        "Mapped Brand": standardizedBrand
+                    };
+                    newGLRows.push(formattedEntry);
+                    existingGLRows.push(formattedEntry);
+                }
+
+                if (newGLRows.length === 0) {
+                    alert(`No new entries added. ${skippedDuplicates} entries were identified as duplicates already in the ledger.`);
+                    return;
+                }
+
+                // Save consolidated sheet to Firestore
+                const sheetDocId = "GL_Raw_by_Store";
+                await setDoc(doc(db, "workbook_v9_sheets", sheetDocId), {
+                    sheetName: "GL Raw by Store",
+                    rows: existingGLRows,
+                    updatedAt: Date.now()
+                }, { merge: true });
+
+                // Update local reactive memory
+                if (!masterWorkbook.value.data) masterWorkbook.value.data = {};
+                masterWorkbook.value.data["GL Raw by Store"] = existingGLRows;
+
+                if (typeof logSystemAction === 'function') {
+                    logSystemAction("UPLOAD", `Ingested ${newGLRows.length} new Sage GL 4545 records (${skippedDuplicates} duplicates skipped).`);
+                }
+
+                alert(`Successfully imported ${newGLRows.length} Sage GL entries! (${skippedDuplicates} duplicates skipped)`);
+
+                // Recalculate Master Ledger balances to reflect newly applied credits
+                await refreshLedger();
+            } catch (err) {
+                console.error("Sage GL Import Error:", err);
+                alert("Failed to process Sage GL CSV: " + err.message);
+            } finally {
+                isProcessingUpload.value = false;
+                if (event.target) event.target.value = '';
+            }
+        };
+
+        // 2. TREEZ POS UPLOAD STUB (Generated Credits - Prepared for when system is unblocked)
+        const handleTreezPOSUpload = async (event) => {
+            const file = event.target.files && event.target.files[0];
+            if (!file) return;
+            isProcessingUpload.value = true;
+            try {
+                const text = await file.text();
+                const rows = text.split(/\r?\n/).map(line => line.split(',').map(c => c.replace(/^"(.*)"$/, '$1').trim()));
+                if (rows.length < 2) {
+                    alert("The uploaded Treez POS CSV is empty.");
+                    return;
+                }
+                const header = rows[0].map(h => h.toLowerCase());
+                const brandIdx = header.findIndex(h => h.includes('brand'));
+                const discountIdx = header.findIndex(h => h.includes('discount') || h.includes('owed') || h.includes('credit'));
+                const dateIdx = header.findIndex(h => h.includes('date'));
+                const siteIdx = header.findIndex(h => h.includes('location') || h.includes('site') || h.includes('store'));
+
+                if (brandIdx === -1 || discountIdx === -1) {
+                    alert("Treez CSV must contain at least 'Brand' and 'Discount Amount/Credit Owed' columns.");
+                    return;
+                }
+                alert(`Treez parser ready: Identified ${rows.length - 1} records. Ingestion will process when POS export is unblocked.`);
+            } catch (err) {
+                console.error("Treez Import Error:", err);
+                alert("Failed to read Treez POS CSV: " + err.message);
+            } finally {
+                isProcessingUpload.value = false;
+                if (event.target) event.target.value = '';
+            }
+        };
+
+        const recalculateMasterLedger = refreshLedger;
+
         const systemUsers = {
             'lenay@rredco.com': { name: 'Lenay A.', access: ['Red Bluff', 'Redding'], active: false },
             'tricia@rredco.com': { name: 'Tricia K.', access: ['Red Bluff', 'Redding'], active: false },
@@ -3200,7 +3408,14 @@ RREDCO`;
                         repopulateFromMasterWorkbook, updateWorkbookFromSales, loadWorkbookFromStorage,
                         exportYTDVariancePDF, exportBrandCSVReports,
             emailReportMode,             auditStartMonth: startMonth, auditEndMonth: endMonth, showEmailDraftModal, selectedBrandForEmail,
-            emailDraftSubject, emailDraftBody, openEmailDraft, refreshEmailDraft, sendEmailDraft, copyEmailToClipboard
+                        emailDraftSubject, emailDraftBody, openEmailDraft, refreshEmailDraft, sendEmailDraft, copyEmailToClipboard,
+                        isProcessingUpload,
+            sageFileInput,
+            treezFileInput,
+            handleSageGLUpload,
+            handleTreezPOSUpload,
+            recalculateMasterLedger,
+            isRecalculating
         };
 
 
