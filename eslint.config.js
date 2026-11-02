@@ -3,7 +3,7 @@ export default [
         languageOptions: {
             ecmaVersion: 2022,
             sourceType: "module",
-                        globals: {
+            globals: {
                 window: "readonly",
                 document: "readonly",
                 console: "readonly",
