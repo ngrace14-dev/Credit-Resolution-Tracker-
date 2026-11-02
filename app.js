@@ -892,7 +892,7 @@ createApp({
             logSystemAction("EXPORT", `Downloaded Statement for ${targetBrand}`);
         };
 
-        const exportVendorsAndBrandsCSV = () => {
+                const exportVendorsAndBrandsCSV = () => {
             if (!masterBrands.value || masterBrands.value.length === 0) {
                 return alert("No brands available to export.");
             }
@@ -923,6 +923,129 @@ createApp({
             document.body.removeChild(link);
             setTimeout(() => URL.revokeObjectURL(url), 150);
             logSystemAction("EXPORT", "Downloaded Vendors and Brands Directory CSV");
+        };
+
+        const calculateMonthlyReport = (brandName) => {
+            if (!brandName) return { reddingGenerated: 0, reddingRecovered: 0, redBluffGenerated: 0, redBluffRecovered: 0, totalGenerated: 0, totalRecovered: 0, balance: 0 };
+            let redGen = 0, redRec = 0, rbGen = 0, rbRec = 0;
+            const startIdx = calendarMonths.indexOf(startMonth.value || 'January');
+            const endIdx = calendarMonths.indexOf(endMonth.value || 'September');
+            const monthsToProcess = calendarMonths.slice(startIdx, Math.max(startIdx, endIdx) + 1);
+            const standardizedTarget = getStandardizedBrandName(brandName).trim().toLowerCase();
+            if (masterWorkbook.value?.data) {
+                monthsToProcess.forEach(m => {
+                    const sheetName = `${m} 2026`;
+                    const rows = masterWorkbook.value.data[sheetName] || [];
+                    rows.forEach(row => {
+                        const keys = Object.keys(row);
+                        const brandKey = keys.find(k => k.trim().toLowerCase() === 'brand');
+                        const promoKey = keys.find(k => k.trim().toLowerCase() === 'promo credits');
+                        const reddingKey = keys.find(k => k.trim().toLowerCase().includes('redding'));
+                        const redBluffKey = keys.find(k => k.trim().toLowerCase().includes('red-bluff') || k.trim().toLowerCase().includes('red bluff'));
+                        const rowBrand = brandKey ? String(row[brandKey]).trim() : String(row[0] || '').trim();
+                        if (rowBrand && getStandardizedBrandName(rowBrand).toLowerCase() === standardizedTarget) {
+                            const promoAmt = promoKey ? parseFloat(String(row[promoKey]).replace(/[^0-9.-]+/g, "")) || 0 : 0;
+                            if (reddingKey && String(row[reddingKey]).trim().toLowerCase() === 'x') redGen += promoAmt;
+                            if (redBluffKey && String(row[redBluffKey]).trim().toLowerCase() === 'x') rbGen += promoAmt;
+                        }
+                    });
+                });
+                const sageRows = masterWorkbook.value.data["GL Raw by Store"] || [];
+                sageRows.forEach(row => {
+                    const rowBrand = row["Mapped Brand"] || '';
+                    if (getStandardizedBrandName(rowBrand).trim().toLowerCase() === standardizedTarget) {
+                        const dateStr = row["Posted dt."] || '';
+                        const month = detectMonthFromDate(dateStr);
+                        if (monthsToProcess.includes(month)) {
+                            const amt = parseFloat(String(row["Credit"] || 0).replace(/[^0-9.-]+/g, "")) || 0;
+                            const site = detectSiteFromName(row["Store"] || row["Location"]);
+                            if (site === 'Redding') redRec += amt;
+                            if (site === 'Red Bluff') rbRec += amt;
+                        }
+                    }
+                });
+            }
+            const gen = redGen + rbGen;
+            const rec = redRec + rbRec;
+            return { reddingGenerated: redGen, reddingRecovered: redRec, redBluffGenerated: rbGen, redBluffRecovered: rbRec, totalGenerated: gen, totalRecovered: rec, balance: gen - rec };
+        };
+
+        const generateStandardEmail = (brand) => {
+            const vendorName = brand.vendor || brand.name || brand;
+            const reportData = calculateMonthlyReport(vendorName);
+            let finalGen = (!activeSite.value || activeSite.value === 'All') ? reportData.totalGenerated : (activeSite.value === 'Redding' ? reportData.reddingGenerated : reportData.redBluffGenerated);
+            const longSiteName = (!activeSite.value || activeSite.value === 'All') ? 'Sundial Collective – All Locations' : `Sundial Collective – ${activeSite.value}`;
+            const startPeriod = startMonth.value || 'January';
+            const endPeriod = endMonth.value || 'September';
+            const userName = loggedInUser.value || 'Nicholas G.';
+            return `Hi ${vendorName} Team,\n\nI hope you're doing well!\n\nAs part of our ongoing monthly reporting, we are providing the promotional credit summary for ${longSiteName} for the period of ${startPeriod} through ${endPeriod} 2026. This summary reflects the promotional discounts issued at our retail registers for your products.\n\nOur records indicate a total of ${formatCurrency(finalGen)} in promotional credits generated during this period.\n\nPromotional Credit Summary – ${startPeriod} through ${endPeriod} 2026\n${longSiteName}\n- Total Credits Generated: ${formatCurrency(finalGen)}\n\nFor your convenience, we have attached a detailed chronological breakdown showing the promotional credits generated by store.\n\nPlease review the attached summary with your Accounting or Accounts Receivable team and let us know when we can expect a credit memo or offset applied to our upcoming inventory invoices for these generated credits.\n\nWe appreciate your continued partnership and assistance in keeping our promotional credits current. Thank you for your support!\n\nBest regards,\n${userName}\nRREDCO`;
+        };
+
+        const generateAuditFindingEmail = (brand) => {
+            const vendorName = brand.vendor || brand.name || brand;
+            const auditData = calculateMonthlyReport(vendorName);
+            let finalGen = (!activeSite.value || activeSite.value === 'All') ? auditData.totalGenerated : (activeSite.value === 'Redding' ? auditData.reddingGenerated : auditData.redBluffGenerated);
+            let finalRec = (!activeSite.value || activeSite.value === 'All') ? auditData.totalRecovered : (activeSite.value === 'Redding' ? auditData.reddingRecovered : auditData.redBluffRecovered);
+            let finalBal = finalGen - finalRec;
+            const longSiteName = (!activeSite.value || activeSite.value === 'All') ? 'Sundial Collective – All Locations' : `Sundial Collective – ${activeSite.value}`;
+            const startPeriod = startMonth.value || 'January';
+            const endPeriod = endMonth.value || 'September';
+            const userName = loggedInUser.value || 'Nicholas G.';
+            const locationText = (!activeSite.value || activeSite.value === 'All') ? 'combined locations' : `${activeSite.value} location`;
+            return `Hi ${vendorName} Team,\n\nI hope you're doing well!\n\nAs part of our ongoing financial review, we recently reconciled our promotional credits for ${longSiteName} for the period of ${startPeriod} through ${endPeriod} 2026. This included comparing promotional discounts issued at our retail registers against vendor credits received and applied to our account.\n\nOur reconciliation identified an outstanding promotional credit balance of ${formatCurrency(finalBal)} for your products at our ${locationText}.\n\nPromotional Credit Summary – ${startPeriod} through ${endPeriod} 2026\n${longSiteName}\n- Total Credits Generated: ${formatCurrency(finalGen)}\n- Total Credits Received: ${formatCurrency(finalRec)}\n- Outstanding Balance: ${formatCurrency(finalBal)}\n\nFor your convenience, we have attached a detailed monthly reconciliation showing the promotional credits generated, reimbursements received, and remaining outstanding balance.\n\nPlease review the attached summary with your Accounting or Accounts Receivable team and let us know when we can expect the outstanding credits to be issued or applied toward upcoming inventory invoices.\n\nIf any credits have already been issued that are not reflected in our records, please provide copies so we can update our reconciliation accordingly.\n\nWe appreciate your continued partnership and assistance in keeping our promotional credits current. Thank you for your support!\n\nBest regards,\n${userName}\nRREDCO`;
+        };
+
+        const refreshEmailDraft = () => {
+            if (!selectedBrandForEmail.value) return;
+            const brand = selectedBrandForEmail.value;
+            const startPeriod = startMonth.value || 'January';
+            const endPeriod = endMonth.value || 'September';
+            emailDraftSubject.value = `Promo Credit Statement (${startPeriod} 2026 - ${endPeriod} 2026)`;
+            emailDraftBody.value = emailReportMode.value === 'standard' ? generateStandardEmail(brand) : generateAuditFindingEmail(brand);
+        };
+
+        const openEmailDraft = (brand) => {
+            selectedBrandForEmail.value = brand;
+            showEmailDraftModal.value = true;
+            refreshEmailDraft();
+        };
+
+        const sendEmailDraft = () => {
+            if (!selectedBrandForEmail.value) return;
+            const brand = selectedBrandForEmail.value;
+            const startPeriod = startMonth.value || 'January';
+            const endPeriod = endMonth.value || 'September';
+            const csvContent = generateAuditStatementCSV(brand);
+            const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.setAttribute("href", url);
+            link.setAttribute("download", `${(brand.vendor || brand.name || brand).replace(/\s/g, '_')}_Statement_${startPeriod}_to_${endPeriod}_2026.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            const cleanEmails = String(brand.email || '').split(/[,;\s]+/).map(e => e.trim()).filter(Boolean).join(',');
+            const mailtoUrl = `mailto:${cleanEmails}?cc=accounting@rredco.com&subject=${encodeURIComponent(emailDraftSubject.value)}&body=${encodeURIComponent(emailDraftBody.value)}`;
+            setTimeout(() => {
+                const mailLink = document.createElement("a");
+                mailLink.href = mailtoUrl;
+                mailLink.setAttribute("target", "_top");
+                document.body.appendChild(mailLink);
+                mailLink.click();
+                document.body.removeChild(mailLink);
+            }, 300);
+            showEmailDraftModal.value = false;
+            logSystemAction("EXPORT", `Dispatched Statement Email for ${brand.vendor || brand.name}`);
+        };
+
+        const copyEmailToClipboard = async () => {
+            const fullText = `Subject: ${emailDraftSubject.value}\n\n${emailDraftBody.value}`;
+            try {
+                await navigator.clipboard.writeText(fullText);
+                alert("Email content copied to clipboard!");
+            } catch (err) {
+                alert("Failed to copy to clipboard.");
+            }
         };
 
         // CHARTS LOGIC
@@ -1621,137 +1744,7 @@ createApp({
             }
         };
 
-        const calculateMonthlyReport = (brandName) => {
-            if (!brandName) return { reddingGenerated: 0, reddingRecovered: 0, redBluffGenerated: 0, redBluffRecovered: 0, totalGenerated: 0, totalRecovered: 0, balance: 0 };
-            let redGen = 0, redRec = 0, rbGen = 0, rbRec = 0;
-            const startIdx = calendarMonths.indexOf(startMonth.value || 'January');
-            const endIdx = calendarMonths.indexOf(endMonth.value || 'September');
-            const monthsToProcess = calendarMonths.slice(startIdx, Math.max(startIdx, endIdx) + 1);
-            const standardizedTarget = getStandardizedBrandName(brandName).trim().toLowerCase();
-
-            if (masterWorkbook.value?.data) {
-                monthsToProcess.forEach(m => {
-                    const sheetName = `${m} 2026`;
-                    const rows = masterWorkbook.value.data[sheetName] || [];
-                    rows.forEach(row => {
-                        const keys = Object.keys(row);
-                        const brandKey = keys.find(k => k.trim().toLowerCase() === 'brand');
-                        const promoKey = keys.find(k => k.trim().toLowerCase() === 'promo credits');
-                        const reddingKey = keys.find(k => k.trim().toLowerCase().includes('redding'));
-                        const redBluffKey = keys.find(k => k.trim().toLowerCase().includes('red-bluff') || k.trim().toLowerCase().includes('red bluff'));
-                        const rowBrand = brandKey ? String(row[brandKey]).trim() : String(row[0] || '').trim();
-                        
-                        if (rowBrand && getStandardizedBrandName(rowBrand).toLowerCase() === standardizedTarget) {
-                            const promoAmt = promoKey ? parseFloat(String(row[promoKey]).replace(/[^0-9.-]+/g, "")) || 0 : 0;
-                            if (reddingKey && String(row[reddingKey]).trim().toLowerCase() === 'x') redGen += promoAmt;
-                            if (redBluffKey && String(row[redBluffKey]).trim().toLowerCase() === 'x') rbGen += promoAmt;
-                        }
-                    });
-                });
-
-                const sageRows = masterWorkbook.value.data["GL Raw by Store"] || [];
-                sageRows.forEach(row => {
-                    const rowBrand = row["Mapped Brand"] || '';
-                    if (getStandardizedBrandName(rowBrand).trim().toLowerCase() === standardizedTarget) {
-                        const dateStr = row["Posted dt."] || '';
-                        const month = detectMonthFromDate(dateStr);
-                        if (monthsToProcess.includes(month)) {
-                            const amt = parseFloat(String(row["Credit"] || 0).replace(/[^0-9.-]+/g, "")) || 0;
-                            const site = detectSiteFromName(row["Store"] || row["Location"]);
-                            if (site === 'Redding') redRec += amt;
-                            if (site === 'Red Bluff') rbRec += amt;
-                        }
-                    }
-                });
-            }
-
-            const gen = redGen + rbGen;
-            const rec = redRec + rbRec;
-            return { reddingGenerated: redGen, reddingRecovered: redRec, redBluffGenerated: rbGen, redBluffRecovered: rbRec, totalGenerated: gen, totalRecovered: rec, balance: gen - rec };
-        };
-
-        const generateStandardEmail = (brand) => {
-            const vendorName = brand.vendor || brand;
-            const reportData = calculateMonthlyReport(vendorName);
-            let finalGen = (!activeSite.value || activeSite.value === 'All') ? reportData.totalGenerated : (activeSite.value === 'Redding' ? reportData.reddingGenerated : reportData.redBluffGenerated);
-            const longSiteName = (!activeSite.value || activeSite.value === 'All') ? 'Sundial Collective – All Locations' : `Sundial Collective – ${activeSite.value}`;
-            const startPeriod = startMonth.value || 'January';
-            const endPeriod = endMonth.value || 'September';
-            const userName = loggedInUser.value || 'Nicholas G.';
-
-            return `Hi ${vendorName} Team,\n\nI hope you're doing well!\n\nAs part of our ongoing monthly reporting, we are providing the promotional credit summary for ${longSiteName} for the period of ${startPeriod} through ${endPeriod} 2026. This summary reflects the promotional discounts issued at our retail registers for your products.\n\nOur records indicate a total of ${formatCurrency(finalGen)} in promotional credits generated during this period.\n\nPromotional Credit Summary – ${startPeriod} through ${endPeriod} 2026\n${longSiteName}\n- Total Credits Generated: ${formatCurrency(finalGen)}\n\nFor your convenience, we have attached a detailed chronological breakdown showing the promotional credits generated by store.\n\nPlease review the attached summary with your Accounting or Accounts Receivable team and let us know when we can expect a credit memo or offset applied to our upcoming inventory invoices for these generated credits.\n\nWe appreciate your continued partnership and assistance in keeping our promotional credits current. Thank you for your support!\n\nBest regards,\n${userName}\nRREDCO`;
-        };
-
-        const generateAuditFindingEmail = (brand) => {
-            const vendorName = brand.vendor || brand;
-            const auditData = calculateMonthlyReport(vendorName);
-            let finalGen = (!activeSite.value || activeSite.value === 'All') ? auditData.totalGenerated : (activeSite.value === 'Redding' ? auditData.reddingGenerated : auditData.redBluffGenerated);
-            let finalRec = (!activeSite.value || activeSite.value === 'All') ? auditData.totalRecovered : (activeSite.value === 'Redding' ? auditData.reddingRecovered : auditData.redBluffRecovered);
-            let finalBal = finalGen - finalRec;
-            const longSiteName = (!activeSite.value || activeSite.value === 'All') ? 'Sundial Collective – All Locations' : `Sundial Collective – ${activeSite.value}`;
-            const startPeriod = startMonth.value || 'January';
-            const endPeriod = endMonth.value || 'September';
-            const userName = loggedInUser.value || 'Nicholas G.';
-
-            return `Hi ${vendorName} Team,\n\nI hope you're doing well!\n\nAs part of our ongoing financial review, we recently reconciled our promotional credits for ${longSiteName} for the period of ${startPeriod} through ${endPeriod} 2026. This included comparing promotional discounts issued at our retail registers against vendor credits received and applied to our account.\n\nOur reconciliation identified an outstanding promotional credit balance of ${formatCurrency(finalBal)} for your products.\n\nPromotional Credit Summary – ${startPeriod} through ${endPeriod} 2026\n${longSiteName}\n- Total Credits Generated: ${formatCurrency(finalGen)}\n- Total Credits Received: ${formatCurrency(finalRec)}\n- Outstanding Balance: ${formatCurrency(finalBal)}\n\nFor your convenience, we have attached a detailed monthly reconciliation showing the promotional credits generated, reimbursements received, and remaining outstanding balance.\n\nPlease review the attached summary with your Accounting or Accounts Receivable team and let us know when we can expect the outstanding credits to be issued or applied toward upcoming inventory invoices.\n\nBest regards,\n${userName}\nRREDCO`;
-        };
-
-        const refreshEmailDraft = () => {
-            if (!selectedBrandForEmail.value) return;
-            const brand = selectedBrandForEmail.value;
-            const startPeriod = startMonth.value || 'January';
-            const endPeriod = endMonth.value || 'September';
-            emailDraftSubject.value = `Promo Credit Statement (${startPeriod} 2026 - ${endPeriod} 2026)`;
-            emailDraftBody.value = emailReportMode.value === 'standard' ? generateStandardEmail(brand) : generateAuditFindingEmail(brand);
-        };
-
-        const openEmailDraft = (brand) => {
-            selectedBrandForEmail.value = brand;
-            showEmailDraftModal.value = true;
-            refreshEmailDraft();
-        };
-
-        const sendEmailDraft = () => {
-            if (!selectedBrandForEmail.value) return;
-            const brand = selectedBrandForEmail.value;
-            const startPeriod = startMonth.value || 'January';
-            const endPeriod = endMonth.value || 'September';
-            
-            const csvContent = generateAuditStatementCSV(brand);
-            const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
-            const url = URL.createObjectURL(blob);
-            const link = document.createElement("a");
-            link.setAttribute("href", url);
-            link.setAttribute("download", `${(brand.vendor || 'Brand').replace(/\s/g, '_')}_Statement_${startPeriod}_to_${endPeriod}_2026.csv`);
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-
-            const cleanEmails = String(brand.email || '').split(/[,;\s]+/).map(e => e.trim()).filter(Boolean).join(',');
-            const mailtoUrl = `mailto:${cleanEmails}?cc=accounting@rredco.com&subject=${encodeURIComponent(emailDraftSubject.value)}&body=${encodeURIComponent(emailDraftBody.value)}`;
-
-            setTimeout(() => {
-                const mailLink = document.createElement("a");
-                mailLink.href = mailtoUrl;
-                mailLink.setAttribute("target", "_top");
-                document.body.appendChild(mailLink);
-                mailLink.click();
-                document.body.removeChild(mailLink);
-            }, 300);
-
-            showEmailDraftModal.value = false;
-            logSystemAction("EXPORT", `Dispatched Statement Email for ${brand.vendor}`);
-        };
-
-        const copyEmailToClipboard = async () => {
-            const fullText = `Subject: ${emailDraftSubject.value}\n\n${emailDraftBody.value}`;
-            try {
-                await navigator.clipboard.writeText(fullText);
-                alert("Email content copied to clipboard!");
-            } catch (err) {
-                alert("Failed to copy to clipboard.");
-            }
-        };
+        
 
         const openDimeHelper = async (brand) => {
             const storeName = activeSite.value === 'Redding' ? 'Sundial' : activeSite.value;
