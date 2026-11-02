@@ -654,118 +654,145 @@ createApp({
         };
 
                                                         const generateBrandLedgerCSV = (brandName) => {
-            const targetSite = (activeSite && activeSite.value) || 'All';
-            const rawTarget = String(brandName || '').trim();
-            const standardizedTarget = getStandardizedBrandName(rawTarget).toLowerCase();
-            const currentYear = "2026";
+                                                            const targetSite = (activeSite && activeSite.value) || 'All';
+                                                            const rawTarget = String(brandName || '').trim();
+                                                            const standardizedTarget = getStandardizedBrandName(rawTarget).toLowerCase();
+                                                            const currentYear = "2026";
             
-            // Ledger Headers
-            let csvLines = ["Month / Dates Ran,Store Location,Credits Generated ($),Date Requested,Date Applied,Credits Used / Applied ($),Credits Rejected ($),Net Monthly Balance ($),Running YTD Balance ($)"];
+                                                            const selectedMonth = (typeof activeMonth !== 'undefined' && activeMonth.value) ? activeMonth.value : 'All';
+                                                            let monthsToProcess = calendarMonths;
+                                                            if (selectedMonth !== 'All' && calendarMonths.includes(selectedMonth)) {
+                                                                const targetIdx = calendarMonths.indexOf(selectedMonth);
+                                                                monthsToProcess = calendarMonths.slice(0, targetIdx + 1);
+                                                            }
+
+                                                            let ytdGenerated = 0;
+                                                            let ytdApplied = 0;
+                                                            let ytdRejected = 0;
+                                                            let runningYTDBalance = 0;
+                                                            const tableRows = [];
             
-            let runningYTDBalance = 0;
-            
-            // FIX: Safely slice months based on activeMonth without crashing
-            const selectedMonth = (typeof activeMonth !== 'undefined' && activeMonth.value) ? activeMonth.value : 'All';
-            let monthsToProcess = calendarMonths;
-            if (selectedMonth !== 'All' && calendarMonths.includes(selectedMonth)) {
-                const targetIdx = calendarMonths.indexOf(selectedMonth);
-                monthsToProcess = calendarMonths.slice(0, targetIdx + 1);
-            }
-            
-            monthsToProcess.forEach(month => {
-                let monthlyGenerated = 0;
-                let monthlyApplied = 0;
-                let monthlyRejected = 0;
-                let dateReqSet = new Set();
-                let dateAppSet = new Set();
+                                                            monthsToProcess.forEach(month => {
+                                                                let monthlyGenerated = 0;
+                                                                let monthlyApplied = 0;
+                                                                let monthlyRejected = 0;
+                                                                let dateReqSet = new Set();
+                                                                let dateAppSet = new Set();
+                                                                let promoDatesSet = new Set();
                 
-                // 1. Fetch Generated & Rejected Credits from Monthly Sheet
-                const sheetName = `${month} ${currentYear}`;
-                const monthlyRows = (masterWorkbook.value && masterWorkbook.value.data && masterWorkbook.value.data[sheetName]) || [];
+                                                                // 1. Fetch Generated & Rejected Credits from Monthly Sheet
+                                                                const sheetName = `${month} ${currentYear}`;
+                                                                const monthlyRows = (masterWorkbook.value && masterWorkbook.value.data && masterWorkbook.value.data[sheetName]) || [];
                 
-                monthlyRows.forEach(row => {
-                    const rowKeys = Object.keys(row);
-                    const brandKey = rowKeys.find(k => k.trim().toLowerCase() === 'brand');
-                    const rowBrand = brandKey ? row[brandKey] : row[0];
-                    if (!rowBrand) return;
+                                                                monthlyRows.forEach(row => {
+                                                                    const rowKeys = Object.keys(row);
+                                                                    const brandKey = rowKeys.find(k => k.trim().toLowerCase() === 'brand');
+                                                                    const rowBrand = brandKey ? row[brandKey] : row[0];
+                                                                    if (!rowBrand) return;
                     
-                    const normalizedRowBrand = getStandardizedBrandName(rowBrand).toLowerCase();
-                    if (normalizedRowBrand === standardizedTarget || String(rowBrand).trim().toLowerCase() === standardizedTarget) {
-                        let rawAmt = 0;
+                                                                    const normalizedRowBrand = getStandardizedBrandName(rowBrand).toLowerCase();
+                                                                    if (normalizedRowBrand === standardizedTarget || String(rowBrand).trim().toLowerCase() === standardizedTarget) {
+                                                                        let rawAmt = 0;
                         
-                        if (targetSite === 'All') {
-                            const reddingKey = rowKeys.find(k => k.trim().toLowerCase() === 'redding');
-                            const rbKey = rowKeys.find(k => k.trim().toLowerCase() === 'red-bluff' || k.trim().toLowerCase() === 'red bluff');
-                            let rAmt = 0, rbAmt = 0;
-                            if (reddingKey) rAmt = String(row[reddingKey]).trim().toLowerCase() === 'x' ? (row["Promo Credits"] || row["Promo Credits "]) : row[reddingKey];
-                            if (rbKey) rbAmt = String(row[rbKey]).trim().toLowerCase() === 'x' ? (row["Promo Credits"] || row["Promo Credits "]) : row[rbKey];
-                            rawAmt = (parseFloat(String(rAmt || 0).replace(/[^0-9.-]+/g, "")) || 0) + (parseFloat(String(rbAmt || 0).replace(/[^0-9.-]+/g, "")) || 0);
-                        } else {
-                            const siteKey = rowKeys.find(k => k.trim().toLowerCase() === targetSite.toLowerCase() || (targetSite === 'Red Bluff' && (k.trim().toLowerCase() === 'red-bluff' || k.trim().toLowerCase() === 'red bluff')));
-                            if (siteKey) {
-                                const val = String(row[siteKey]).trim().toLowerCase();
-                                if (val === 'x') {
-                                    const promoKey = rowKeys.find(k => k.trim().toLowerCase() === 'promo credits' || k.trim().toLowerCase() === 'promo credits ');
-                                    rawAmt = promoKey ? row[promoKey] : 0;
-                                } else {
-                                    rawAmt = row[siteKey];
-                                }
-                            }
-                        }
+                                                                        if (targetSite === 'All') {
+                                                                            const reddingKey = rowKeys.find(k => k.trim().toLowerCase() === 'redding');
+                                                                            const rbKey = rowKeys.find(k => k.trim().toLowerCase() === 'red-bluff' || k.trim().toLowerCase() === 'red bluff');
+                                                                            let rAmt = 0, rbAmt = 0;
+                                                                            if (reddingKey) rAmt = String(row[reddingKey]).trim().toLowerCase() === 'x' ? (row["Promo Credits"] || row["Promo Credits "]) : row[reddingKey];
+                                                                            if (rbKey) rbAmt = String(row[rbKey]).trim().toLowerCase() === 'x' ? (row["Promo Credits"] || row["Promo Credits "]) : row[rbKey];
+                                                                            rawAmt = (parseFloat(String(rAmt || 0).replace(/[^0-9.-]+/g, "")) || 0) + (parseFloat(String(rbAmt || 0).replace(/[^0-9.-]+/g, "")) || 0);
+                                                                        } else {
+                                                                            const siteKey = rowKeys.find(k => k.trim().toLowerCase() === targetSite.toLowerCase() || (targetSite === 'Red Bluff' && (k.trim().toLowerCase() === 'red-bluff' || k.trim().toLowerCase() === 'red bluff')));
+                                                                            if (siteKey) {
+                                                                                const val = String(row[siteKey]).trim().toLowerCase();
+                                                                                if (val === 'x') {
+                                                                                    const promoKey = rowKeys.find(k => k.trim().toLowerCase() === 'promo credits' || k.trim().toLowerCase() === 'promo credits ');
+                                                                                    rawAmt = promoKey ? row[promoKey] : 0;
+                                                                                } else {
+                                                                                    rawAmt = row[siteKey];
+                                                                                }
+                                                                            }
+                                                                        }
                         
-                        const amtGen = parseFloat(String(rawAmt || 0).replace(/[^0-9.-]+/g, "")) || 0;
-                        monthlyGenerated += amtGen;
+                                                                        const amtGen = parseFloat(String(rawAmt || 0).replace(/[^0-9.-]+/g, "")) || 0;
+                                                                        monthlyGenerated += amtGen;
                         
-                        const dReq = row["Date Requested"];
-                        if (dReq && !['/', 'n/a', 'nan', ''].includes(String(dReq).trim().toLowerCase())) {
-                            dateReqSet.add(String(dReq).trim());
-                        }
+                                                                        const dReq = row["Date Requested"];
+                                                                        if (dReq && !['/', 'n/a', 'nan', ''].includes(String(dReq).trim().toLowerCase())) {
+                                                                            dateReqSet.add(String(dReq).trim());
+                                                                        }
+
+                                                                        // Capture "Promo Dates Ran" from workbook keys
+                                                                        const pDatesKey = rowKeys.find(k => k.toLowerCase().includes('promo credits were generated') || k.toLowerCase() === 'dates' || k.toLowerCase() === 'promo dates');
+                                                                        const pDates = pDatesKey ? row[pDatesKey] : '';
+                                                                        if (pDates && !['/', 'n/a', 'nan', ''].includes(String(pDates).trim().toLowerCase())) {
+                                                                            promoDatesSet.add(String(pDates).trim());
+                                                                        }
                         
-                        // FIX: Collect Rejections independently of amtGen
-                        const rejKey = rowKeys.find(k => k.trim().toLowerCase() === 'credits rejected');
-                        const rejectedAmt = rejKey ? (parseFloat(String(row[rejKey] || 0).replace(/[^0-9.-]+/g, "")) || 0) : 0;
-                        monthlyRejected += rejectedAmt;
-                    }
-                });
+                                                                        const rejKey = rowKeys.find(k => k.trim().toLowerCase() === 'credits rejected');
+                                                                        const rejectedAmt = rejKey ? (parseFloat(String(row[rejKey] || 0).replace(/[^0-9.-]+/g, "")) || 0) : 0;
+                                                                        monthlyRejected += rejectedAmt;
+                                                                    }
+                                                                });
                 
-                // 2. Fetch Applied Credits from GL Raw by Store
-                const glRows = (masterWorkbook.value && masterWorkbook.value.data && masterWorkbook.value.data["GL Raw by Store"]) || [];
-                glRows.forEach(row => {
-                    const storeStr = String(row["Store"] || row["Location"] || '');
-                    const rowStore = typeof detectSiteFromName === 'function' ? detectSiteFromName(storeStr) : (storeStr.toLowerCase().includes('bluff') ? 'Red Bluff' : 'Redding');
+                                                                // 2. Fetch Applied Credits from GL Raw by Store
+                                                                const glRows = (masterWorkbook.value && masterWorkbook.value.data && masterWorkbook.value.data["GL Raw by Store"]) || [];
+                                                                glRows.forEach(row => {
+                                                                    const storeStr = String(row["Store"] || row["Location"] || '');
+                                                                    const rowStore = typeof detectSiteFromName === 'function' ? detectSiteFromName(storeStr) : (storeStr.toLowerCase().includes('bluff') ? 'Red Bluff' : 'Redding');
                     
-                    if (targetSite !== 'All' && rowStore !== targetSite) return;
+                                                                    if (targetSite !== 'All' && rowStore !== targetSite) return;
                     
-                    // FIX: STRICT GL EQUALITY to prevent portfolio hijacking (e.g., the $90k Nabifive issue)
-                    const normalizedGLBrand = getStandardizedBrandName(row["Mapped Brand"]).toLowerCase();
-                    const isBrandMatch = normalizedGLBrand === standardizedTarget;
+                                                                    const normalizedGLBrand = getStandardizedBrandName(row["Mapped Brand"]).toLowerCase();
+                                                                    const isBrandMatch = normalizedGLBrand === standardizedTarget;
                     
-                    if (isBrandMatch) {
-                        const dateStr = String(row["Posted dt."] || '');
-                        const rowMonth = typeof detectMonthFromDate === 'function' ? detectMonthFromDate(dateStr) : (new Date(dateStr).toLocaleString('default', { month: 'long' }));
+                                                                    if (isBrandMatch) {
+                                                                        const dateStr = String(row["Posted dt."] || '');
+                                                                        const rowMonth = typeof detectMonthFromDate === 'function' ? detectMonthFromDate(dateStr) : (new Date(dateStr).toLocaleString('default', { month: 'long' }));
                         
-                        if (rowMonth === month) {
-                            const amt = parseFloat(String(row["Credit"] || 0).replace(/[^0-9.-]+/g, "")) || 0;
-                            monthlyApplied += amt;
+                                                                        if (rowMonth === month) {
+                                                                            const amt = parseFloat(String(row["Credit"] || 0).replace(/[^0-9.-]+/g, "")) || 0;
+                                                                            monthlyApplied += amt;
                             
-                            if (dateStr && !['/', 'n/a', 'nan', ''].includes(dateStr.trim().toLowerCase())) {
-                                dateAppSet.add(dateStr.trim());
-                            }
-                        }
-                    }
-                });
+                                                                            if (dateStr && !['/', 'n/a', 'nan', ''].includes(dateStr.trim().toLowerCase())) {
+                                                                                dateAppSet.add(dateStr.trim());
+                                                                            }
+                                                                        }
+                                                                    }
+                                                                });
                 
-                const netMonthly = monthlyGenerated - monthlyApplied;
-                runningYTDBalance += netMonthly;
-                const dateReqStr = Array.from(dateReqSet).join('; ');
-                const dateAppStr = Array.from(dateAppSet).join('; ');
-                const siteLabel = targetSite === 'All' ? 'Consolidated' : targetSite;
+                                                                const netMonthly = monthlyGenerated - monthlyApplied;
+                                                                runningYTDBalance += netMonthly;
+
+                                                                ytdGenerated += monthlyGenerated;
+                                                                ytdApplied += monthlyApplied;
+                                                                ytdRejected += monthlyRejected;
+
+                                                                const dateReqStr = Array.from(dateReqSet).join('; ');
+                                                                const dateAppStr = Array.from(dateAppSet).join('; ');
+                                                                const promoDatesStr = Array.from(promoDatesSet).join('; ');
                 
-                csvLines.push(`"${month} ${currentYear}","${siteLabel}",${monthlyGenerated.toFixed(2)},"${dateReqStr}","${dateAppStr}",${monthlyApplied.toFixed(2)},${monthlyRejected.toFixed(2)},${netMonthly.toFixed(2)},${runningYTDBalance.toFixed(2)}`);
-            });
+                                                                tableRows.push(`"${month} ${currentYear}","${promoDatesStr}",${monthlyGenerated.toFixed(2)},"${dateReqStr}","${dateAppStr}",${monthlyApplied.toFixed(2)},${monthlyRejected.toFixed(2)},${netMonthly.toFixed(2)},${runningYTDBalance.toFixed(2)}`);
+                                                            });
+
+                                                            const cutoffLabel = selectedMonth === 'All' ? `December ${currentYear}` : `${selectedMonth} ${currentYear}`;
+                                                            const siteLabel = targetSite === 'All' ? 'Consolidated' : targetSite;
+                                                            const currentPendingBalance = ytdGenerated - ytdApplied;
+
+                                                            let csvLines = [
+                                                                `Brand Report: ${rawTarget}`,
+                                                                `Store Location: ${siteLabel}`,
+                                                                `Report Cutoff: ${cutoffLabel}`,
+                                                                `YTD Credits Generated: ${ytdGenerated.toFixed(2)}`,
+                                                                `YTD Credits Applied: ${ytdApplied.toFixed(2)}`,
+                                                                `YTD Credits Rejected: ${ytdRejected.toFixed(2)}`,
+                                                                `Current Pending Balance: ${currentPendingBalance.toFixed(2)}`,
+                                                                ``,
+                                                                `Month,Promo Dates Ran,Credits Generated ($),Date Requested,Date Applied,Credits Applied ($),Credits Rejected ($),Net Monthly ($),Running Pending Balance ($)`
+                                                            ];
             
-            return csvLines.join("\n");
-        };
+                                                            return csvLines.concat(tableRows).join("\n");
+                                                        };
 
                                                 const generateAuditStatementCSV = (brand) => {
             const targetSite = activeSite.value;
@@ -859,7 +886,7 @@ createApp({
 
 
 
-                const downloadMonthlyReport = (brand) => {
+                                const downloadMonthlyReport = (brand) => {
                     const isFullMonth = !!brand.brandList; 
                     const reportMonth = brand.month || activeMonth.value;
 
@@ -882,7 +909,26 @@ createApp({
                         return;
                     }
 
-                    // 2. Itemized POS Data Dump (FIXED BRAND FILTER)
+                    // 2. Individual Brand: Chronological YTD Ledger (New structure with Executive Block)
+                    if (!isFullMonth) {
+                        const targetBrand = brand.vendor || brand.brand || brand.name || '';
+                        const csvContent = generateBrandLedgerCSV(targetBrand);
+                        const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
+                        const url = URL.createObjectURL(blob);
+                        const link = document.createElement("a");
+                        link.setAttribute("href", url);
+                        const currentYear = new Date().getFullYear();
+                        const safeBrandName = String(targetBrand).replace(/[^a-zA-Z0-9]/g, '_');
+                        link.setAttribute("download", `${activeSite.value.replace(/\s/g, '_')}_Ledger_${safeBrandName}_${currentYear}.csv`);
+                        document.body.appendChild(link);
+                        link.click();
+                        document.body.removeChild(link);
+                        setTimeout(() => URL.revokeObjectURL(url), 150);
+                        if (typeof logSystemAction === 'function') logSystemAction("EXPORT", `Downloaded YTD Ledger for ${targetBrand}`);
+                        return;
+                    }
+
+                    // 3. Full Month: Itemized POS Data Dump
                     let csvContent = "Location,Date & Time,Brand,Product Name,Transaction ID,Quantity Sold,Unit Price,Total Before Tax,Discount Title,Discount Amount,Credit Owed,Entry Type\n";
                     let csvTotal = 0;
             
@@ -2730,18 +2776,20 @@ const handleSageCsvUpload = async (e) => {
                             updatesCount++;
                         });
 
-                                                                            // Update the specific sheet document for each unsynced sale
-                        for (const sale of unsynced) {
-                            const sheetName = `${sale.month} ${currentYear}`;
-                            if (updatedData[sheetName]) {
-                                const sheetDocId = sheetName.replace(/\//g, '_');
-                                await setDoc(doc(db, "workbook_v9_sheets", sheetDocId), {
-                                    sheetName: sheetName,
-                                    rows: updatedData[sheetName],
-                                    updatedAt: Date.now()
-                                });
-                            }
-                        }
+                                                                            // Update the specific sheet document for each affected month (consolidated)
+                                                                            const sheetsToUpdate = new Set();
+                                                                            unsynced.forEach(s => sheetsToUpdate.add(`${s.month} ${currentYear}`));
+
+                                                                            for (const sheetName of sheetsToUpdate) {
+                                                                                if (updatedData[sheetName]) {
+                                                                                    const sheetDocId = sheetName.replace(/\//g, '_');
+                                                                                    await setDoc(doc(db, "workbook_v9_sheets", sheetDocId), {
+                                                                                        sheetName: sheetName,
+                                                                                        rows: updatedData[sheetName],
+                                                                                        updatedAt: Date.now()
+                                                                                    });
+                                                                                }
+                                                                            }
 
                             // Update summary metadata
                             await setDoc(doc(db, "promo tracker", "Master_Workbook_V9_Board_Report"), {
