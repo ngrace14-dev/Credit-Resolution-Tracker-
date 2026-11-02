@@ -241,12 +241,12 @@ createApp({
             return metrics;
         });
 
-        // COMPUTED: Consolidated promoCredits
-        const promoCredits = computed(() => {
-            const allCredits = [];
-            if (!masterWorkbook.value || !masterWorkbook.value.data) return [];
+                // COMPUTED: Consolidated promoCredits
+                const promoCredits = computed(() => {
+                    const allCredits = promoCreditsList.value.filter(c => c.invoice !== 'WB-V9-SYNC');
+                    if (!masterWorkbook.value || !masterWorkbook.value.data) return allCredits;
 
-            Object.keys(masterWorkbook.value.data).forEach(sheetName => {
+                    Object.keys(masterWorkbook.value.data).forEach(sheetName => {
                 if (sheetName.includes('2026')) {
                     const monthName = sheetName.split(' ')[0];
                     const rows = masterWorkbook.value.data[sheetName] || [];
@@ -1032,10 +1032,19 @@ createApp({
             }
         };
 
-        watch(activeTab, (newTab) => {
+                watch(activeTab, (newTab) => {
             if (newTab === 'Dashboard') nextTick(() => drawCharts());
             if (newTab === 'Ledger') refreshLedger();
         });
+
+        const getEmptyForm = () => ({ 
+            trackingMonth: activeMonth.value === 'All' ? 'August' : activeMonth.value,
+            vendor: '', distributor: '', creditType: '', dates: '', 
+            amount: '', dateRequested: '', dateReceived: '', 
+            invoice: '', status: 'Pending', attachmentName: '', attachmentData: null 
+        });
+        
+        const form = ref(getEmptyForm());
 
         // WORKBOOK LOAD & LISTENERS
         let unsubscribeSales = null;
@@ -2072,11 +2081,148 @@ createApp({
                 .catch(() => { authError.value = "Invalid email or password."; });
         };
 
-        const forceLock = () => { 
+                const forceLock = () => { 
             signOut(auth).then(() => { 
                 isManagerUnlocked.value = false; 
                 loggedInUser.value = ''; 
             }); 
+        };
+
+        const filteredBrands = computed(() => {
+            const query = (form.value.vendor || '').toLowerCase();
+            if (!query) return masterBrands.value;
+            return masterBrands.value.filter(b => (b.vendor || '').toLowerCase().includes(query));
+        });
+
+        const selectBrand = (brand) => {
+            form.value.vendor = brand.vendor;
+            form.value.distributor = brand.distributor;
+            showBrandDropdown.value = false;
+        };
+
+        const openPromoModal = () => { form.value = getEmptyForm(); editingId.value = null; showPromoModal.value = true; refreshIcons(); };
+        const closePromoModal = () => { showPromoModal.value = false; showBrandDropdown.value = false; };
+
+        const handleFileUpload = (event) => {
+            const file = event.target.files[0];
+            if (!file) return;
+            if (file.size > 800000) return alert("File is too large. Please keep attachments under 800KB.");
+            form.value.attachmentName = file.name;
+            form.value.attachmentData = "mock_file_data";
+        };
+
+        const saveCredit = async () => {
+            if (!form.value.vendor) return alert("Vendor (Brand) is required.");
+            if (!form.value.trackingMonth) return alert("Tracking Month is required.");
+            const payload = { ...form.value, site: activeSite.value, createdAt: Date.now() };
+            try {
+                if (editingId.value) await updateDoc(doc(db, "promoCredits", editingId.value), payload);
+                else await addDoc(collection(db, "promoCredits"), payload);
+                closePromoModal();
+            } catch (error) { alert("Failed to save to Firebase."); }
+        };
+
+        const editCredit = (credit) => { form.value = { ...credit }; editingId.value = credit.id; showPromoModal.value = true; refreshIcons(); };
+        
+        const deleteCredit = async () => {
+            if (confirm("Are you sure you want to permanently delete this credit?")) {
+                try { await deleteDoc(doc(db, "promoCredits", editingId.value)); closePromoModal(); }
+                catch (error) { alert("Failed to delete."); }
+            }
+        };
+
+        const openResolutionModal = (credit) => {
+            resolutionCredit.value = credit;
+            resolutionForm.value = {
+                invoice: '',
+                dateReceived: new Date().toISOString().split('T')[0]
+            };
+            showResolutionModal.value = true;
+            refreshIcons();
+        };
+
+        const processResolution = async () => {
+            if (!resolutionForm.value.invoice) return alert("Invoice / Memo number is required to resolve.");
+            
+            try {
+                await updateDoc(doc(db, "promoCredits", resolutionCredit.value.id), { 
+                    status: "Applied",
+                    invoice: resolutionForm.value.invoice,
+                    dateReceived: resolutionForm.value.dateReceived
+                });
+                
+                await addDoc(collection(db, "emailHistories"), {
+                    creditId: resolutionCredit.value.id,
+                    vendor: resolutionCredit.value.vendor,
+                    amount: resolutionCredit.value.amount,
+                    site: resolutionCredit.value.site,
+                    action: "Resolved (Applied)",
+                    invoice: resolutionForm.value.invoice,
+                    resolvedBy: loggedInUser.value,
+                    timestamp: Date.now()
+                });
+                
+                logSystemAction("UPDATE", `Resolved credit for ${resolutionCredit.value.vendor} (Memo: ${resolutionForm.value.invoice})`);
+                showResolutionModal.value = false;
+            } catch (error) {
+                console.error(error);
+                alert("Failed to resolve.");
+            }
+        };
+
+        const regenerateBrandSummary = async (brandReport) => {
+            if (!confirm(`This will delete current aggregated summaries for ${brandReport.vendor} in ${brandReport.month} and re-calculate them from raw sales data. Continue?`)) return;
+            await runRegeneration([brandReport], brandReport.month);
+        };
+
+        const regenerateMonthReports = async (monthGroup) => {
+            if (!confirm(`Regenerate all brand summaries for ${monthGroup.month}? This will sync with latest Treez sales data.`)) return;
+            await runRegeneration(monthGroup.brandList, monthGroup.month);
+        };
+
+                const runRegeneration = async (brandList, month) => {
+            try {
+                const batch = writeBatch(db);
+                let workFound = false;
+
+                for (const brand of brandList) {
+                    // Find existing aggregated credits for this brand/month and delete them
+                    const existingAggregated = promoCreditsList.value.filter(c => 
+                        c.site === activeSite.value &&
+                        c.trackingMonth === month &&
+                        (c.vendor || '').toLowerCase() === (brand.vendor || '').toLowerCase() &&
+                        c.creditType && String(c.creditType).includes('Aggregated POS Sales')
+                    );
+                    existingAggregated.forEach(c => {
+                        batch.delete(doc(db, "promoCredits", c.id));
+                        workFound = true;
+                    });
+
+                    // Find the raw POS items and flip them back to Unsynced
+                    const relevantSales = treesSalesData.value.filter(sale => 
+                        sale.detectedSite === activeSite.value &&
+                        sale.month === month &&
+                        (sale.brand || '').toLowerCase() === (brand.vendor || '').toLowerCase()
+                    );
+                    relevantSales.forEach(sale => {
+                        batch.update(doc(db, "treesSales", sale.id), { status: 'Unsynced' });
+                        workFound = true;
+                    });
+                }
+
+                if (workFound) {
+                    await batch.commit();
+                    setTimeout(async () => {
+                        await pushToMainTracker(); // Automatically resync after flipping
+                        logSystemAction("UPDATE", `Regenerated reports for ${month} (${brandList.length} brands)`);
+                    }, 800);
+                } else {
+                    alert("No automated POS credits found to regenerate for this selection.");
+                }
+            } catch (err) {
+                console.error(err);
+                alert("Failed to regenerate reports.");
+            }
         };
 
         onMounted(() => {
@@ -2166,9 +2312,11 @@ createApp({
             showResolutionModal, resolutionCredit, resolutionForm, markAsSent, markReportGroupAsSent,
             monthlyReportSummaries, downloadMonthlyReport, draftEmail: openEmailDraft, showImportModal,
             showBrandImportModal, brandPasteData, brandPastedGrid, brandMappedHeaders, brandAvailableHeaders,
-            handleLogin, forceLock, formatCurrency, filteredCredits, filteredTreesSalesData,
+                        handleLogin, forceLock, formatCurrency, filteredCredits, filteredTreesSalesData,
             displayTreesSalesData, totalPending, totalApplied, unsyncedSalesCount,
             totalTreesOwedYTD, totalTreesPending,
+            openPromoModal, closePromoModal, form, handleFileUpload, saveCredit, editCredit, deleteCredit,
+            openResolutionModal, processResolution, regenerateBrandSummary, regenerateMonthReports, filteredBrands, selectBrand,
             handleTreesCsvUpload, handleSageCsvUpload, pushToMainTracker, resetBrandImport,
             processBrandRawPaste, processBrandImport, systemLogs, refreshIcons, clearAllSalesData,
             openDimeHelper, exportVendorsAndBrandsCSV,
