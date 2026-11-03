@@ -73,37 +73,46 @@ createApp({
         const masterBrands = ref([]);
         const selectedBrands = ref([]);
 
-        // LEDGER MANAGEMENT STATE
-        const treezLedger = ref([]);
-        const sage4545Ledger = ref([]);
+                // LEDGER MANAGEMENT STATE
+        const treezLedgerCount = ref(0);
+        const sage4545LedgerCount = ref(0);
         const treezLedgerLastUpload = ref(null);
         const sage4545LedgerLastUpload = ref(null);
+        const treezLedgerSourceFile = ref(null);
+        const sage4545LedgerSourceFile = ref(null);
 
-        // Load persisted ledgers on startup
+        // Load persisted ledger metadata on startup
         try {
-            const storedTreez = localStorage.getItem('treezLedger');
-            const storedSage = localStorage.getItem('sage4545Ledger');
+            const storedTreezCount = localStorage.getItem('treezLedgerCount');
+            const storedSageCount = localStorage.getItem('sage4545LedgerCount');
             const storedTreezTime = localStorage.getItem('treezLedgerLastUpload');
             const storedSageTime = localStorage.getItem('sage4545LedgerLastUpload');
+            const storedTreezFile = localStorage.getItem('treezLedgerSourceFile');
+            const storedSageFile = localStorage.getItem('sage4545LedgerSourceFile');
             
-            if (storedTreez) treezLedger.value = JSON.parse(storedTreez);
-            if (storedSage) sage4545Ledger.value = JSON.parse(storedSage);
+            if (storedTreezCount) treezLedgerCount.value = parseInt(storedTreezCount);
+            if (storedSageCount) sage4545LedgerCount.value = parseInt(storedSageCount);
             if (storedTreezTime) treezLedgerLastUpload.value = storedTreezTime;
             if (storedSageTime) sage4545LedgerLastUpload.value = storedSageTime;
+            if (storedTreezFile) treezLedgerSourceFile.value = storedTreezFile;
+            if (storedSageFile) sage4545LedgerSourceFile.value = storedSageFile;
         } catch (e) {
-            console.error("Error loading persisted ledgers:", e);
+            console.error("Error loading persisted ledger metadata:", e);
         }
 
-        const persistLedgers = () => {
+        const persistLedgerMetadata = () => {
             try {
-                localStorage.setItem('treezLedger', JSON.stringify(treezLedger.value));
-                localStorage.setItem('sage4545Ledger', JSON.stringify(sage4545Ledger.value));
+                localStorage.setItem('treezLedgerCount', treezLedgerCount.value.toString());
+                localStorage.setItem('sage4545LedgerCount', sage4545LedgerCount.value.toString());
                 if (treezLedgerLastUpload.value) localStorage.setItem('treezLedgerLastUpload', treezLedgerLastUpload.value);
                 if (sage4545LedgerLastUpload.value) localStorage.setItem('sage4545LedgerLastUpload', sage4545LedgerLastUpload.value);
+                if (treezLedgerSourceFile.value) localStorage.setItem('treezLedgerSourceFile', treezLedgerSourceFile.value);
+                if (sage4545LedgerSourceFile.value) localStorage.setItem('sage4545LedgerSourceFile', sage4545LedgerSourceFile.value);
             } catch (e) {
-                console.error("Error persisting ledgers:", e);
+                console.error("Error persisting ledger metadata:", e);
             }
         };
+
 
         // 1. DATA SOURCE: Master Workbook Fragments
         const masterWorkbook = ref({ data: {}, summary: {} });
@@ -1688,23 +1697,17 @@ createApp({
                             const headers = parseCSVRow(lines[0]).map(normalizeHeader);
                             const rows = lines.slice(1);
 
-                            const uploadTime = new Date().toLocaleString();
-                    
-                            const parsedData = normalizeTreezLedger(
-                                rows, headers, file.name, uploadTime, normalizeSiteName, getStandardizedBrandName, masterBrands.value
-                            );
+                                                        const uploadTime = new Date().toLocaleString();
+                            const importedCount = parsedData.length;
 
-                            if (parsedData.length === 0) {
-                                alert("No valid records found in Treez upload. Please check the column formatting.");
-                                return;
-                            }
-
-                            treezLedger.value = parsedData;
+                            treezLedgerCount.value = importedCount;
                             treezLedgerLastUpload.value = uploadTime;
-                            persistLedgers();
+                            treezLedgerSourceFile.value = file.name;
+                            persistLedgerMetadata();
 
                             // --- OPTION B: WORKBOOK INGESTION ---
-                            if (confirm(`Successfully parsed ${parsedData.length} records. Would you like to merge this data into the Master Workbook?`)) {
+                            if (confirm(`Successfully parsed ${importedCount} records. Would you like to merge this data into the Master Workbook?`)) {
+
                                 const updatedData = JSON.parse(JSON.stringify(masterWorkbook.value.data));
                                 const currentYear = "2026";
                                 const affectedSheets = new Set();
@@ -1778,22 +1781,16 @@ createApp({
                             const rows = lines.slice(1);
 
                             const uploadTime = new Date().toLocaleString();
+                            const importedCount = parsedData.length;
 
-                            const parsedData = normalizeSageLedger(
-                                rows, headers, file.name, uploadTime, normalizeSiteName, getStandardizedBrandName
-                            );
-
-                            if (parsedData.length === 0) {
-                                alert("No valid 4545/Promo Credit records found in Sage upload. Please check the GL Account filtering.");
-                                return;
-                            }
-
-                            sage4545Ledger.value = parsedData;
+                            sage4545LedgerCount.value = importedCount;
                             sage4545LedgerLastUpload.value = uploadTime;
-                            persistLedgers();
+                            sage4545LedgerSourceFile.value = file.name;
+                            persistLedgerMetadata();
 
                             // --- OPTION B: WORKBOOK INGESTION ---
-                            if (confirm(`Successfully parsed ${parsedData.length} recovery records. Append these to the Master Workbook GL?`)) {
+                            if (confirm(`Successfully parsed ${importedCount} recovery records. Append these to the Master Workbook GL?`)) {
+
                                 const updatedData = JSON.parse(JSON.stringify(masterWorkbook.value.data));
                                 const glSheet = updatedData["GL Raw by Store"] || [];
 
@@ -2283,7 +2280,7 @@ createApp({
             }
         });
 
-        return {
+                return {
             isManagerUnlocked, isSuperAdmin, loggedInUser, emailInput, passwordInput, authError, activeSite, activeTab,
             treesSalesData, masterBrands, selectedBrands, allBrandsSelected, toggleAllBrands,
             deleteSelectedBrands, updateBrandField, promoCredits, calendarMonths, activeMonth,
@@ -2301,7 +2298,7 @@ createApp({
             handleSageCsvUpload, pushToMainTracker, resetBrandImport, processBrandRawPaste, processBrandImport, 
             systemLogs, refreshIcons, clearAllSalesData, detectMonthInString, drawCharts, detectMonthFromDate, 
             detectSiteFromName, openDimeHelper, exportVendorsAndBrandsCSV, masterLedgerData, selectedLedgerVendor, 
-            refreshLedger, openLegacyVerification, ledgerTotals, treezLedger, sage4545Ledger, treezLedgerLastUpload, 
+            refreshLedger, openLegacyVerification, ledgerTotals, treezLedgerCount, sage4545LedgerCount, treezLedgerLastUpload, 
             sage4545LedgerLastUpload, handleTreezLedgerUpload, handleSage4545Upload, masterWorkbook, showWorkspaceMenu, 
             showAdminMenu, workspaceTabs, selectWorkspace, activeWorkspaceInfo, scrollMonths, scrollWorkbookTabs, 
             workbookSchema, activeWorkbookSheet, isWorkbookLoaded, auditRange, brandAuditData, sageAuditData, 
