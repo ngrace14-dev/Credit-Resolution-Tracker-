@@ -30,18 +30,20 @@ export const normalizeSageLedger = (rows, headers, fileName, uploadTime, normali
         const rowObj = {};
         headers.forEach((h, idx) => { rowObj[h] = cols[idx] ? cleanString(cols[idx]) : ''; });
 
-        const glAccount = rowObj['account'] || rowObj['gl account'] || rowObj['gl'] || '';
+        // Account Detection Logic
+        const firstColValue = cols[0] ? String(cols[0]).trim() : '';
+        const glAccount = rowObj['account'] || rowObj['gl account'] || rowObj['gl'] || firstColValue;
                 
         if (glAccount.includes('4545') || glAccount.toLowerCase().includes('promo credit')) {
-            const rawBrand = rowObj['vendor'] || rowObj['brand'] || rowObj['name'] || rowObj['description'] || '';
+            const rawBrand = rowObj['mapped brand'] || rowObj['vendor'] || rowObj['brand'] || rowObj['memo/description'] || rowObj['description'] || '';
             if (!rawBrand) continue;
 
             parsedData.push({
-                postingDate: rowObj['date'] || rowObj['posting date'] || rowObj['posted dt.'] || '',
+                postingDate: rowObj['posted dt.'] || rowObj['date'] || rowObj['posting date'] || '',
                 location: normalizeSiteFn(rowObj['location'] || rowObj['store'] || rowObj['site']),
                 brand: standardizeBrandFn(rawBrand),
-                amount: cleanCurrency(rowObj['amount'] || rowObj['credit']),
-                documentNumber: rowObj['document number'] || rowObj['ref'] || rowObj['reference'] || '',
+                amount: cleanCurrency(rowObj['credit'] || rowObj['amount']),
+                documentNumber: rowObj['doc'] || rowObj['document number'] || rowObj['ref'] || rowObj['reference'] || '',
                 glAccount: glAccount,
                 sourceFile: fileName,
                 uploadTimestamp: uploadTime
