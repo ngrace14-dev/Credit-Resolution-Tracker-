@@ -16,8 +16,7 @@
 
     <link href="https://fonts.googleapis.com/css2?family=Calibri:wght@400;700&display=swap" rel="stylesheet">
     
-    <!-- External CSS -->
-    <link rel="stylesheet" href="styles.css">
+    <!-- External CSS Removed to resolve the 404 error -->
 </head>
 <body>
     <div id="app" class="h-full flex flex-col bg-gray-100" v-cloak>
@@ -77,8 +76,11 @@
                  <p class="text-gray-500 mb-6 font-medium">Enter your authorized email and password.</p>
                  
                  <div class="flex flex-col gap-4 mb-6">
-                     <input type="email" v-model="emailInput" class="border-2 border-gray-300 p-3 w-full rounded-xl focus:border-emerald-600 focus:ring-4 focus:ring-emerald-600/10 outline-none text-center font-bold text-gray-900 transition-all" placeholder="Email Address">
-                     <input type="password" v-model="passwordInput" @keyup.enter="handleLogin" class="border-2 border-gray-300 p-3 w-full rounded-xl focus:border-emerald-600 focus:ring-4 focus:ring-emerald-600/10 outline-none text-center font-bold text-gray-900 transition-all" placeholder="Password">
+                     <label for="login-email" class="sr-only">Email Address</label>
+                     <input id="login-email" name="loginEmail" type="email" v-model="emailInput" class="border-2 border-gray-300 p-3 w-full rounded-xl focus:border-emerald-600 focus:ring-4 focus:ring-emerald-600/10 outline-none text-center font-bold text-gray-900 transition-all" placeholder="Email Address">
+                     
+                     <label for="login-password" class="sr-only">Password</label>
+                     <input id="login-password" name="loginPassword" type="password" v-model="passwordInput" @keyup.enter="handleLogin" class="border-2 border-gray-300 p-3 w-full rounded-xl focus:border-emerald-600 focus:ring-4 focus:ring-emerald-600/10 outline-none text-center font-bold text-gray-900 transition-all" placeholder="Password">
                  </div>
                  
                  <p v-if="authError" class="text-red-500 text-sm font-bold mb-4">{{ authError }}</p>
@@ -131,7 +133,7 @@
                 </div>
 
 
-                <!-- SHARED GLOBAL FILTERS -->
+        <!-- SHARED GLOBAL FILTERS -->
         <div v-if="isManagerUnlocked && activeTab !== 'Logs'" class="bg-gray-100 px-4 md:px-6 pt-4 pb-2 flex flex-col lg:flex-row justify-between items-center shrink-0 gap-3 z-10 border-b border-gray-200">
             
             <!-- MONTH SCROLL CONTAINER -->
@@ -159,7 +161,8 @@
 
             <div class="relative w-full lg:w-80 shrink-0">
                 <i data-lucide="search" class="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
-                <input type="text" v-model="searchQueryInput" placeholder="Search brands, types, records..." class="w-full bg-white border border-gray-300 rounded-xl py-2 pl-10 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 shadow-sm transition-shadow">
+                <label for="global-search" class="sr-only">Search</label>
+                <input id="global-search" name="globalSearch" type="text" v-model="searchQueryInput" placeholder="Search brands, types, records..." class="w-full bg-white border border-gray-300 rounded-xl py-2 pl-10 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 shadow-sm transition-shadow">
                 <button v-if="searchQueryInput" @click="searchQueryInput = ''" class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
                     <i data-lucide="x-circle" class="w-4 h-4"></i>
                 </button>
@@ -189,15 +192,15 @@
                             <p class="text-xs text-gray-300 mt-0.5">{{ monthGroup.brandList.length }} Brands • {{ monthGroup.count }} Total Entries</p>
                         </div>
                         <div class="flex items-center gap-3">
-                                                        <span class="text-lg font-extrabold text-emerald-400 bg-white/10 px-3 py-1 rounded-lg border border-white/10">{{ formatCurrency(monthGroup.total) }}</span>
-                                                                                    <button type="button" @click.prevent="regenerateMonthReports(monthGroup)" class="bg-gray-800 text-amber-500 hover:bg-gray-700 px-3 py-1.5 rounded-lg font-bold text-xs shadow transition-colors flex items-center gap-1.5 border border-gray-700">
+                                                <span class="text-lg font-extrabold text-emerald-400 bg-white/10 px-3 py-1 rounded-lg border border-white/10">{{ formatCurrency(monthGroup.total) }}</span>
+                                                                <button type="button" @click.prevent="regenerateMonthReports(monthGroup)" class="bg-gray-800 text-amber-500 hover:bg-gray-700 px-3 py-1.5 rounded-lg font-bold text-xs shadow transition-colors flex items-center gap-1.5 border border-gray-700">
                                 <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i> Regenerate Month
                             </button>
 
-                            <label class="flex items-center cursor-pointer gap-2 group ml-2">
+                            <label class="flex items-center cursor-pointer gap-2 group ml-2" for="audit-mode-toggle">
                                 <span class="text-[10px] font-black uppercase tracking-tighter text-gray-400 group-hover:text-emerald-400 transition-colors">Audit Mode</span>
                                 <div class="relative">
-                                    <input type="checkbox" v-model="emailReportMode" :true-value="'audit_statement'" :false-value="'standard'" class="sr-only peer">
+                                    <input id="audit-mode-toggle" name="auditModeToggle" type="checkbox" v-model="emailReportMode" :true-value="'audit_statement'" :false-value="'standard'" class="sr-only peer">
                                     <div class="w-9 h-5 bg-gray-700 rounded-full peer peer-checked:bg-emerald-500 transition-colors border border-gray-600 shadow-inner"></div>
                                     <div class="absolute left-1 top-1 bg-white w-3 h-3 rounded-full transition-transform peer-checked:translate-x-4 shadow-sm"></div>
                                 </div>
@@ -216,14 +219,14 @@
                         </h3>
                         <div class="flex flex-wrap items-center gap-4">
                             <div class="flex items-center gap-2">
-                                <label class="text-xs text-gray-400 font-bold uppercase tracking-wider">Start:</label>
-                                <select v-model="auditStartMonth" class="bg-gray-900 border border-gray-700 rounded px-2 py-1 text-sm text-gray-200 focus:border-emerald-500 outline-none cursor-pointer">
+                                <label class="text-xs text-gray-400 font-bold uppercase tracking-wider" for="audit-start-month">Start:</label>
+                                <select id="audit-start-month" name="auditStartMonth" v-model="auditStartMonth" class="bg-gray-900 border border-gray-700 rounded px-2 py-1 text-sm text-gray-200 focus:border-emerald-500 outline-none cursor-pointer">
                                     <option v-for="month in calendarMonths" :key="month" :value="month">{{ month }}</option>
                                 </select>
                             </div>
                             <div class="flex items-center gap-2">
-                                <label class="text-xs text-gray-400 font-bold uppercase tracking-wider">End:</label>
-                                <select v-model="auditEndMonth" class="bg-gray-900 border border-gray-700 rounded px-2 py-1 text-sm text-gray-200 focus:border-emerald-500 outline-none cursor-pointer">
+                                <label class="text-xs text-gray-400 font-bold uppercase tracking-wider" for="audit-end-month">End:</label>
+                                <select id="audit-end-month" name="auditEndMonth" v-model="auditEndMonth" class="bg-gray-900 border border-gray-700 rounded px-2 py-1 text-sm text-gray-200 focus:border-emerald-500 outline-none cursor-pointer">
                                     <option v-for="month in calendarMonths" :key="month" :value="month">{{ month }}</option>
                                 </select>
                             </div>
@@ -520,7 +523,7 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                                                <tr v-for="item in masterLedgerData" :key="item.vendor + item.site" @click="selectedLedgerVendor = item" :class="{'bg-emerald-50/50 ring-1 ring-inset ring-emerald-500': selectedLedgerVendor?.vendor === item.vendor}" class="hover:bg-gray-50 cursor-pointer transition-all">
+                                                        <tr v-for="item in masterLedgerData" :key="item.vendor + item.site" @click="selectedLedgerVendor = item" :class="{'bg-emerald-50/50 ring-1 ring-inset ring-emerald-500': selectedLedgerVendor?.vendor === item.vendor}" class="hover:bg-gray-50 cursor-pointer transition-all">
                                     <td class="font-bold text-gray-900">{{ item.vendor }}</td>
                                     <td class="text-gray-600">{{ item.site }}</td>
                                     <td class="text-right font-medium">{{ formatCurrency(item.generated) }}</td>
@@ -852,7 +855,8 @@
                     <div class="bg-amber-50 border border-amber-200 p-4 rounded-lg text-xs text-amber-800 mb-4">
                         <strong>Excel Instructions:</strong> Paste the <strong>Month</strong> and <strong>Grand Total</strong> columns from your Workbook V9 "Board Recon" sheet here.
                     </div>
-                    <textarea v-model="workbookPasteData" rows="4" class="w-full border border-gray-300 rounded-xl p-4 text-sm font-mono focus:ring-2 focus:ring-emerald-500 outline-none resize-none" placeholder="Paste data from Excel..."></textarea>
+                    <label for="workbook-paste" class="sr-only">Paste data from Excel</label>
+                    <textarea id="workbook-paste" name="workbookPaste" v-model="workbookPasteData" rows="4" class="w-full border border-gray-300 rounded-xl p-4 text-sm font-mono focus:ring-2 focus:ring-emerald-500 outline-none resize-none" placeholder="Paste data from Excel..."></textarea>
                 </div>
 
                 <div class="px-6 py-4 border-t bg-gray-50 flex gap-3">
@@ -906,7 +910,8 @@
                             <button class="px-4 py-2 bg-gray-900 text-amber-500 rounded-lg font-bold shadow-md transition-colors flex items-center gap-2 text-sm border border-gray-800">
                                 <i data-lucide="landmark" class="w-4 h-4"></i> Upload Sage Report (GL)
                             </button>
-                            <input type="file" @change="handleSageCsvUpload" accept=".csv" class="absolute left-0 top-0 w-full h-full opacity-0 cursor-pointer">
+                            <label for="sage-upload" class="sr-only">Upload Sage Report (GL)</label>
+                            <input id="sage-upload" name="sageUpload" type="file" @change="handleSageCsvUpload" accept=".csv" class="absolute left-0 top-0 w-full h-full opacity-0 cursor-pointer">
                         </div>
                     </div>
                 </div>
@@ -918,7 +923,8 @@
                         <button class="w-full px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold shadow-md transition-colors flex items-center justify-center gap-2 text-sm">
                             <i data-lucide="file-up" class="w-4 h-4"></i> Upload Treez CSV
                         </button>
-                        <input type="file" @change="handleTreesCsvUpload" accept=".csv" class="absolute left-0 top-0 w-full h-full opacity-0 cursor-pointer">
+                        <label for="treez-upload" class="sr-only">Upload Treez CSV</label>
+                        <input id="treez-upload" name="treezUpload" type="file" @change="handleTreesCsvUpload" accept=".csv" class="absolute left-0 top-0 w-full h-full opacity-0 cursor-pointer">
                     </div>
                 </div>
             </div>
@@ -978,12 +984,12 @@
                 </div>
                 <div class="flex gap-4 items-end">
                     <div class="flex flex-col gap-1">
-                        <label class="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Start Date</label>
-                        <input type="date" v-model="auditRange.start" class="bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none shadow-sm">
+                        <label class="text-[10px] font-bold text-gray-500 uppercase tracking-widest" for="audit-start">Start Date</label>
+                        <input id="audit-start" name="auditStart" type="date" v-model="auditRange.start" class="bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none shadow-sm">
                     </div>
                     <div class="flex flex-col gap-1">
-                        <label class="text-[10px] font-bold text-gray-500 uppercase tracking-widest">End Date</label>
-                        <input type="date" v-model="auditRange.end" class="bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none shadow-sm">
+                        <label class="text-[10px] font-bold text-gray-500 uppercase tracking-widest" for="audit-end">End Date</label>
+                        <input id="audit-end" name="auditEnd" type="date" v-model="auditRange.end" class="bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none shadow-sm">
                     </div>
                 </div>
             </div>
@@ -993,7 +999,7 @@
                                 <div class="overflow-auto flex-1">
                     <table class="excel-table min-w-max">
                         <thead class="sticky top-0 z-10 shadow-sm bg-gray-50">
-                                                        <tr>
+                                                <tr>
                                 <th>Brand / Vendor</th>
                                 <th>Contact Rep</th>
                                 <th class="text-right">Total Generated</th>
@@ -1150,7 +1156,8 @@
                             <tr>
                                 <th class="whitespace-nowrap">
                                     <div class="flex items-center gap-2">
-                                        <input type="checkbox" :checked="allBrandsSelected" @change="toggleAllBrands" class="w-4 h-4 cursor-pointer text-emerald-600 focus:ring-emerald-500 border-gray-300 rounded">
+                                        <label for="select-all-brands" class="sr-only">Select All</label>
+                                        <input id="select-all-brands" name="selectAllBrands" type="checkbox" :checked="allBrandsSelected" @change="toggleAllBrands" class="w-4 h-4 cursor-pointer text-emerald-600 focus:ring-emerald-500 border-gray-300 rounded">
                                         Brand
                                     </div>
                                 </th>
@@ -1169,18 +1176,19 @@
                             <tr v-for="(brand, index) in masterBrands" :key="brand.id" class="hover:bg-emerald-50/40" :class="{'bg-emerald-50/70': selectedBrands.includes(brand.id)}">
                                 <td class="font-bold text-gray-900 sticky left-0 bg-white shadow-[1px_0_0_#e5e7eb] z-10 whitespace-nowrap">
                                     <div class="flex items-center gap-2">
-                                        <input type="checkbox" :value="brand.id" v-model="selectedBrands" class="w-4 h-4 cursor-pointer text-emerald-600 focus:ring-emerald-500 border-gray-300 rounded">
+                                        <label :for="'brand-check-' + index" class="sr-only">Select {{ brand.vendor }}</label>
+                                        <input :id="'brand-check-' + index" :name="'brandCheck_' + index" type="checkbox" :value="brand.id" v-model="selectedBrands" class="w-4 h-4 cursor-pointer text-emerald-600 focus:ring-emerald-500 border-gray-300 rounded">
                                         {{ brand.vendor }}
                                     </div>
                                 </td>
-                                <td><input type="text" :value="brand.rep" @change="updateBrandField(brand.id, 'rep', $event, brand.vendor)" placeholder="-" class="w-full min-w-[120px] bg-transparent border-b border-dashed border-transparent hover:border-gray-300 focus:border-emerald-500 outline-none px-1 py-0.5"></td>
-                                <td><input type="text" :value="brand.email" @change="updateBrandField(brand.id, 'email', $event, brand.vendor)" placeholder="-" class="w-full min-w-[180px] bg-transparent border-b border-dashed border-transparent hover:border-gray-300 focus:border-emerald-500 outline-none px-1 py-0.5 text-emerald-600 font-medium"></td>
-                                <td><input type="text" :value="brand.treesName" @change="updateBrandField(brand.id, 'treesName', $event, brand.vendor)" placeholder="-" class="w-full min-w-[160px] bg-transparent border-b border-dashed border-transparent hover:border-gray-300 focus:border-emerald-500 outline-none px-1 py-0.5"></td>
-                                <td><input type="text" :value="brand.distributor" @change="updateBrandField(brand.id, 'distributor', $event, brand.vendor)" placeholder="-" class="w-full min-w-[140px] bg-transparent border-b border-dashed border-transparent hover:border-gray-300 focus:border-emerald-500 outline-none px-1 py-0.5"></td>
-                                <td><input type="text" :value="brand.assetLibrary" @change="updateBrandField(brand.id, 'assetLibrary', $event, brand.vendor)" placeholder="-" class="w-full min-w-[180px] bg-transparent border-b border-dashed border-transparent hover:border-gray-300 focus:border-emerald-500 outline-none px-1 py-0.5 text-xs text-amber-600"></td>
-                                <td><input type="text" :value="brand.orderFrom" @change="updateBrandField(brand.id, 'orderFrom', $event, brand.vendor)" placeholder="-" class="w-full min-w-[120px] bg-transparent border-b border-dashed border-transparent hover:border-gray-300 focus:border-emerald-500 outline-none px-1 py-0.5"></td>
-                                <td><input type="text" :value="brand.payee" @change="updateBrandField(brand.id, 'payee', $event, brand.vendor)" placeholder="-" class="w-full min-w-[120px] bg-transparent border-b border-dashed border-transparent hover:border-gray-300 focus:border-emerald-500 outline-none px-1 py-0.5"></td>
-                                <td><input type="text" :value="brand.notes" @change="updateBrandField(brand.id, 'notes', $event, brand.vendor)" placeholder="-" class="w-full min-w-[180px] bg-transparent border-b border-dashed border-transparent hover:border-gray-300 focus:border-emerald-500 outline-none px-1 py-0.5 text-xs"></td>
+                                <td><input :id="'brand-rep-' + index" :name="'brandRep_' + index" :aria-label="'Rep for ' + brand.vendor" type="text" :value="brand.rep" @change="updateBrandField(brand.id, 'rep', $event, brand.vendor)" placeholder="-" class="w-full min-w-[120px] bg-transparent border-b border-dashed border-transparent hover:border-gray-300 focus:border-emerald-500 outline-none px-1 py-0.5"></td>
+                                <td><input :id="'brand-email-' + index" :name="'brandEmail_' + index" :aria-label="'Email for ' + brand.vendor" type="text" :value="brand.email" @change="updateBrandField(brand.id, 'email', $event, brand.vendor)" placeholder="-" class="w-full min-w-[180px] bg-transparent border-b border-dashed border-transparent hover:border-gray-300 focus:border-emerald-500 outline-none px-1 py-0.5 text-emerald-600 font-medium"></td>
+                                <td><input :id="'brand-treesName-' + index" :name="'brandTreesName_' + index" :aria-label="'TREES Name for ' + brand.vendor" type="text" :value="brand.treesName" @change="updateBrandField(brand.id, 'treesName', $event, brand.vendor)" placeholder="-" class="w-full min-w-[160px] bg-transparent border-b border-dashed border-transparent hover:border-gray-300 focus:border-emerald-500 outline-none px-1 py-0.5"></td>
+                                <td><input :id="'brand-distro-' + index" :name="'brandDistro_' + index" :aria-label="'Distro for ' + brand.vendor" type="text" :value="brand.distributor" @change="updateBrandField(brand.id, 'distributor', $event, brand.vendor)" placeholder="-" class="w-full min-w-[140px] bg-transparent border-b border-dashed border-transparent hover:border-gray-300 focus:border-emerald-500 outline-none px-1 py-0.5"></td>
+                                <td><input :id="'brand-assetLibrary-' + index" :name="'brandAssetLibrary_' + index" :aria-label="'Asset Library for ' + brand.vendor" type="text" :value="brand.assetLibrary" @change="updateBrandField(brand.id, 'assetLibrary', $event, brand.vendor)" placeholder="-" class="w-full min-w-[180px] bg-transparent border-b border-dashed border-transparent hover:border-gray-300 focus:border-emerald-500 outline-none px-1 py-0.5 text-xs text-amber-600"></td>
+                                <td><input :id="'brand-orderFrom-' + index" :name="'brandOrderFrom_' + index" :aria-label="'Order From for ' + brand.vendor" type="text" :value="brand.orderFrom" @change="updateBrandField(brand.id, 'orderFrom', $event, brand.vendor)" placeholder="-" class="w-full min-w-[120px] bg-transparent border-b border-dashed border-transparent hover:border-gray-300 focus:border-emerald-500 outline-none px-1 py-0.5"></td>
+                                <td><input :id="'brand-payee-' + index" :name="'brandPayee_' + index" :aria-label="'Payee for ' + brand.vendor" type="text" :value="brand.payee" @change="updateBrandField(brand.id, 'payee', $event, brand.vendor)" placeholder="-" class="w-full min-w-[120px] bg-transparent border-b border-dashed border-transparent hover:border-gray-300 focus:border-emerald-500 outline-none px-1 py-0.5"></td>
+                                <td><input :id="'brand-notes-' + index" :name="'brandNotes_' + index" :aria-label="'Notes for ' + brand.vendor" type="text" :value="brand.notes" @change="updateBrandField(brand.id, 'notes', $event, brand.vendor)" placeholder="-" class="w-full min-w-[180px] bg-transparent border-b border-dashed border-transparent hover:border-gray-300 focus:border-emerald-500 outline-none px-1 py-0.5 text-xs"></td>
                             </tr>
                         </tbody>
                     </table>
@@ -1275,14 +1283,18 @@
                         <!-- Date Range & Quick Select (Audit Mode Only) -->
                         <div v-if="emailReportMode === 'audit_statement'" class="flex items-center gap-2">
                             <span class="text-xs text-gray-400">Audit Period:</span>
+                            <label for="audit-start-month-modal" class="sr-only">Start Month</label>
                             <select 
+                                id="audit-start-month-modal" name="auditStartMonthModal"
                                 v-model="auditStartMonth"
                                 @change="refreshEmailDraft()"
                                 class="bg-gray-800 text-white text-xs border border-gray-700 rounded-lg px-2 py-1 focus:border-emerald-500 outline-none">
                                 <option v-for="m in calendarMonths" :key="m" :value="m">{{ m }}</option>
                             </select>
                             <span class="text-xs text-gray-500">to</span>
+                            <label for="audit-end-month-modal" class="sr-only">End Month</label>
                             <select 
+                                id="audit-end-month-modal" name="auditEndMonthModal"
                                 v-model="auditEndMonth"
                                 @change="refreshEmailDraft()"
                                 class="bg-gray-800 text-white text-xs border border-gray-700 rounded-lg px-2 py-1 focus:border-emerald-500 outline-none">
@@ -1299,13 +1311,13 @@
                     </div>
                     <!-- Subject Input -->
                     <div>
-                        <label class="block text-xs font-bold uppercase tracking-wider text-gray-400 mb-1">Subject</label>
-                        <input type="text" v-model="emailDraftSubject" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 outline-none focus:border-emerald-500 font-medium">
+                        <label for="draft-subject" class="block text-xs font-bold uppercase tracking-wider text-gray-400 mb-1">Subject</label>
+                        <input id="draft-subject" name="draftSubject" type="text" v-model="emailDraftSubject" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 outline-none focus:border-emerald-500 font-medium">
                     </div>
                     <!-- Body Textarea -->
                     <div>
-                        <label class="block text-xs font-bold uppercase tracking-wider text-gray-400 mb-1">Message Body</label>
-                        <textarea v-model="emailDraftBody" rows="14" class="w-full bg-gray-800 border border-gray-700 rounded-lg p-3 text-xs text-gray-200 font-mono outline-none focus:border-emerald-500 resize-none leading-relaxed"></textarea>
+                        <label for="draft-body" class="block text-xs font-bold uppercase tracking-wider text-gray-400 mb-1">Message Body</label>
+                        <textarea id="draft-body" name="draftBody" v-model="emailDraftBody" rows="14" class="w-full bg-gray-800 border border-gray-700 rounded-lg p-3 text-xs text-gray-200 font-mono outline-none focus:border-emerald-500 resize-none leading-relaxed"></textarea>
                     </div>
                 </div>
                 <!-- Modal Footer Actions -->
@@ -1336,15 +1348,15 @@
                 
                 <div class="p-4 md:p-6 grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4 overflow-y-auto">
                     <div class="col-span-1 md:col-span-2">
-                        <label class="text-[11px] font-bold text-gray-500 uppercase tracking-wide">Tracking Month</label>
-                        <select v-model="form.trackingMonth" class="border border-gray-300 p-2.5 w-full rounded-lg mt-1 font-bold focus:ring-2 focus:ring-emerald-500 outline-none">
+                        <label for="promo-tracking-month" class="text-[11px] font-bold text-gray-500 uppercase tracking-wide">Tracking Month</label>
+                        <select id="promo-tracking-month" name="trackingMonth" v-model="form.trackingMonth" class="border border-gray-300 p-2.5 w-full rounded-lg mt-1 font-bold focus:ring-2 focus:ring-emerald-500 outline-none">
                             <option v-for="m in calendarMonths" :key="m" :value="m">{{ m }}</option>
                         </select>
                     </div>
                     <div class="col-span-1 md:col-span-2 border-t border-gray-200 pt-2"></div>
                     <div class="col-span-1 md:col-span-2 relative">
-                        <label class="text-[11px] font-bold text-gray-500 uppercase tracking-wide">Vendor (Brand)</label>
-                        <input type="text" v-model="form.vendor" @focus="showBrandDropdown = true" @input="showBrandDropdown = true" class="border border-gray-300 p-2.5 w-full rounded-lg mt-1 font-bold focus:ring-2 focus:ring-emerald-500 outline-none" placeholder="Search Brand Name...">
+                        <label for="promo-vendor" class="text-[11px] font-bold text-gray-500 uppercase tracking-wide">Vendor (Brand)</label>
+                        <input id="promo-vendor" name="vendor" type="text" v-model="form.vendor" @focus="showBrandDropdown = true" @input="showBrandDropdown = true" class="border border-gray-300 p-2.5 w-full rounded-lg mt-1 font-bold focus:ring-2 focus:ring-emerald-500 outline-none" placeholder="Search Brand Name...">
                         <div v-if="showBrandDropdown && filteredBrands.length > 0" class="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 shadow-xl rounded-lg max-h-48 overflow-y-auto z-50">
                             <div v-for="brand in filteredBrands" :key="brand.vendor" @click="selectBrand(brand)" class="px-4 py-2 hover:bg-emerald-50 cursor-pointer border-b border-gray-100 last:border-0 flex justify-between items-center">
                                 <span class="font-bold text-gray-900">{{ brand.vendor }}</span>
@@ -1352,27 +1364,27 @@
                             </div>
                         </div>
                     </div>
-                    <div><label class="text-[11px] font-bold text-gray-500 uppercase tracking-wide">Distributor</label><input type="text" v-model="form.distributor" class="border border-gray-300 bg-gray-50 p-2.5 w-full rounded-lg mt-1 text-sm focus:ring-2 focus:ring-emerald-500 outline-none"></div>
-                    <div><label class="text-[11px] font-bold text-gray-500 uppercase tracking-wide">Credit Type</label><input type="text" v-model="form.creditType" class="border border-gray-300 p-2.5 w-full rounded-lg mt-1 text-sm focus:ring-2 focus:ring-emerald-500 outline-none"></div>
-                    <div><label class="text-[11px] font-bold text-gray-500 uppercase tracking-wide">Dates</label><input type="text" v-model="form.dates" class="border border-gray-300 p-2.5 w-full rounded-lg mt-1 text-sm focus:ring-2 focus:ring-emerald-500 outline-none"></div>
+                    <div><label for="promo-distributor" class="text-[11px] font-bold text-gray-500 uppercase tracking-wide">Distributor</label><input id="promo-distributor" name="distributor" type="text" v-model="form.distributor" class="border border-gray-300 bg-gray-50 p-2.5 w-full rounded-lg mt-1 text-sm focus:ring-2 focus:ring-emerald-500 outline-none"></div>
+                    <div><label for="promo-credit-type" class="text-[11px] font-bold text-gray-500 uppercase tracking-wide">Credit Type</label><input id="promo-credit-type" name="creditType" type="text" v-model="form.creditType" class="border border-gray-300 p-2.5 w-full rounded-lg mt-1 text-sm focus:ring-2 focus:ring-emerald-500 outline-none"></div>
+                    <div><label for="promo-dates" class="text-[11px] font-bold text-gray-500 uppercase tracking-wide">Dates</label><input id="promo-dates" name="dates" type="text" v-model="form.dates" class="border border-gray-300 p-2.5 w-full rounded-lg mt-1 text-sm focus:ring-2 focus:ring-emerald-500 outline-none"></div>
                     <div>
-                        <label class="text-[11px] font-bold text-gray-500 uppercase tracking-wide">Credit Amount $$$</label>
-                        <div class="relative"><span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 font-bold">$</span><input type="number" v-model.number="form.amount" class="border border-gray-300 pl-7 p-2.5 w-full rounded-lg mt-1 font-bold text-gray-900 focus:ring-2 focus:ring-emerald-500 outline-none" step="0.01"></div>
+                        <label for="promo-amount" class="text-[11px] font-bold text-gray-500 uppercase tracking-wide">Credit Amount $$$</label>
+                        <div class="relative"><span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 font-bold">$</span><input id="promo-amount" name="amount" type="number" v-model.number="form.amount" class="border border-gray-300 pl-7 p-2.5 w-full rounded-lg mt-1 font-bold text-gray-900 focus:ring-2 focus:ring-emerald-500 outline-none" step="0.01"></div>
                     </div>
                     <div class="col-span-1 md:col-span-2 border-t border-gray-200 pt-2"></div>
-                    <div><label class="text-[11px] font-bold text-gray-500 uppercase tracking-wide">Date Requested</label><input type="date" v-model="form.dateRequested" class="border border-gray-300 p-2.5 w-full rounded-lg mt-1 text-sm focus:ring-2 focus:ring-emerald-500 outline-none"></div>
-                    <div><label class="text-[11px] font-bold text-gray-500 uppercase tracking-wide">Date Received</label><input type="date" v-model="form.dateReceived" class="border border-gray-300 p-2.5 w-full rounded-lg mt-1 text-sm focus:ring-2 focus:ring-emerald-500 outline-none"></div>
-                    <div><label class="text-[11px] font-bold text-gray-500 uppercase tracking-wide">Invoice / Credit Memo #</label><input type="text" v-model="form.invoice" class="border border-gray-300 p-2.5 w-full rounded-lg mt-1 font-mono text-sm focus:ring-2 focus:ring-emerald-500 outline-none"></div>
+                    <div><label for="promo-date-requested" class="text-[11px] font-bold text-gray-500 uppercase tracking-wide">Date Requested</label><input id="promo-date-requested" name="dateRequested" type="date" v-model="form.dateRequested" class="border border-gray-300 p-2.5 w-full rounded-lg mt-1 text-sm focus:ring-2 focus:ring-emerald-500 outline-none"></div>
+                    <div><label for="promo-date-received" class="text-[11px] font-bold text-gray-500 uppercase tracking-wide">Date Received</label><input id="promo-date-received" name="dateReceived" type="date" v-model="form.dateReceived" class="border border-gray-300 p-2.5 w-full rounded-lg mt-1 text-sm focus:ring-2 focus:ring-emerald-500 outline-none"></div>
+                    <div><label for="promo-invoice" class="text-[11px] font-bold text-gray-500 uppercase tracking-wide">Invoice / Credit Memo #</label><input id="promo-invoice" name="invoice" type="text" v-model="form.invoice" class="border border-gray-300 p-2.5 w-full rounded-lg mt-1 font-mono text-sm focus:ring-2 focus:ring-emerald-500 outline-none"></div>
                     <div>
-                        <label class="text-[11px] font-bold text-gray-500 uppercase tracking-wide">Status</label>
-                        <select v-model="form.status" class="border border-gray-300 p-2.5 w-full rounded-lg mt-1 font-bold cursor-pointer focus:ring-2 focus:ring-emerald-500 outline-none" :class="{'bg-emerald-50 text-emerald-800': form.status === 'Applied', 'bg-amber-50 text-amber-800': form.status === 'Pending', 'bg-gray-50 text-gray-800': form.status === 'Uncollectable'}">
+                        <label for="promo-status" class="text-[11px] font-bold text-gray-500 uppercase tracking-wide">Status</label>
+                        <select id="promo-status" name="status" v-model="form.status" class="border border-gray-300 p-2.5 w-full rounded-lg mt-1 font-bold cursor-pointer focus:ring-2 focus:ring-emerald-500 outline-none" :class="{'bg-emerald-50 text-emerald-800': form.status === 'Applied', 'bg-amber-50 text-amber-800': form.status === 'Pending', 'bg-gray-50 text-gray-800': form.status === 'Uncollectable'}">
                             <option value="Pending">Pending</option><option value="Applied">Applied</option><option value="Uncollectable">Uncollectable</option>
                         </select>
                     </div>
                     <div class="col-span-1 md:col-span-2 mt-2">
-                        <label class="text-[11px] font-bold text-gray-500 uppercase tracking-wide mb-1 block">Vendor Outcome Proof (PDF or Image)</label>
+                        <label for="promo-file-upload" class="text-[11px] font-bold text-gray-500 uppercase tracking-wide mb-1 block">Vendor Outcome Proof (PDF or Image)</label>
                         <div class="border-2 border-dashed border-gray-300 rounded-xl p-4 text-center bg-gray-50 hover:bg-gray-100 cursor-pointer transition-colors relative">
-                            <input type="file" @change="handleFileUpload" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" accept="application/pdf,image/*">
+                            <input id="promo-file-upload" name="fileUpload" type="file" @change="handleFileUpload" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" accept="application/pdf,image/*">
                             <i data-lucide="paperclip" class="w-6 h-6 text-gray-400 mx-auto mb-2"></i>
                             <span v-if="!form.attachmentName" class="text-sm font-medium text-gray-500">Tap to upload email PDF/Image</span>
                             <span v-else class="text-sm font-bold text-emerald-600">{{ form.attachmentName }}</span>
@@ -1404,4 +1416,3 @@
     </script>
 </body>
 </html>
- 
