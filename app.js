@@ -611,28 +611,32 @@ createApp({
             });
         };
 
-        const downloadMonthlyReport = (brand) => {
+                const downloadMonthlyReport = (brand) => {
             const isFullMonth = !!brand.brandList; 
-            const reportMonth = brand.month || activeMonth.value;
-
+            
             if (!isFullMonth) {
-                const csvContent = generateAuditStatementCSV(brand);
-                const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
+                const csv = generateAuditStatementCSV(brand);
+                const blob = new Blob(
+                    ['\ufeff' + csv],
+                    {
+                        type: 'text/csv;charset=utf-8;'
+                    }
+                );
                 const url = URL.createObjectURL(blob);
                 const link = document.createElement("a");
                 link.setAttribute("href", url);
-                const currentYear = new Date().getFullYear();
-                const safeBrandName = String(brand.vendor).replace(/[^a-zA-Z0-9]/g, '_');
-                link.setAttribute("download", `${activeSite.value.replace(/\s/g, '_')}_Statement_${safeBrandName}_${currentYear}.csv`);
+                link.setAttribute("download", `${activeSite.value}_Statement_${brand.vendor}_${new Date().getFullYear()}.csv`);
                 document.body.appendChild(link);
                 link.click();
                 document.body.removeChild(link);
+                logSystemAction("EXPORT", `Audit Statement exported for ${brand.vendor}`);
                 setTimeout(() => URL.revokeObjectURL(url), 150);
-                logSystemAction("EXPORT", `Downloaded Cumulative Statement for ${brand.vendor}`);
                 return;
             }
 
+            const reportMonth = brand.month || activeMonth.value;
             let csvContent = "Location,Date & Time,Brand,Product Name,Transaction ID,Quantity Sold,Unit Price,Total Before Tax,Discount Title,Discount Amount,Credit Owed,Entry Type\n";
+
             let csvTotal = 0;
             const cleanStr = cleanString;
     
