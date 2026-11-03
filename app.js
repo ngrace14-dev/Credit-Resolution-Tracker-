@@ -8,6 +8,8 @@ import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from
 import { getStorage, ref as sRef, uploadBytes, getDownloadURL, getBytes } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-storage.js";
 import { initializeAppCheck, ReCaptchaEnterpriseProvider } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-app-check.js";
 
+// NEW PHASE 1 IMPORT
+import { parseCSVText, parseCSVRow, cleanString, cleanCurrency, csvEscape, normalizeHeader, validateHeaders } from './services/csvService.js';
 
 // 2. FIREBASE CONFIGURATION
 const firebaseConfig = {
@@ -57,7 +59,6 @@ createApp({
             const d = new Date(value);
             return isNaN(d.getTime()) ? null : d;
         };
-        const csvEscape = (value) => `"${String(value ?? '').replace(/"/g, '""')}"`;
         const normalizeSiteName = (val) => String(val || '').toLowerCase().replace(/[\s_-]/g, '');
 
         const isManagerUnlocked = ref(false);
@@ -813,7 +814,7 @@ createApp({
             // Full Month CSV remains itemized as requested
             let csvContent = "Location,Date & Time,Brand,Product Name,Transaction ID,Quantity Sold,Unit Price,Total Before Tax,Discount Title,Discount Amount,Credit Owed,Entry Type\n";
             let csvTotal = 0;
-            const cleanStr = (str) => String(str || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+            const cleanStr = cleanString;
     
             const itemizedSales = [];
 
@@ -1481,7 +1482,7 @@ createApp({
         });
 
 
-                                                                        const brandAuditData = computed(() => {
+                                                                const brandAuditData = computed(() => {
 
             if (!masterWorkbook.value || !masterWorkbook.value.data) return [];
             const targetMonth = activeMonth.value;
@@ -1685,7 +1686,7 @@ createApp({
                                             }
                                         }, (err) => console.error("Sheets Listener Error:", err));
 
-                                                                                // 2. Master Workbook Metadata (Reactive to Site)
+                                                            // 2. Master Workbook Metadata (Reactive to Site)
                                         watch(activeSite, (newSite) => {
                                             const docId = `Board_Report_${newSite.replace(/\s/g, '_')}`;
                                             onSnapshot(doc(db, "promo tracker", docId), (docSnap) => {
@@ -1698,7 +1699,7 @@ createApp({
                                         }, { immediate: true });
 
 
-                                                                                // 3. Optimized Sales Listener (Discovery Intake)
+                                                            // 3. Optimized Sales Listener (Discovery Intake)
                                         setupFilteredListeners();
 
                                         // 4. Brand Directory Listener
@@ -2046,31 +2047,27 @@ createApp({
                 reader.onload = async (evt) => {
                     try {
                         const text = evt.target.result;
-                        const rows = text.split(/\r?\n/);
-                        if (rows.length < 2) return alert("File is empty or invalid.");
+                        // NEW: Use parseCSVText instead of manual splitting and parsing
+                        const { headers: baseHeaders, rows } = parseCSVText(text);
+                        if (rows.length === 0) return alert("File is empty or invalid.");
 
-                        const parseCSVRow = (str) => {
-                            const result = [];
-                            let cell = '';
-                            let inQuotes = false;
-                            for (let i = 0; i < str.length; i++) {
-                                const char = str[i];
-                                if (char === '"') { inQuotes = !inQuotes; } 
-                                else if (char === ',' && !inQuotes) { result.push(cell.trim()); cell = ''; } 
-                                else { cell += char; }
-                            }
-                            result.push(cell.trim());
-                            return result;
-                        };
-
-                        let headerIdx = 0;
+                        // Find the actual header row if it's not the first line
+                        let headerIdx = -1;
                         let headers = [];
-                        for (let i = 0; i < rows.length; i++) {
-                            const cols = parseCSVRow(rows[i]);
-                            if (cols.some(c => c.toLowerCase().includes('product brand') || c.toLowerCase().includes('vendor credit owed'))) {
-                                headerIdx = i;
-                                headers = cols.map(h => h.replace(/["']/g, '').trim());
-                                break;
+                        
+                        // Check if base headers are valid, otherwise scan rows
+                        const baseValidation = validateHeaders(baseHeaders, ['product brand', 'vendor credit owed']);
+                        if (baseValidation.valid) {
+                            headers = baseHeaders;
+                        } else {
+                            for (let i = 0; i < rows.length; i++) {
+                                const cols = parseCSVRow(rows[i]);
+                                const validation = validateHeaders(cols, ['product brand', 'vendor credit owed']);
+                                if (validation.valid) {
+                                    headerIdx = i;
+                                    headers = cols.map(normalizeHeader);
+                                    break;
+                                }
                             }
                         }
 
@@ -2089,7 +2086,8 @@ createApp({
                             if (!rows[i].trim()) continue;
                             const cols = parseCSVRow(rows[i]);
                             const rowObj = {};
-                            headers.forEach((h, idx) => { rowObj[h] = cols[idx] ? cols[idx].replace(/["']/g, '') : ''; });
+                            // NEW: Use cleanString
+                            headers.forEach((h, idx) => { rowObj[h] = cols[idx] ? cleanString(cols[idx]) : ''; });
 
                             const brandVal = getVal(rowObj, 'Product Brand', 'Brand');
                             const trackingVal = getVal(rowObj, 'State Tracking Id', 'Tracking Id');
@@ -2101,10 +2099,11 @@ createApp({
                             const storeString = getVal(rowObj, 'Store Name', 'Location');
                             const detectedSite = detectSiteFromName(storeString);
 
+                            // NEW: Use cleanCurrency
                             const units = parseFloat(getVal(rowObj, 'Units Sold', 'Unit Sold', 'Qty', 'Quantity')) || 0;
-                            const unitPrice = parseFloat(String(getVal(rowObj, 'Cost Per Unit', 'Unit Price', 'Price')).replace(/[^0-9.-]+/g,"")) || 0;
-                            const discAmt = parseFloat(String(getVal(rowObj, 'Discounts', 'Discount Amount', 'Discount')).replace(/[^0-9.-]+/g,"")) || 0;
-                            const owedAmt = parseFloat(String(getVal(rowObj, 'Vendor Credit Owed', 'Credit Owed')).replace(/[^0-9.-]+/g,"")) || 0;
+                            const unitPrice = cleanCurrency(getVal(rowObj, 'Cost Per Unit', 'Unit Price', 'Price'));
+                            const discAmt = cleanCurrency(getVal(rowObj, 'Discounts', 'Discount Amount', 'Discount'));
+                            const owedAmt = cleanCurrency(getVal(rowObj, 'Vendor Credit Owed', 'Credit Owed'));
 
                             const newSale = {
                                 uploadId: uploadId, // LINK TO SOURCE CSV
@@ -2168,31 +2167,14 @@ const reader = new FileReader();
 reader.onload = async (evt) => {
     try {
                 const text = evt.target.result;
-                const rows = text.split(/\r?\n/).filter(r => r.trim() !== '');
-                
-                // Simple CSV Parser
-                const parseCSVRow = (str) => {
-                    const result = [];
-                    let cell = '';
-                    let inQuotes = false;
-                    for (let i = 0; i < str.length; i++) {
-                        const char = str[i];
-                        if (char === '"') { inQuotes = !inQuotes; } 
-                        else if (char === ',' && !inQuotes) { result.push(cell.trim()); cell = ''; } 
-                        else { cell += char; }
-                    }
-                    result.push(cell.trim());
-                    return result;
-                };
-
-                const headers = parseCSVRow(rows[0]).map(h => h.replace(/["']/g, '').trim());
+                const { headers, rows } = parseCSVText(text);
                 const importedSageData = [];
 
-                for (let i = 1; i < rows.length; i++) {
+                for (let i = 0; i < rows.length; i++) { // Adjusted index since headers are extracted
                     const cols = parseCSVRow(rows[i]);
                     const rowObj = {};
                     headers.forEach((h, idx) => { 
-                        rowObj[h] = cols[idx] ? cols[idx].replace(/["']/g, '') : ''; 
+                        rowObj[h] = cols[idx] ? cleanString(cols[idx]) : ''; 
                     });
                     
                     // Map Sage Columns to Workbook Schema
@@ -2202,7 +2184,7 @@ reader.onload = async (evt) => {
                         "Store": rowObj["Store"] || rowObj["Location"] || '',
                         "Location": rowObj["Location"] || '',
                         "Memo/Description": rowObj["Memo/Description"] || rowObj["Description"] || rowObj["Memo"] || '',
-                        "Credit": parseFloat(String(rowObj["Credit"] || rowObj["Amount"] || 0).replace(/[^0-9.-]+/g,"")) || 0,
+                        "Credit": cleanCurrency(rowObj["Credit"] || rowObj["Amount"]),
                         "Mapped Brand": "" // Will be manually mapped or auto-detected later
                     });
                 }
@@ -2249,32 +2231,16 @@ const handleTreezLedgerUpload = (e) => {
     reader.onload = (evt) => {
         try {
             const text = evt.target.result;
-            const rows = text.split(/\r?\n/).filter(r => r.trim() !== '');
-                    
-            if (rows.length < 2) return alert("File is empty or invalid.");
+            const { headers, rows } = parseCSVText(text);
+            if (rows.length === 0) return alert("File is empty or invalid.");
 
-            const parseCSVRow = (str) => {
-                const result = [];
-                let cell = '';
-                let inQuotes = false;
-                for (let i = 0; i < str.length; i++) {
-                    const char = str[i];
-                    if (char === '"') { inQuotes = !inQuotes; } 
-                    else if (char === ',' && !inQuotes) { result.push(cell.trim()); cell = ''; } 
-                    else { cell += char; }
-                }
-                result.push(cell.trim());
-                return result;
-            };
-
-            const headers = parseCSVRow(rows[0]).map(h => h.replace(/["']/g, '').trim().toLowerCase());
             const parsedData = [];
             const uploadTime = new Date().toLocaleString();
 
-            for (let i = 1; i < rows.length; i++) {
+            for (let i = 0; i < rows.length; i++) {
                 const cols = parseCSVRow(rows[i]);
                 const rowObj = {};
-                headers.forEach((h, idx) => { rowObj[h] = cols[idx] ? cols[idx].replace(/["']/g, '').trim() : ''; });
+                headers.forEach((h, idx) => { rowObj[h] = cols[idx] ? cleanString(cols[idx]) : ''; });
 
                 const rawBrand = rowObj['brand'] || rowObj['product brand'] || rowObj['vendor'];
                 if (!rawBrand) continue;
@@ -2283,7 +2249,7 @@ const handleTreezLedgerUpload = (e) => {
                     promoDate: rowObj['date closed'] || rowObj['date'] || rowObj['created at'] || '',
                     location: normalizeSiteName(rowObj['store name'] || rowObj['location'] || rowObj['site']),
                     brand: getStandardizedBrandName(rawBrand),
-                    creditGenerated: parseFloat(String(rowObj['vendor credit owed'] || rowObj['credit owed'] || rowObj['owed'] || 0).replace(/[^0-9.-]+/g, "")) || 0,
+                    creditGenerated: cleanCurrency(rowObj['vendor credit owed'] || rowObj['credit owed'] || rowObj['owed']),
                     sourceFile: file.name,
                     uploadTimestamp: uploadTime
                 });
@@ -2317,32 +2283,16 @@ const handleSage4545Upload = (e) => {
     reader.onload = (evt) => {
         try {
             const text = evt.target.result;
-            const rows = text.split(/\r?\n/).filter(r => r.trim() !== '');
-                    
-            if (rows.length < 2) return alert("File is empty or invalid.");
+            const { headers, rows } = parseCSVText(text);
+            if (rows.length === 0) return alert("File is empty or invalid.");
 
-            const parseCSVRow = (str) => {
-                const result = [];
-                let cell = '';
-                let inQuotes = false;
-                for (let i = 0; i < str.length; i++) {
-                    const char = str[i];
-                    if (char === '"') { inQuotes = !inQuotes; } 
-                    else if (char === ',' && !inQuotes) { result.push(cell.trim()); cell = ''; } 
-                    else { cell += char; }
-                }
-                result.push(cell.trim());
-                return result;
-            };
-
-            const headers = parseCSVRow(rows[0]).map(h => h.replace(/["']/g, '').trim().toLowerCase());
             const parsedData = [];
             const uploadTime = new Date().toLocaleString();
 
-            for (let i = 1; i < rows.length; i++) {
+            for (let i = 0; i < rows.length; i++) {
                 const cols = parseCSVRow(rows[i]);
                 const rowObj = {};
-                headers.forEach((h, idx) => { rowObj[h] = cols[idx] ? cols[idx].replace(/["']/g, '').trim() : ''; });
+                headers.forEach((h, idx) => { rowObj[h] = cols[idx] ? cleanString(cols[idx]) : ''; });
 
                 const glAccount = rowObj['account'] || rowObj['gl account'] || rowObj['gl'] || '';
                         
@@ -2355,7 +2305,7 @@ const handleSage4545Upload = (e) => {
                         postingDate: rowObj['date'] || rowObj['posting date'] || rowObj['posted dt.'] || '',
                         location: normalizeSiteName(rowObj['location'] || rowObj['store'] || rowObj['site']),
                         brand: getStandardizedBrandName(rawBrand),
-                        amount: parseFloat(String(rowObj['amount'] || rowObj['credit'] || 0).replace(/[^0-9.-]+/g, "")) || 0,
+                        amount: cleanCurrency(rowObj['amount'] || rowObj['credit']),
                         documentNumber: rowObj['document number'] || rowObj['ref'] || rowObj['reference'] || '',
                         glAccount: glAccount,
                         sourceFile: file.name,
@@ -2982,7 +2932,7 @@ const handleSage4545Upload = (e) => {
 
 
 
-                                                                                                                                        const generateStandardEmail = (brand) => {
+                                                                                                                                                                const generateStandardEmail = (brand) => {
             const vendorName = brand.vendor || brand;
             const reportData = calculateMonthlyReport(vendorName);
             const formatCurrency = (val) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(val || 0);
@@ -3017,7 +2967,7 @@ ${userName}
 RREDCO`;
         };
 
-                                                                                                                                        const generateAuditFindingEmail = (brand) => {
+                                                                                                                                                                const generateAuditFindingEmail = (brand) => {
             const vendorName = brand.vendor || brand;
             const auditData = calculateMonthlyReport(vendorName);
             const formatCurrency = (val) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(val || 0);
@@ -3068,21 +3018,21 @@ ${userName}
 RREDCO`;
         };
 
-                                                                                                                                const refreshEmailDraft = () => {
-                                                                                                                                    if (!selectedBrandForEmail.value) return;
-                                                                                                                                    const brand = selectedBrandForEmail.value;
-                                                                                                                                    // Explicitly grab the active values from the date dropdowns
-                                                                                                                                    const startPeriod = startMonth.value || 'January';
-                                                                                                                                    const endPeriod = endMonth.value || 'September';
-                                                                                                                                    // Uniform dynamic subject line matching the report range
-                                                                                                                                    emailDraftSubject.value = `Promo Credit Statement (${startPeriod} 2026 - ${endPeriod} 2026)`;
-                                                                                                                                    // Inject the selected body
-                                                                                                                                    if (emailReportMode.value === 'standard') {
-                                                                                                                                        emailDraftBody.value = generateStandardEmail(brand);
-                                                                                                                                    } else {
-                                                                                                                                        emailDraftBody.value = generateAuditFindingEmail(brand);
-                                                                                                                                    }
-                                                                                                                                };
+                                                                                                                                                                                const refreshEmailDraft = () => {
+                                                                                                                                                                                    if (!selectedBrandForEmail.value) return;
+                                                                                                                                                                                    const brand = selectedBrandForEmail.value;
+                                                                                                                                                                                    // Explicitly grab the active values from the date dropdowns
+                                                                                                                                                                                    const startPeriod = startMonth.value || 'January';
+                                                                                                                                                                                    const endPeriod = endMonth.value || 'September';
+                                                                                                                                                                                    // Uniform dynamic subject line matching the report range
+                                                                                                                                                                                    emailDraftSubject.value = `Promo Credit Statement (${startPeriod} 2026 - ${endPeriod} 2026)`;
+                                                                                                                                                                                    // Inject the selected body
+                                                                                                                                                                                    if (emailReportMode.value === 'standard') {
+                                                                                                                                                                                        emailDraftBody.value = generateStandardEmail(brand);
+                                                                                                                                                                                    } else {
+                                                                                                                                                                                        emailDraftBody.value = generateAuditFindingEmail(brand);
+                                                                                                                                                                                    }
+                                                                                                                                                                                };
 
 
                                 const openEmailDraft = (brand) => {
