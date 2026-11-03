@@ -1,6 +1,5 @@
 // app.js
 
-
 // 1. FIREBASE IMPORTS
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-app.js";
 import { getFirestore, collection, addDoc, doc, updateDoc, deleteDoc, writeBatch, onSnapshot, setDoc, query, where, orderBy, limit } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js";
@@ -8,10 +7,11 @@ import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from
 import { getStorage, ref as sRef, uploadBytes, getDownloadURL, getBytes } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-storage.js";
 import { initializeAppCheck, ReCaptchaEnterpriseProvider } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-app-check.js";
 
-// NEW PHASE 1, 2 & 3 IMPORTS
+// NEW PHASE 1, 2, 3 & 4 IMPORTS
 import { parseCSVText, parseCSVRow, cleanString, cleanCurrency, csvEscape, normalizeHeader, validateHeaders } from './services/csvService.js';
 import { normalizeTreezLedger, normalizeSageLedger } from './services/ledgerService.js';
 import { parseExcelDate, generateAuditStatementCSV as generateAuditStatementService } from './services/auditService.js';
+import { buildStandardEmail, buildAuditFindingEmail, buildMailtoUrl } from './services/emailService.js';
 
 // 2. FIREBASE CONFIGURATION
 const firebaseConfig = {
@@ -428,7 +428,7 @@ createApp({
 
                 const searchQueryInput = ref('');
         const searchQuery = ref('');      
-      
+        
         let searchTimeout = null;
         
         watch(searchQueryInput, (newVal) => {
@@ -825,7 +825,6 @@ createApp({
             link.click();
             document.body.removeChild(link);
 
-            const cleanEmails = String(brand.email || '').split(/[,;\s]+/).map(e => e.trim()).filter(Boolean).join(',');
             const subject = `Promo Credit Statement - ${storeName} - ${periodStr}`;
             
             let body = `Hello ${brand.vendor},\n\n`;
@@ -834,7 +833,8 @@ createApp({
             body += `Please let us know if you have any questions or when we can expect the remaining balance to be applied to our account.\n\n`;
             body += `Best regards,\n\n${storeName} Accounting Team\n`;
 
-            window.location.href = `mailto:${cleanEmails}?cc=accounting@rredco.com&subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+            // NEW: Delegate mailto generation to pure service
+            window.location.href = buildMailtoUrl(brand.email, 'accounting@rredco.com', subject, body);
             
             logSystemAction("EXPORT", `Generated Dual-Use Statement for ${brand.vendor}`);
         };
@@ -2752,7 +2752,7 @@ const handleSage4545Upload = (e) => {
             if (startIdx === -1 || endIdx === -1 || startIdx > endIdx) return allMonths.slice(0, 9);
             return allMonths.slice(startIdx, endIdx + 1);
         };
-                                                                                                const calculateMonthlyReport = (brandName) => {
+                                                                                                        const calculateMonthlyReport = (brandName) => {
             if (!brandName) return { reddingGenerated: 0, reddingRecovered: 0, redBluffGenerated: 0, redBluffRecovered: 0, totalGenerated: 0, totalRecovered: 0, balance: 0 };
             let redGen = 0, redRec = 0, rbGen = 0, rbRec = 0;
             
@@ -2820,161 +2820,80 @@ const handleSage4545Upload = (e) => {
 
         
 
-
-
-
-
-
-                                                                                                                                                                const generateStandardEmail = (brand) => {
+        const refreshEmailDraft = () => {
+            if (!selectedBrandForEmail.value) return;
+            const brand = selectedBrandForEmail.value;
+            
+            const startPeriod = startMonth.value || 'January';
+            const endPeriod = endMonth.value || 'September';
+            
+            emailDraftSubject.value = `Promo Credit Statement (${startPeriod} 2026 - ${endPeriod} 2026)`;
+            
+            // NEW: Prepare config object and calculate data for the pure service
             const vendorName = brand.vendor || brand;
             const reportData = calculateMonthlyReport(vendorName);
-            const formatCurrency = (val) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(val || 0);
-            let finalGen = 0;
-            let longSiteName = '';
-            // Dynamically calculate generated totals and store names based on active UI toggle
-            if (!activeSite.value || activeSite.value === 'All') {
-                finalGen = reportData.totalGenerated;
-                longSiteName = 'Sundial Collective – All Locations';
-            } else if (activeSite.value === 'Redding') {
-                finalGen = reportData.reddingGenerated;
-                longSiteName = 'Sundial Collective – Redding';
+            const config = {
+                activeSite: activeSite.value,
+                startPeriod,
+                endPeriod,
+                userName: loggedInUser.value || 'Nicholas G.'
+            };
+
+            // NEW: Route to the appropriate pure service generator
+            if (emailReportMode.value === 'standard') {
+                emailDraftBody.value = buildStandardEmail(vendorName, reportData, config);
             } else {
-                finalGen = reportData.redBluffGenerated;
-                longSiteName = 'Sundial Collective – Red Bluff';
+                emailDraftBody.value = buildAuditFindingEmail(vendorName, reportData, config);
             }
-            const startPeriod = startMonth.value || 'January';
-            const endPeriod = endMonth.value || 'September';
-            const userName = loggedInUser.value || 'Nicholas G.';
-            return `Hi ${vendorName} Team,
-I hope you're doing well!
-As part of our ongoing monthly reporting, we are providing the promotional credit summary for ${longSiteName} for the period of ${startPeriod} through ${endPeriod} 2026. This summary reflects the promotional discounts issued at our retail registers for your products.
-Our records indicate a total of ${formatCurrency(finalGen)} in promotional credits generated during this period.
-Promotional Credit Summary – ${startPeriod} through ${endPeriod} 2026
-${longSiteName}
-- Total Credits Generated: ${formatCurrency(finalGen)}
-For your convenience, we have attached a detailed chronological breakdown showing the promotional credits generated by store.
-Please review the attached summary with your Accounting or Accounts Receivable team and let us know when we can expect a credit memo or offset applied to our upcoming inventory invoices for these generated credits.
-We appreciate your continued partnership and assistance in keeping our promotional credits current. Thank you for your support!
-Best regards,
-${userName}
-RREDCO`;
         };
 
-                                                                                                                                                                const generateAuditFindingEmail = (brand) => {
-            const vendorName = brand.vendor || brand;
-            const auditData = calculateMonthlyReport(vendorName);
-            const formatCurrency = (val) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(val || 0);
-            let finalGen = 0;
-            let finalRec = 0;
-            let finalBal = 0;
-            let longSiteName = '';
-            let shortSiteName = '';
-            // Dynamically calculate totals and store names based on active UI toggle
-            if (!activeSite.value || activeSite.value === 'All') {
-                finalGen = auditData.totalGenerated;
-                finalRec = auditData.totalRecovered;
-                finalBal = auditData.balance;
-                longSiteName = 'Sundial Collective – All Locations';
-                shortSiteName = 'Combined';
-            } else if (activeSite.value === 'Redding') {
-                finalGen = auditData.reddingGenerated;
-                finalRec = auditData.reddingRecovered;
-                finalBal = auditData.reddingGenerated - auditData.reddingRecovered;
-                longSiteName = 'Sundial Collective – Redding';
-                shortSiteName = 'Redding';
-            } else {
-                finalGen = auditData.redBluffGenerated;
-                finalRec = auditData.redBluffRecovered;
-                finalBal = auditData.redBluffGenerated - auditData.redBluffRecovered;
-                longSiteName = 'Sundial Collective – Red Bluff';
-                shortSiteName = 'Red Bluff';
-            }
-            const startPeriod = startMonth.value || 'January';
-            const endPeriod = endMonth.value || 'September';
-            const userName = loggedInUser.value || 'Nicholas G.';
-            const locationText = shortSiteName === 'Combined' ? 'combined locations' : `${shortSiteName} location`;
-            return `Hi ${vendorName} Team,
-I hope you're doing well!
-As part of our ongoing financial review, we recently reconciled our promotional credits for ${longSiteName} for the period of ${startPeriod} through ${endPeriod} 2026. This included comparing promotional discounts issued at our retail registers against vendor credits received and applied to our account.
-Our reconciliation identified an outstanding promotional credit balance of ${formatCurrency(finalBal)} for your products at our ${locationText}.
-Promotional Credit Summary – ${startPeriod} through ${endPeriod} 2026
-${longSiteName}
-- Total Credits Generated: ${formatCurrency(finalGen)}
-- Total Credits Received: ${formatCurrency(finalRec)}
-- Outstanding Balance: ${formatCurrency(finalBal)}
-For your convenience, we have attached a detailed monthly reconciliation showing the promotional credits generated, reimbursements received, and remaining outstanding balance.
-Please review the attached summary with your Accounting or Accounts Receivable team and let us know when we can expect the outstanding credits to be issued or applied toward upcoming inventory invoices.
-If any credits have already been issued that are not reflected in our records, please provide copies so we can update our reconciliation accordingly.
-We appreciate your continued partnership and assistance in keeping our promotional credits current. Thank you for your support!
-Best regards,
-${userName}
-RREDCO`;
-        };
 
-                                                                                                                                                                                const refreshEmailDraft = () => {
-                                                                                                                                                                                    if (!selectedBrandForEmail.value) return;
-                                                                                                                                                                                    const brand = selectedBrandForEmail.value;
-                                                                                                                                                                                    // Explicitly grab the active values from the date dropdowns
-                                                                                                                                                                                    const startPeriod = startMonth.value || 'January';
-                                                                                                                                                                                    const endPeriod = endMonth.value || 'September';
-                                                                                                                                                                                    // Uniform dynamic subject line matching the report range
-                                                                                                                                                                                    emailDraftSubject.value = `Promo Credit Statement (${startPeriod} 2026 - ${endPeriod} 2026)`;
-                                                                                                                                                                                    // Inject the selected body
-                                                                                                                                                                                    if (emailReportMode.value === 'standard') {
-                                                                                                                                                                                        emailDraftBody.value = generateStandardEmail(brand);
-                                                                                                                                                                                    } else {
-                                                                                                                                                                                        emailDraftBody.value = generateAuditFindingEmail(brand);
-                                                                                                                                                                                    }
-                                                                                                                                                                                };
-
-
-                                const openEmailDraft = (brand) => {
+        const openEmailDraft = (brand) => {
             // 1. Open the preview modal for the selected brand
             selectedBrandForEmail.value = brand;
             showEmailDraftModal.value = true;
             // 2. Populate subject and body preview (NO CSV download here)
             refreshEmailDraft();
         };
-                                const sendEmailDraft = () => {
-                    if (!selectedBrandForEmail.value) return;
-                    const brand = selectedBrandForEmail.value;
-                    const startPeriod = startMonth.value || 'January';
-                    const endPeriod = endMonth.value || 'September';
+        
+        const sendEmailDraft = () => {
+            if (!selectedBrandForEmail.value) return;
+            const brand = selectedBrandForEmail.value;
+            const startPeriod = startMonth.value || 'January';
+            const endPeriod = endMonth.value || 'September';
             
-                    // 1. Consistently trigger Cumulative Statement CSV download
-                    const csvContent = generateAuditStatementCSV(brand);
-                    const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
-                    const url = URL.createObjectURL(blob);
-                    const link = document.createElement("a");
-                    link.setAttribute("href", url);
-                    const currentYear = new Date().getFullYear();
-                    link.setAttribute("download", `${brand.vendor.replace(/\s/g, '_')}_Statement_${startPeriod}_to_${endPeriod}_2026.csv`);
-                    document.body.appendChild(link);
-                    link.click();
-                    document.body.removeChild(link);
+            // 1. Consistently trigger Cumulative Statement CSV download
+            const csvContent = generateAuditStatementCSV(brand);
+            const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.setAttribute("href", url);
+            const currentYear = new Date().getFullYear();
+            link.setAttribute("download", `${brand.vendor.replace(/\s/g, '_')}_Statement_${startPeriod}_to_${endPeriod}_2026.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
 
-                    // 2. Construct Mailto Link (Optimized for Outlook/Mail Clients)
-                    const cleanEmails = String(brand.email || '').split(/[,;\s]+/).map(e => e.trim()).filter(Boolean).join(',');
-                    const mailtoUrl = `mailto:${cleanEmails}?cc=accounting@rredco.com&subject=${encodeURIComponent(emailDraftSubject.value)}&body=${encodeURIComponent(emailDraftBody.value)}`;
+            // NEW: Use the pure service to construct the Mailto Url
+            const mailtoUrl = buildMailtoUrl(brand.email, 'accounting@rredco.com', emailDraftSubject.value, emailDraftBody.value);
 
-                    // 3. Trigger the system's default mail client with a hidden anchor tag (more reliable than window.location)
-                    setTimeout(() => {
-                        try {
-                            const mailLink = document.createElement("a");
-                            mailLink.href = mailtoUrl;
-                            // Setting target="_top" ensures it breaks out of any Vue router restrictions
-                            mailLink.setAttribute("target", "_top"); 
-                            document.body.appendChild(mailLink);
-                            mailLink.click();
-                            document.body.removeChild(mailLink);
-                        } catch (error) {
-                            console.error("Failed to open mail client:", error);
-                            alert("Could not open Outlook automatically. Please use the 'Copy to Clipboard' button.");
-                        }
-                    }, 300); // Increased delay slightly to 300ms to guarantee the CSV download finishes first
+            // 3. Trigger the system's default mail client with a hidden anchor tag
+            setTimeout(() => {
+                try {
+                    const mailLink = document.createElement("a");
+                    mailLink.href = mailtoUrl;
+                    mailLink.setAttribute("target", "_top"); 
+                    document.body.appendChild(mailLink);
+                    mailLink.click();
+                    document.body.removeChild(mailLink);
+                } catch (error) {
+                    console.error("Failed to open mail client:", error);
+                    alert("Could not open Outlook automatically. Please use the 'Copy to Clipboard' button.");
+                }
+            }, 300); 
             
-                    showEmailDraftModal.value = false;
-                    logSystemAction("EXPORT", `Dispatched Cumulative Statement Email for ${brand.vendor}`);
+            showEmailDraftModal.value = false;
+            logSystemAction("EXPORT", `Dispatched Cumulative Statement Email for ${brand.vendor}`);
         };
 
         const copyEmailToClipboard = async () => {
