@@ -1775,67 +1775,94 @@ createApp({
                     reader.readAsText(file);
                 };
 
-                const handleSage4545Upload = (e) => {
-                    const file = e.target.files[0];
-                    if (!file) return;
+                                const handleSage4545Upload = (e) => {
+                                    const file = e.target.files[0];
+                                    if (!file) return;
 
-                    const reader = new FileReader();
-                    reader.onload = async (evt) => {
-                        try {
-                            const text = evt.target.result;
-                            const lines = parseCSVText(text);
-                            if (lines.length === 0) return alert("File is empty or invalid.");
+                                    const reader = new FileReader();
+                                    reader.onload = async (evt) => {
+                                        try {
+                                            const text = evt.target.result;
+                                            const lines = parseCSVText(text);
+                                            if (lines.length === 0) return alert("File is empty or invalid.");
 
-                            const headers = parseCSVRow(lines[0]).map(normalizeHeader);
-                            const rows = lines.slice(1);
+                                            // Dynamic Header Detection for Sage
+                                            let headerIdx = -1;
+                                            let headers = [];
 
-                            const uploadTime = new Date().toLocaleString();
-                            const importedCount = parsedData.length;
+                                            for (let i = 0; i < Math.min(lines.length, 20); i++) {
+                                                const tempHeaders = parseCSVRow(lines[i]).map(normalizeHeader);
+                                                if (tempHeaders.includes('posted dt.') || tempHeaders.includes('credit') || tempHeaders.includes('memo/description')) {
+                                                    headerIdx = i;
+                                                    headers = tempHeaders;
+                                                    break;
+                                                }
+                                            }
 
-                            sage4545LedgerCount.value = importedCount;
-                            sage4545LedgerLastUpload.value = uploadTime;
-                            sage4545LedgerSourceFile.value = file.name;
-                            persistLedgerMetadata();
+                                            if (headerIdx === -1) {
+                                                // Fallback to first line if no keywords found
+                                                headers = parseCSVRow(lines[0]).map(normalizeHeader);
+                                                headerIdx = 0;
+                                            }
 
-                            // --- OPTION B: WORKBOOK INGESTION ---
-                            if (confirm(`Successfully parsed ${importedCount} recovery records. Append these to the Master Workbook GL?`)) {
-
-                                const updatedData = JSON.parse(JSON.stringify(masterWorkbook.value.data));
-                                const glSheet = updatedData["GL Raw by Store"] || [];
-
-                                parsedData.forEach(item => {
-                                    glSheet.push({
-                                        "Posted dt.": item.postingDate,
-                                        "Store": item.location.includes('bluff') ? 'Red Bluff' : 'Redding',
-                                        "Location": item.location,
-                                        "Memo/Description": `${item.brand} | Doc: ${item.documentNumber}`,
-                                        "Credit": item.amount,
-                                        "Mapped Brand": item.brand
-                                    });
-                                });
-
-                                updatedData["GL Raw by Store"] = glSheet;
-                        
-                                await setDoc(doc(db, "workbook_v9_sheets", "GL Raw by Store"), {
-                                    sheetName: "GL Raw by Store",
-                                    rows: glSheet,
-                                    updatedAt: Date.now()
-                                });
-
-                                masterWorkbook.value.data = updatedData;
-                                logSystemAction("UPDATE", `Appended Sage Ledger to GL Raw by Store (${parsedData.length} rows)`);
-                            }
+                                            const rows = lines.slice(headerIdx + 1);
+                                            const uploadTime = new Date().toLocaleString();
                             
-                            logSystemAction("UPLOAD", `Sage 4545 ledger imported (${parsedData.length} records)`);
-                            alert(`Sage Ledger: Records Imported: ${parsedData.length}`);
-                            e.target.value = '';
-                        } catch (error) {
-                            console.error("Sage 4545 Ledger Parse Error:", error);
-                            alert("Error parsing Sage 4545 Ledger CSV.");
-                        }
-                    };
-                    reader.readAsText(file);
-                };
+                                            const parsedData = normalizeSageLedger(
+                                                rows, headers, file.name, uploadTime, normalizeSiteName, getStandardizedBrandName
+                                            );
+
+                                            if (parsedData.length === 0) {
+                                                alert("No valid 4545/Promo Credit records found in Sage upload. Please check the GL Account filtering.");
+                                                return;
+                                            }
+
+                                            const importedCount = parsedData.length;
+                                            sage4545LedgerCount.value = importedCount;
+                                            sage4545LedgerLastUpload.value = uploadTime;
+                                            sage4545LedgerSourceFile.value = file.name;
+                                            persistLedgerMetadata();
+
+                                            // --- OPTION B: WORKBOOK INGESTION ---
+                                            if (confirm(`Successfully parsed ${importedCount} recovery records. Append these to the Master Workbook GL?`)) {
+                                                const updatedData = JSON.parse(JSON.stringify(masterWorkbook.value.data));
+                                                const glSheet = updatedData["GL Raw by Store"] || [];
+
+                                                parsedData.forEach(item => {
+                                                    glSheet.push({
+                                                        "Posted dt.": item.postingDate,
+                                                        "Store": item.location.includes('bluff') ? 'Red Bluff' : 'Redding',
+                                                        "Location": item.location,
+                                                        "Memo/Description": `${item.brand} | Doc: ${item.documentNumber}`,
+                                                        "Credit": item.amount,
+                                                        "Mapped Brand": item.brand
+                                                    });
+                                                });
+
+                                                updatedData["GL Raw by Store"] = glSheet;
+                        
+                                                await setDoc(doc(db, "workbook_v9_sheets", "GL Raw by Store"), {
+                                                    sheetName: "GL Raw by Store",
+                                                    rows: glSheet,
+                                                    updatedAt: Date.now()
+                                                });
+
+                                                masterWorkbook.value.data = updatedData;
+                                                logSystemAction("UPDATE", `Appended Sage Ledger to GL Raw by Store (${parsedData.length} rows)`);
+                                            }
+                            
+                                            logSystemAction("UPLOAD", `Sage 4545 ledger imported (${parsedData.length} records)`);
+                                            alert(`Sage Ledger: Records Imported: ${parsedData.length}`);
+                                            e.target.value = '';
+                                        } catch (error) {
+                                            console.error("CRITICAL: Sage Ingestion Failure", error);
+                                            alert(`Error parsing Sage 4545 Ledger CSV.\n\nDetails: ${error.message}`);
+                                        }
+                                    };
+                                    reader.readAsText(file);
+                                };
+
+
 
 
 
