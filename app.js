@@ -65,13 +65,45 @@ createApp({
         const emailInput = ref('');
         const passwordInput = ref('');
         const authError = ref('');
-        const activeSite = ref('Red Bluff');
+                const activeSite = ref('Red Bluff');
                 const activeTab = ref('Ledger');
                 const promoCreditsList = ref([]); // Rename the ref to avoid collision with computed
         const calendarMonths = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
                 const activeMonth = ref('August');
                 const masterBrands = ref([]);
                 const selectedBrands = ref([]);
+
+        // LEDGER MANAGEMENT STATE
+        const treezLedger = ref([]);
+        const sage4545Ledger = ref([]);
+        const treezLedgerLastUpload = ref(null);
+        const sage4545LedgerLastUpload = ref(null);
+
+        // Load persisted ledgers on startup
+        try {
+            const storedTreez = localStorage.getItem('treezLedger');
+            const storedSage = localStorage.getItem('sage4545Ledger');
+            const storedTreezTime = localStorage.getItem('treezLedgerLastUpload');
+            const storedSageTime = localStorage.getItem('sage4545LedgerLastUpload');
+            
+            if (storedTreez) treezLedger.value = JSON.parse(storedTreez);
+            if (storedSage) sage4545Ledger.value = JSON.parse(storedSage);
+            if (storedTreezTime) treezLedgerLastUpload.value = storedTreezTime;
+            if (storedSageTime) sage4545LedgerLastUpload.value = storedSageTime;
+        } catch (e) {
+            console.error("Error loading persisted ledgers:", e);
+        }
+
+        const persistLedgers = () => {
+            try {
+                localStorage.setItem('treezLedger', JSON.stringify(treezLedger.value));
+                localStorage.setItem('sage4545Ledger', JSON.stringify(sage4545Ledger.value));
+                if (treezLedgerLastUpload.value) localStorage.setItem('treezLedgerLastUpload', treezLedgerLastUpload.value);
+                if (sage4545LedgerLastUpload.value) localStorage.setItem('sage4545LedgerLastUpload', sage4545LedgerLastUpload.value);
+            } catch (e) {
+                console.error("Error persisting ledgers:", e);
+            }
+        };
 
                                 // 1. DATA SOURCE: Master Workbook Fragments
                                 const masterWorkbook = ref({ data: {}, summary: {} });
@@ -2130,83 +2162,226 @@ const handleSageCsvUpload = async (e) => {
     const fileRef = sRef(storage, storagePath);
     
     try {
-        await uploadBytes(fileRef, file);
+await uploadBytes(fileRef, file);
         
-        const reader = new FileReader();
-        reader.onload = async (evt) => {
-            try {
-                        const text = evt.target.result;
-                        const rows = text.split(/\r?\n/).filter(r => r.trim() !== '');
+const reader = new FileReader();
+reader.onload = async (evt) => {
+    try {
+                const text = evt.target.result;
+                const rows = text.split(/\r?\n/).filter(r => r.trim() !== '');
                 
-                        // Simple CSV Parser
-                        const parseCSVRow = (str) => {
-                            const result = [];
-                            let cell = '';
-                            let inQuotes = false;
-                            for (let i = 0; i < str.length; i++) {
-                                const char = str[i];
-                                if (char === '"') { inQuotes = !inQuotes; } 
-                                else if (char === ',' && !inQuotes) { result.push(cell.trim()); cell = ''; } 
-                                else { cell += char; }
-                            }
-                            result.push(cell.trim());
-                            return result;
-                        };
+                // Simple CSV Parser
+                const parseCSVRow = (str) => {
+                    const result = [];
+                    let cell = '';
+                    let inQuotes = false;
+                    for (let i = 0; i < str.length; i++) {
+                        const char = str[i];
+                        if (char === '"') { inQuotes = !inQuotes; } 
+                        else if (char === ',' && !inQuotes) { result.push(cell.trim()); cell = ''; } 
+                        else { cell += char; }
+                    }
+                    result.push(cell.trim());
+                    return result;
+                };
 
-                        const headers = parseCSVRow(rows[0]).map(h => h.replace(/["']/g, '').trim());
-                        const importedSageData = [];
+                const headers = parseCSVRow(rows[0]).map(h => h.replace(/["']/g, '').trim());
+                const importedSageData = [];
 
-                        for (let i = 1; i < rows.length; i++) {
-                            const cols = parseCSVRow(rows[i]);
-                            const rowObj = {};
-                            headers.forEach((h, idx) => { 
-                                rowObj[h] = cols[idx] ? cols[idx].replace(/["']/g, '') : ''; 
-                            });
-                    
-                            // Map Sage Columns to Workbook Schema
-                            // Expected Sage Headers: Posted dt., Store, Location, Memo/Description, Credit
-                            importedSageData.push({
-                                "Posted dt.": rowObj["Posted dt."] || rowObj["Date"] || '',
-                                "Store": rowObj["Store"] || rowObj["Location"] || '',
-                                "Location": rowObj["Location"] || '',
-                                "Memo/Description": rowObj["Memo/Description"] || rowObj["Description"] || rowObj["Memo"] || '',
-                                "Credit": parseFloat(String(rowObj["Credit"] || rowObj["Amount"] || 0).replace(/[^0-9.-]+/g,"")) || 0,
-                                "Mapped Brand": "" // Will be manually mapped or auto-detected later
-                            });
-                        }
-
-                        // Push to Master Workbook
-                        if (!masterWorkbook.value) return alert("Master Workbook not loaded.");
-                
-                        const updatedData = JSON.parse(JSON.stringify(masterWorkbook.value.data));
-                        updatedData["GL Raw by Store"] = [...(updatedData["GL Raw by Store"] || []), ...importedSageData];
-
-                                            const sheetDocId = "GL Raw by Store";
-                    await setDoc(doc(db, "workbook_v9_sheets", sheetDocId), {
-                        sheetName: "GL Raw by Store",
-                        rows: updatedData["GL Raw by Store"],
-                        updatedAt: Date.now()
+                for (let i = 1; i < rows.length; i++) {
+                    const cols = parseCSVRow(rows[i]);
+                    const rowObj = {};
+                    headers.forEach((h, idx) => { 
+                        rowObj[h] = cols[idx] ? cols[idx].replace(/["']/g, '') : ''; 
                     });
+                    
+                    // Map Sage Columns to Workbook Schema
+                    // Expected Sage Headers: Posted dt., Store, Location, Memo/Description, Credit
+                    importedSageData.push({
+                        "Posted dt.": rowObj["Posted dt."] || rowObj["Date"] || '',
+                        "Store": rowObj["Store"] || rowObj["Location"] || '',
+                        "Location": rowObj["Location"] || '',
+                        "Memo/Description": rowObj["Memo/Description"] || rowObj["Description"] || rowObj["Memo"] || '',
+                        "Credit": parseFloat(String(rowObj["Credit"] || rowObj["Amount"] || 0).replace(/[^0-9.-]+/g,"")) || 0,
+                        "Mapped Brand": "" // Will be manually mapped or auto-detected later
+                    });
+                }
 
-                    // Update summary metadata
-                    await setDoc(doc(db, "promo tracker", "Master_Workbook_V9_Board_Report"), {
-                        lastModified: Date.now(),
-                        modifiedBy: loggedInUser.value
-                    }, { merge: true });
+                // Push to Master Workbook
+                if (!masterWorkbook.value) return alert("Master Workbook not loaded.");
+                
+                const updatedData = JSON.parse(JSON.stringify(masterWorkbook.value.data));
+                updatedData["GL Raw by Store"] = [...(updatedData["GL Raw by Store"] || []), ...importedSageData];
 
-                    logSystemAction("IMPORT", `Uploaded ${importedSageData.length} Sage GL entries to Master Workbook`);
-                        alert(`Success! Added ${importedSageData.length} entries from Sage to the 'GL Raw by Store' sheet.`);
-                        e.target.value = '';
-            } catch (err) {
-                        console.error(err);
-                        alert("Error processing Sage CSV.");
-            }
-        };
-        reader.readAsText(file);
+                                    const sheetDocId = "GL Raw by Store";
+            await setDoc(doc(db, "workbook_v9_sheets", sheetDocId), {
+                sheetName: "GL Raw by Store",
+                rows: updatedData["GL Raw by Store"],
+                updatedAt: Date.now()
+            });
+
+            // Update summary metadata
+            await setDoc(doc(db, "promo tracker", "Master_Workbook_V9_Board_Report"), {
+                lastModified: Date.now(),
+                modifiedBy: loggedInUser.value
+            }, { merge: true });
+
+            logSystemAction("IMPORT", `Uploaded ${importedSageData.length} Sage GL entries to Master Workbook`);
+                alert(`Success! Added ${importedSageData.length} entries from Sage to the 'GL Raw by Store' sheet.`);
+                e.target.value = '';
     } catch (err) {
-        console.error(err);
-        alert("Storage error during Sage upload.");
+                console.error(err);
+                alert("Error processing Sage CSV.");
     }
+};
+reader.readAsText(file);
+    } catch (err) {
+console.error(err);
+alert("Storage error during Sage upload.");
+    }
+};
+
+const handleTreezLedgerUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+        try {
+            const text = evt.target.result;
+            const rows = text.split(/\r?\n/).filter(r => r.trim() !== '');
+                    
+            if (rows.length < 2) return alert("File is empty or invalid.");
+
+            const parseCSVRow = (str) => {
+                const result = [];
+                let cell = '';
+                let inQuotes = false;
+                for (let i = 0; i < str.length; i++) {
+                    const char = str[i];
+                    if (char === '"') { inQuotes = !inQuotes; } 
+                    else if (char === ',' && !inQuotes) { result.push(cell.trim()); cell = ''; } 
+                    else { cell += char; }
+                }
+                result.push(cell.trim());
+                return result;
+            };
+
+            const headers = parseCSVRow(rows[0]).map(h => h.replace(/["']/g, '').trim().toLowerCase());
+            const parsedData = [];
+            const uploadTime = new Date().toLocaleString();
+
+            for (let i = 1; i < rows.length; i++) {
+                const cols = parseCSVRow(rows[i]);
+                const rowObj = {};
+                headers.forEach((h, idx) => { rowObj[h] = cols[idx] ? cols[idx].replace(/["']/g, '').trim() : ''; });
+
+                const rawBrand = rowObj['brand'] || rowObj['product brand'] || rowObj['vendor'];
+                if (!rawBrand) continue;
+
+                parsedData.push({
+                    promoDate: rowObj['date closed'] || rowObj['date'] || rowObj['created at'] || '',
+                    location: normalizeSiteName(rowObj['store name'] || rowObj['location'] || rowObj['site']),
+                    brand: getStandardizedBrandName(rawBrand),
+                    creditGenerated: parseFloat(String(rowObj['vendor credit owed'] || rowObj['credit owed'] || rowObj['owed'] || 0).replace(/[^0-9.-]+/g, "")) || 0,
+                    sourceFile: file.name,
+                    uploadTimestamp: uploadTime
+                });
+            }
+
+            if (parsedData.length === 0) {
+                alert("No valid records found in Treez upload. Please check the column formatting.");
+                return;
+            }
+
+            treezLedger.value = parsedData;
+            treezLedgerLastUpload.value = uploadTime;
+            persistLedgers();
+                    
+            logSystemAction("UPLOAD", `Treez ledger imported (${parsedData.length} records)`);
+            alert(`Treez Ledger: Records Imported: ${parsedData.length}`);
+            e.target.value = '';
+        } catch (error) {
+            console.error("Treez Ledger Parse Error:", error);
+            alert("Error parsing Treez Ledger CSV.");
+        }
+    };
+    reader.readAsText(file);
+};
+
+const handleSage4545Upload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+        try {
+            const text = evt.target.result;
+            const rows = text.split(/\r?\n/).filter(r => r.trim() !== '');
+                    
+            if (rows.length < 2) return alert("File is empty or invalid.");
+
+            const parseCSVRow = (str) => {
+                const result = [];
+                let cell = '';
+                let inQuotes = false;
+                for (let i = 0; i < str.length; i++) {
+                    const char = str[i];
+                    if (char === '"') { inQuotes = !inQuotes; } 
+                    else if (char === ',' && !inQuotes) { result.push(cell.trim()); cell = ''; } 
+                    else { cell += char; }
+                }
+                result.push(cell.trim());
+                return result;
+            };
+
+            const headers = parseCSVRow(rows[0]).map(h => h.replace(/["']/g, '').trim().toLowerCase());
+            const parsedData = [];
+            const uploadTime = new Date().toLocaleString();
+
+            for (let i = 1; i < rows.length; i++) {
+                const cols = parseCSVRow(rows[i]);
+                const rowObj = {};
+                headers.forEach((h, idx) => { rowObj[h] = cols[idx] ? cols[idx].replace(/["']/g, '').trim() : ''; });
+
+                const glAccount = rowObj['account'] || rowObj['gl account'] || rowObj['gl'] || '';
+                        
+                // Strict Filtering: Must be 4545 or mention Promo Credit
+                if (glAccount.includes('4545') || glAccount.toLowerCase().includes('promo credit')) {
+                    const rawBrand = rowObj['vendor'] || rowObj['brand'] || rowObj['name'] || rowObj['description'] || '';
+                    if (!rawBrand) continue;
+
+                    parsedData.push({
+                        postingDate: rowObj['date'] || rowObj['posting date'] || rowObj['posted dt.'] || '',
+                        location: normalizeSiteName(rowObj['location'] || rowObj['store'] || rowObj['site']),
+                        brand: getStandardizedBrandName(rawBrand),
+                        amount: parseFloat(String(rowObj['amount'] || rowObj['credit'] || 0).replace(/[^0-9.-]+/g, "")) || 0,
+                        documentNumber: rowObj['document number'] || rowObj['ref'] || rowObj['reference'] || '',
+                        glAccount: glAccount,
+                        sourceFile: file.name,
+                        uploadTimestamp: uploadTime
+                    });
+                }
+            }
+
+            if (parsedData.length === 0) {
+                alert("No valid 4545/Promo Credit records found in Sage upload. Please check the GL Account filtering.");
+                return;
+            }
+
+            sage4545Ledger.value = parsedData;
+            sage4545LedgerLastUpload.value = uploadTime;
+            persistLedgers();
+                    
+            logSystemAction("UPLOAD", `Sage 4545 ledger imported (${parsedData.length} records)`);
+            alert(`Sage Ledger: Records Imported: ${parsedData.length}`);
+            e.target.value = '';
+        } catch (error) {
+            console.error("Sage 4545 Ledger Parse Error:", error);
+            alert("Error parsing Sage 4545 Ledger CSV.");
+        }
+    };
+    reader.readAsText(file);
 };
 
         const pushToMainTracker = async () => {
@@ -2996,6 +3171,8 @@ RREDCO`;
             processBrandRawPaste, processBrandImport, systemLogs, refreshIcons, clearAllSalesData,
             detectMonthInString, drawCharts, detectMonthFromDate, detectSiteFromName, openDimeHelper, exportVendorsAndBrandsCSV,
             masterLedgerData, selectedLedgerVendor, refreshLedger, openLegacyVerification, ledgerTotals,
+            treezLedger, sage4545Ledger, treezLedgerLastUpload, sage4545LedgerLastUpload,
+            handleTreezLedgerUpload, handleSage4545Upload,
                         masterWorkbook, showWorkspaceMenu, showAdminMenu, workspaceTabs, selectWorkspace, activeWorkspaceInfo,
                         scrollMonths, scrollWorkbookTabs, workbookSchema, activeWorkbookSheet, isWorkbookLoaded,
                         auditRange, brandAuditData, sageAuditData, activeWorkbookHeaders,
