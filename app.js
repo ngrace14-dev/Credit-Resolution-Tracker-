@@ -8,8 +8,9 @@ import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from
 import { getStorage, ref as sRef, uploadBytes, getDownloadURL, getBytes } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-storage.js";
 import { initializeAppCheck, ReCaptchaEnterpriseProvider } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-app-check.js";
 
-// NEW PHASE 1 IMPORT
+// NEW PHASE 1 & 2 IMPORTS
 import { parseCSVText, parseCSVRow, cleanString, cleanCurrency, csvEscape, normalizeHeader, validateHeaders } from './services/csvService.js';
+import { normalizeTreezLedger, normalizeSageLedger } from './services/ledgerService.js';
 
 // 2. FIREBASE CONFIGURATION
 const firebaseConfig = {
@@ -2234,26 +2235,17 @@ const handleTreezLedgerUpload = (e) => {
             const { headers, rows } = parseCSVText(text);
             if (rows.length === 0) return alert("File is empty or invalid.");
 
-            const parsedData = [];
             const uploadTime = new Date().toLocaleString();
-
-            for (let i = 0; i < rows.length; i++) {
-                const cols = parseCSVRow(rows[i]);
-                const rowObj = {};
-                headers.forEach((h, idx) => { rowObj[h] = cols[idx] ? cleanString(cols[idx]) : ''; });
-
-                const rawBrand = rowObj['brand'] || rowObj['product brand'] || rowObj['vendor'];
-                if (!rawBrand) continue;
-
-                parsedData.push({
-                    promoDate: rowObj['date closed'] || rowObj['date'] || rowObj['created at'] || '',
-                    location: normalizeSiteName(rowObj['store name'] || rowObj['location'] || rowObj['site']),
-                    brand: getStandardizedBrandName(rawBrand),
-                    creditGenerated: cleanCurrency(rowObj['vendor credit owed'] || rowObj['credit owed'] || rowObj['owed']),
-                    sourceFile: file.name,
-                    uploadTimestamp: uploadTime
-                });
-            }
+            
+            // REPLACED PARSING LOOP WITH SERVICE EXTRATION
+            const parsedData = normalizeTreezLedger(
+                rows, 
+                headers, 
+                file.name, 
+                uploadTime, 
+                normalizeSiteName, 
+                getStandardizedBrandName
+            );
 
             if (parsedData.length === 0) {
                 alert("No valid records found in Treez upload. Please check the column formatting.");
@@ -2286,33 +2278,17 @@ const handleSage4545Upload = (e) => {
             const { headers, rows } = parseCSVText(text);
             if (rows.length === 0) return alert("File is empty or invalid.");
 
-            const parsedData = [];
             const uploadTime = new Date().toLocaleString();
 
-            for (let i = 0; i < rows.length; i++) {
-                const cols = parseCSVRow(rows[i]);
-                const rowObj = {};
-                headers.forEach((h, idx) => { rowObj[h] = cols[idx] ? cleanString(cols[idx]) : ''; });
-
-                const glAccount = rowObj['account'] || rowObj['gl account'] || rowObj['gl'] || '';
-                        
-                // Strict Filtering: Must be 4545 or mention Promo Credit
-                if (glAccount.includes('4545') || glAccount.toLowerCase().includes('promo credit')) {
-                    const rawBrand = rowObj['vendor'] || rowObj['brand'] || rowObj['name'] || rowObj['description'] || '';
-                    if (!rawBrand) continue;
-
-                    parsedData.push({
-                        postingDate: rowObj['date'] || rowObj['posting date'] || rowObj['posted dt.'] || '',
-                        location: normalizeSiteName(rowObj['location'] || rowObj['store'] || rowObj['site']),
-                        brand: getStandardizedBrandName(rawBrand),
-                        amount: cleanCurrency(rowObj['amount'] || rowObj['credit']),
-                        documentNumber: rowObj['document number'] || rowObj['ref'] || rowObj['reference'] || '',
-                        glAccount: glAccount,
-                        sourceFile: file.name,
-                        uploadTimestamp: uploadTime
-                    });
-                }
-            }
+            // REPLACED PARSING LOOP WITH SERVICE EXTRATION
+            const parsedData = normalizeSageLedger(
+                rows, 
+                headers, 
+                file.name, 
+                uploadTime, 
+                normalizeSiteName, 
+                getStandardizedBrandName
+            );
 
             if (parsedData.length === 0) {
                 alert("No valid 4545/Promo Credit records found in Sage upload. Please check the GL Account filtering.");
