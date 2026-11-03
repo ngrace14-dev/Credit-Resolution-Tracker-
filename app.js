@@ -7,13 +7,14 @@ import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from
 import { getStorage, ref as sRef, uploadBytes, getBytes } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-storage.js";
 import { initializeAppCheck, ReCaptchaEnterpriseProvider } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-app-check.js";
 
-// NEW PHASE 1, 2, 3, 4, 5 & 6 IMPORTS
+// NEW PHASE 1, 2, 3, 4, 5, 6 & 7A IMPORTS
 import { parseCSVText, parseCSVRow, cleanString, cleanCurrency, csvEscape, normalizeHeader, validateHeaders } from './services/csvService.js';
 import { normalizeTreezLedger, normalizeSageLedger } from './services/ledgerService.js';
 import { parseExcelDate, generateAuditStatementCSV as generateAuditStatementService } from './services/auditService.js';
 import { buildStandardEmail, buildAuditFindingEmail, buildMailtoUrl } from './services/emailService.js';
 import { buildVendorsAndBrandsCSV, buildAnnualReportCSV, buildBrandVarianceCSV, buildYTDVariancePDFData } from './services/exportService.js';
 import { buildDefinitiveBrandMetrics, buildMonthlyReportSummaries, buildBrandAuditData, buildSageAuditData, calculateMonthlyReportData } from './services/reportService.js';
+import { buildTrackerSyncPayloads, buildGridImportPayloads, buildBrandImportPayloads } from './services/importService.js';
 
 // 2. FIREBASE CONFIGURATION
 const firebaseConfig = {
@@ -152,7 +153,7 @@ createApp({
         };
 
 
-        // --- PHASE 6: REPORT DATA EXTRACTIONS ---
+        // --- REPORT DATA EXTRACTIONS ---
 
         // 1. Extraction Rules Logic (Definitive Applied & Generated per Brand)
         const definitiveBrandMetrics = computed(() => {
@@ -574,11 +575,11 @@ createApp({
             credits.forEach(c => {
                 if (String(c.creditType).includes('Aggregated POS Sales')) return; 
                 
-                const safeLoc = `"${String(c.site || '').replace(/"/g, '""')}"`;
-                const safeDate = `"${String(c.dates || '').replace(/"/g, '""')}"`;
-                const safeBrand = `"${String(c.vendor || '').replace(/"/g, '""')}"`;
-                const safeProd = `"${String(c.creditType || '').replace(/"/g, '""')}"`; 
-                const safeTrack = `"${String(c.invoice || '').replace(/"/g, '""')}"`;
+                const safeLoc = `"${csvEscape(String(c.site || ''))}"`;
+                const safeDate = `"${csvEscape(String(c.dates || ''))}"`;
+                const safeBrand = `"${csvEscape(String(c.vendor || ''))}"`;
+                const safeProd = `"${csvEscape(String(c.creditType || ''))}"`; 
+                const safeTrack = `"${csvEscape(String(c.invoice || ''))}"`;
                 
                 runningContent += `${safeLoc},${safeDate},${safeBrand},${safeProd},${safeTrack},"-","-","-","-","-","${formatCurrency(c.amount)}","Manual Entry"\n`;
                 runningTotal += parseFloat(c.amount) || 0;
@@ -1381,80 +1382,38 @@ createApp({
             });
         };
 
-        const headerToFormKey = {
-            'Tracking Month': 'trackingMonth', 'Vendor': 'vendor', 'Distributor': 'distributor',
-            'Credit Type': 'creditType', 'Dates': 'dates', 'Credit amount $$$': 'amount',
-            'Date requested': 'dateRequested', 'Date received': 'dateReceived',
-            'Invoice / Credit Memo': 'invoice', 'Status': 'status'
-        };
-
         const processImport = async () => {
-            let importedCount = 0;
-            const superHeaders = pastedGrid.value[0];
-            const batch = writeBatch(db); 
-            
-            for (let r = 2; r < pastedGrid.value.length; r++) {
-                const row = pastedGrid.value[r];
-                let currentCredit = getEmptyForm();
-                let hasData = false;
-                let seenHeadersInChunk = new Set();
-                let currentChunkMonth = 'Unknown';
-                
-                for (let c = 0; c < row.length; c++) {
-                    const detectedMonth = detectMonthInString(superHeaders[c]);
-                    if (detectedMonth) currentChunkMonth = detectedMonth;
+            const { creditsToCreate, brandsToCreate, importedCount } = buildGridImportPayloads(
+                pastedGrid.value,
+                mappedHeaders.value,
+                { activeSite: activeSite.value, activeMonth: activeMonth.value },
+                masterBrands.value,
+                { detectMonthInString }
+            );
 
-                    const header = mappedHeaders.value[c];
-                    if (header === '-- Ignore Column --') continue;
-                    
-                    if (seenHeadersInChunk.has(header)) {
-                        if (hasData && currentCredit.vendor) {
-                            currentCredit.site = activeSite.value;
-                            currentCredit.trackingMonth = currentChunkMonth !== 'Unknown' ? currentChunkMonth : (activeMonth.value === 'All' ? 'August' : activeMonth.value);
-                            currentCredit.amount = parseFloat(String(currentCredit.amount).replace(/[^0-9.-]+/g,"")) || 0;
-                            currentCredit.createdAt = Date.now();
-                            const newDocRef = doc(collection(db, "promoCredits"));
-                            batch.set(newDocRef, currentCredit);
-                            importedCount++;
-                        }
-                        currentCredit = getEmptyForm();
-                        hasData = false;
-                        seenHeadersInChunk.clear();
-                    }
-                    
-                    const val = row[c];
-                    if (val) hasData = true;
-                    
-                    const key = headerToFormKey[header];
-                    if (key) {
-                        currentCredit[key] = val;
-                        seenHeadersInChunk.add(header);
-                        if (key === 'vendor' && val) {
-                            if (!masterBrands.value.find(b => (b.vendor || '').toLowerCase() === val.toLowerCase())) {
-                                const newBrandRef = doc(collection(db, "brands"));
-                                batch.set(newBrandRef, { vendor: val, distributor: 'Auto-Imported' });
-                            }
-                        }
-                    }
-                }
-                
-                if (hasData && currentCredit.vendor) {
-                    currentCredit.site = activeSite.value;
-                    currentCredit.trackingMonth = currentChunkMonth !== 'Unknown' ? currentChunkMonth : (activeMonth.value === 'All' ? 'August' : activeMonth.value);
-                    currentCredit.amount = parseFloat(String(currentCredit.amount).replace(/[^0-9.-]+/g,"")) || 0;
-                    currentCredit.createdAt = Date.now();
-                    const newDocRef = doc(collection(db, "promoCredits"));
-                    batch.set(newDocRef, currentCredit);
-                    importedCount++;
-                }
+            if (importedCount === 0) {
+                return alert("No valid credits found in paste data to import.");
             }
-            
+
             try {
+                const batch = writeBatch(db);
+                creditsToCreate.forEach(credit => {
+                    const newDocRef = doc(collection(db, "promoCredits"));
+                    batch.set(newDocRef, credit);
+                });
+                brandsToCreate.forEach(brand => {
+                    const newBrandRef = doc(collection(db, "brands"));
+                    batch.set(newBrandRef, brand);
+                });
+
                 await batch.commit();
                 alert(`Successfully extracted and saved ${importedCount} promo credits to Firebase!`);
                 closeImportModal();
                 refreshIcons();
-            } catch (err) { alert("Failed to save import to cloud."); }
+            } catch (err) {
+                console.error(err);
+                alert("Failed to save import to cloud.");
+            }
         };
 
         const regenerateBrandSummary = async (brandReport) => {
@@ -1781,59 +1740,32 @@ createApp({
         };
 
         const pushToMainTracker = async () => {
-            const groupedBrands = {};
-            const recordsToSync = treesSalesData.value.filter(s => s.status === 'Unsynced');
-            
-            if (recordsToSync.length === 0) return alert("No unsynced sales data found.");
+            const unsynced = treesSalesData.value.filter(s => s.status === 'Unsynced');
+            if (unsynced.length === 0) return alert("No unsynced sales data found.");
 
-            recordsToSync.forEach(sale => {
-                const uniqueKey = `${sale.detectedSite}___${sale.brand}___${sale.month}`;
-                if (!groupedBrands[uniqueKey]) {
-                    groupedBrands[uniqueKey] = { site: sale.detectedSite, brand: sale.brand, month: sale.month, totalOwed: 0, itemCount: 0, salesItems: [] };
-                }
-                groupedBrands[uniqueKey].totalOwed += sale.owed;
-                groupedBrands[uniqueKey].itemCount += 1;
-                groupedBrands[uniqueKey].salesItems.push(sale.id);
-            });
+            const { creditsToCreate, salesToUpdate } = buildTrackerSyncPayloads(unsynced, masterBrands.value);
 
-            let creditsCreated = 0;
-            const batch = writeBatch(db); 
-            
-            for (const [key, data] of Object.entries(groupedBrands)) {
-                if (data.totalOwed > 0) {
-                    const masterRecord = masterBrands.value.find(b => (b.vendor || '').toLowerCase() === data.brand.toLowerCase());
-                    const payload = {
-                        site: data.site, 
-                        trackingMonth: data.month, 
-                        vendor: data.brand,
-                        distributor: (masterRecord && masterRecord.distributor) ? masterRecord.distributor : '', 
-                        creditType: `Aggregated POS Sales (${data.itemCount} items)`,
-                        dates: new Date().toLocaleDateString(),
-                        amount: data.totalOwed,
-                        dateRequested: new Date().toLocaleDateString(),
-                        dateReceived: '',
-                        invoice: 'CSV-AUTO-SYNC',
-                        status: 'Pending',
-                        createdAt: Date.now()
-                    };
+            if (creditsToCreate.length === 0) {
+                return alert("No valid credits to sync.");
+            }
+
+            try {
+                const batch = writeBatch(db);
+                creditsToCreate.forEach(payload => {
                     const newDocRef = doc(collection(db, "promoCredits"));
                     batch.set(newDocRef, payload);
-                    creditsCreated++;
+                });
+                salesToUpdate.forEach(({ id, status }) => {
+                    const saleRef = doc(db, "treesSales", id);
+                    batch.update(saleRef, { status });
+                });
 
-                    data.salesItems.forEach(saleId => {
-                        const saleRef = doc(db, "treesSales", saleId);
-                        batch.update(saleRef, { status: 'Synced' });
-                    });
-                }
-            }
-            
-            try {
                 await batch.commit();
-                logSystemAction("UPDATE", `Synced and aggregated ${creditsCreated} vendor credits`);
-                alert(`Success! Aggregated ${creditsCreated} vendor credits and pushed them to Firebase.`);
-            } catch (err) { 
+                logSystemAction("UPDATE", `Synced and aggregated ${creditsToCreate.length} vendor credits`);
+                alert(`Success! Aggregated ${creditsToCreate.length} vendor credits and pushed them to Firebase.`);
+            } catch (err) {
                 console.error(err);
-                alert("Failed to sync aggregated credits to the cloud."); 
+                alert("Failed to sync aggregated credits to the cloud.");
             }
         };
 
@@ -1868,60 +1800,28 @@ createApp({
         };
 
         const processBrandImport = async () => {
-            let updatedCount = 0;
-            let newCount = 0;
-            
-            let startRow = 0;
-            if (brandPastedGrid.value.length > 0) {
-                const firstRowStr = brandPastedGrid.value[0].join('').toLowerCase();
-                if (firstRowStr.includes('brand') && (firstRowStr.includes('email') || firstRowStr.includes('rep') || firstRowStr.includes('distro'))) {
-                    startRow = 1;
-                }
+            const { brandsToUpdate, brandsToCreate } = buildBrandImportPayloads(
+                brandPastedGrid.value,
+                brandMappedHeaders.value,
+                masterBrands.value
+            );
+
+            if (brandsToUpdate.length === 0 && brandsToCreate.length === 0) {
+                return alert("No valid brand entries found to import.");
             }
-            
-            const batch = writeBatch(db);
 
-            for (let r = startRow; r < brandPastedGrid.value.length; r++) {
-                const row = brandPastedGrid.value[r];
-                let currentBrand = {};
-                
-                for (let c = 0; c < row.length; c++) {
-                    const header = brandMappedHeaders.value[c];
-                    if (header === '-- Ignore Column --') continue;
-                    currentBrand[header] = row[c] || '';
-                }
-                
-                const vendorName = currentBrand['Brand'];
-                if (!vendorName || vendorName.length <= 1) continue; 
-                
-                const existingBrand = masterBrands.value.find(b => (b.vendor || '').toLowerCase() === vendorName.toLowerCase());
-                
-                const payload = {};
-                if (currentBrand['Rep'] !== undefined) payload.rep = currentBrand['Rep'];
-                if (currentBrand['Email'] !== undefined) payload.email = currentBrand['Email'];
-                if (currentBrand['Name as appears in TREES'] !== undefined) payload.treesName = currentBrand['Name as appears in TREES'];
-                if (currentBrand['Distro'] !== undefined) payload.distributor = currentBrand['Distro'];
-                if (currentBrand['Asset Library'] !== undefined) payload.assetLibrary = currentBrand['Asset Library'];
-                if (currentBrand['Order From'] !== undefined) payload.orderFrom = currentBrand['Order From'];
-                if (currentBrand['Payee'] !== undefined) payload.payee = currentBrand['Payee'];
-                if (currentBrand['Notes'] !== undefined) payload.notes = currentBrand['Notes'];
-
-                if (existingBrand) {
-                    if (Object.keys(payload).length > 0) {
-                        batch.update(doc(db, "brands", existingBrand.id), payload);
-                        updatedCount++;
-                    }
-                } else {
-                    payload.vendor = vendorName;
+            try {
+                const batch = writeBatch(db);
+                brandsToUpdate.forEach(({ id, data }) => {
+                    batch.update(doc(db, "brands", id), data);
+                });
+                brandsToCreate.forEach(payload => {
                     const newDocRef = doc(collection(db, "brands"));
                     batch.set(newDocRef, payload);
-                    newCount++;
-                }
-            }
-            
-            try {
+                });
+
                 await batch.commit();
-                alert(`Success! Added ${newCount} new brands and updated ${updatedCount} existing entries in the cloud.`);
+                alert(`Success! Added ${brandsToCreate.length} new brands and updated ${brandsToUpdate.length} existing entries in the cloud.`);
                 resetBrandImport();
                 showBrandImportModal.value = false;
             } catch (error) {
