@@ -2,17 +2,18 @@
 
 // 1. FIREBASE IMPORTS
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-app.js";
-import { getFirestore, collection, addDoc, doc, updateDoc, deleteDoc, writeBatch, onSnapshot, setDoc, query, where, orderBy, limit } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js";
+import { getFirestore, collection, addDoc, doc, updateDoc, deleteDoc, writeBatch, onSnapshot, setDoc, query, where, limit } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js";
 import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js";
-import { getStorage, ref as sRef, uploadBytes, getDownloadURL, getBytes } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-storage.js";
+import { getStorage, ref as sRef, uploadBytes, getBytes } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-storage.js";
 import { initializeAppCheck, ReCaptchaEnterpriseProvider } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-app-check.js";
 
-// NEW PHASE 1, 2, 3, 4 & 5 IMPORTS
+// NEW PHASE 1, 2, 3, 4, 5 & 6 IMPORTS
 import { parseCSVText, parseCSVRow, cleanString, cleanCurrency, csvEscape, normalizeHeader, validateHeaders } from './services/csvService.js';
 import { normalizeTreezLedger, normalizeSageLedger } from './services/ledgerService.js';
 import { parseExcelDate, generateAuditStatementCSV as generateAuditStatementService } from './services/auditService.js';
 import { buildStandardEmail, buildAuditFindingEmail, buildMailtoUrl } from './services/emailService.js';
 import { buildVendorsAndBrandsCSV, buildAnnualReportCSV, buildBrandVarianceCSV, buildYTDVariancePDFData } from './services/exportService.js';
+import { buildDefinitiveBrandMetrics, buildMonthlyReportSummaries, buildBrandAuditData, buildSageAuditData, calculateMonthlyReportData } from './services/reportService.js';
 
 // 2. FIREBASE CONFIGURATION
 const firebaseConfig = {
@@ -46,7 +47,6 @@ try {
     console.error("App Check Error:", error);
 }
 
-
 const db = getFirestore(firebaseApp);
 const auth = getAuth(firebaseApp); 
 const storage = getStorage(firebaseApp); 
@@ -55,9 +55,10 @@ const storage = getStorage(firebaseApp);
 const { createApp, ref, computed, nextTick, onMounted, watch } = window.Vue;
 
 createApp({
-        setup() {
+    setup() {
         const normalizeSiteName = (val) => String(val || '').toLowerCase().replace(/[\s_-]/g, '');
 
+        // --- Core State ---
         const isManagerUnlocked = ref(false);
         const loggedInUser = ref('');
         const emailInput = ref('');
@@ -65,7 +66,7 @@ createApp({
         const authError = ref('');
         const activeSite = ref('Red Bluff');
         const activeTab = ref('Ledger');
-        const promoCreditsList = ref([]); // Rename the ref to avoid collision with computed
+        const promoCreditsList = ref([]);
         const calendarMonths = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
         const activeMonth = ref('August');
         const masterBrands = ref([]);
@@ -105,48 +106,65 @@ createApp({
 
         // 1. DATA SOURCE: Master Workbook Fragments
         const masterWorkbook = ref({ data: {}, summary: {} });
+        const treesSalesData = ref([]); 
+        const auditRange = ref({ start: '', end: '' });
+        
+        // Form & Audit state
+        const startMonth = ref('January');
+        const endMonth = ref('September');
 
-        // NEW: Extraction Rules Logic (Definitive Applied & Generated per Brand)
+        // --- GLOBAL HELPERS (Hoisted for pure service injection) ---
+        const formatCurrency = (val) => {
+            const num = parseFloat(val);
+            if (isNaN(num)) return '$0';
+            const rounded = Math.round(num * 100) / 100;
+            return new Intl.NumberFormat('en-US', { 
+                style: 'currency', 
+                currency: 'USD',
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2
+            }).format(rounded);
+        };
+        
+        const detectMonthFromDate = (dateString) => {
+            if (!dateString) return 'Unknown';
+            const d = new Date(dateString);
+            if (isNaN(d.getTime())) return 'Unknown';
+            return calendarMonths[d.getMonth()];
+        };
+
+        const detectSiteFromName = (storeNameStr) => {
+            if (!storeNameStr) return activeSite.value; 
+            const s = storeNameStr.toLowerCase();
+            if (s.includes('red bluff') || s.includes('redbluff')) return 'Red Bluff';
+            if (s.includes('redding') || s.includes('sundial')) return 'Redding';
+            return activeSite.value; 
+        };
+
+        const getStandardizedBrandName = (name) => {
+            if (!name) return '';
+            const clean = String(name).trim();
+            const mappingRows = masterWorkbook.value.data["Brand_Mapping"] || [];
+            const match = mappingRows.find(r => 
+                String(r["Master Workbook Legacy Name"] || '').trim().toLowerCase() === clean.toLowerCase()
+            );
+            return match ? String(match["Standardized POS Name (CSV)"] || '').trim() : clean;
+        };
+
+
+        // --- PHASE 6: REPORT DATA EXTRACTIONS ---
+
+        // 1. Extraction Rules Logic (Definitive Applied & Generated per Brand)
         const definitiveBrandMetrics = computed(() => {
-            const metrics = { total: {}, redding: {}, redBluff: {} };
-            if (!masterWorkbook.value || !masterWorkbook.value.data) return metrics;
-
-            const processSheet = (sheetName, siteKey) => {
-                const rows = masterWorkbook.value.data[sheetName] || [];
-                rows.forEach(row => {
-                    const brandRaw = row["Brand"];
-                    if (!brandRaw) return;
-                    const brand = String(brandRaw).trim();
-    
-                    // Cleaning as per Extraction Rules Step 3/4
-                    const cleanBrand = brand.toLowerCase();
-                    if (['nan', 'grand total', '(blank)', 'store-funded', 'brand'].includes(cleanBrand)) return;
-
-                    const applied = parseFloat(String(row["YTD Received (GL)"] || 0).replace(/[^0-9.-]+/g,"")) || 0;
-                    const generated = parseFloat(String(row["YTD Generated (POS)"] || 0).replace(/[^0-9.-]+/g,"")) || 0;
-    
-                    if (!metrics.total[brand]) metrics.total[brand] = { applied: 0, generated: 0 };
-                    metrics.total[brand].applied += applied;
-                    metrics.total[brand].generated += generated;
-
-                    if (!metrics[siteKey][brand]) metrics[siteKey][brand] = { applied: 0, generated: 0 };
-                    metrics[siteKey][brand].applied += applied;
-                    metrics[siteKey][brand].generated += generated;
-                });
-            };
-
-            processSheet('Redding Store Audit', 'redding');
-            processSheet('Red Bluff Store Audit', 'redBluff');
-            return metrics;
+            return buildDefinitiveBrandMetrics(masterWorkbook.value?.data);
         });
 
-        // 2. COMPUTED: promoCredits (This name is what all components expect)
+        // COMPUTED: promoCredits (This active tracker merge logic remains local)
         const promoCredits = computed(() => {
             const allCredits = [];
             if (!masterWorkbook.value || !masterWorkbook.value.data) return [];
 
             Object.keys(masterWorkbook.value.data).forEach(sheetName => {
-                // Look for monthly sheets
                 if (sheetName.includes('2026')) {
                     const monthName = sheetName.split(' ')[0];
                     const rows = masterWorkbook.value.data[sheetName] || [];
@@ -158,7 +176,6 @@ createApp({
                         ["Redding", "Red-Bluff"].forEach(siteKey => {
                             const siteName = siteKey === "Red-Bluff" ? "Red Bluff" : "Redding";
                     
-                            // NEW LOGIC: Check for "x" marker or direct amount
                             let rawAmt = 0;
                             const rowKeys = Object.keys(row);
                             const exactKey = rowKeys.find(k => k.trim().toLowerCase() === siteName.toLowerCase() || k.trim().toLowerCase() === siteKey.toLowerCase());
@@ -203,7 +220,6 @@ createApp({
                     });
                 }
 
-                // NEW: Process "Monthly Vendor Variance Report"
                 if (sheetName === "Monthly Vendor Variance Report") {
                     const rows = masterWorkbook.value.data[sheetName] || [];
                     rows.forEach((row, idx) => {
@@ -218,8 +234,6 @@ createApp({
                             const colAmt = parseFloat(String(row[colKey] || 0).replace(/[^0-9.-]+/g,"")) || 0;
 
                             if (genAmt > 0) {
-                                // We only add this if it's NOT already covered by the site-specific logs
-                                // But for reporting, we can use this to fill gaps
                                 allCredits.push({
                                     id: `variance-${idx}-${m}`,
                                     site: "Corporate (Variance)",
@@ -237,7 +251,6 @@ createApp({
                 }
             });
             
-            // Also include any manual credits from Firestore that aren't synced to workbook
             promoCreditsList.value.forEach(c => {
                 if (c.invoice !== 'WB-V9-SYNC') allCredits.push(c);
             });
@@ -245,27 +258,64 @@ createApp({
             return allCredits;
         });
 
-        // 3. DASHBOARD & LEDGER (Now strictly powered by Workbook)
-        const treesSalesData = ref([]); 
-        const auditRange = ref({ start: '', end: '' });
+        const monthlyReportSummaries = computed(() => {
+            return buildMonthlyReportSummaries({
+                masterWorkbookData: masterWorkbook.value?.data,
+                targetMonth: activeMonth.value,
+                targetSite: activeSite.value,
+                calendarMonths,
+                masterBrands: masterBrands.value,
+                promoCredits: promoCredits.value,
+                treesSalesData: treesSalesData.value
+            });
+        });
 
+        const brandAuditData = computed(() => {
+            return buildBrandAuditData({
+                masterWorkbookData: masterWorkbook.value?.data,
+                targetMonth: activeMonth.value,
+                targetSite: activeSite.value,
+                auditRangeStart: auditRange.value.start,
+                auditRangeEnd: auditRange.value.end,
+                promoCredits: promoCredits.value,
+                masterBrands: masterBrands.value,
+                definitiveBrandMetrics: definitiveBrandMetrics.value
+            });
+        });
+
+        const sageAuditData = computed(() => {
+            return buildSageAuditData({
+                masterWorkbookData: masterWorkbook.value?.data,
+                targetSite: activeSite.value,
+                targetMonth: activeMonth.value,
+                promoCredits: promoCredits.value
+            }, { detectSiteFromName, detectMonthFromDate });
+        });
+
+        const calculateMonthlyReport = (brandName) => {
+            return calculateMonthlyReportData(brandName, {
+                startMonthValue: startMonth.value,
+                endMonthValue: endMonth.value,
+                calendarMonths,
+                masterWorkbookData: masterWorkbook.value?.data
+            }, { getStandardizedBrandName, detectMonthFromDate, detectSiteFromName });
+        };
+
+
+        // --- DASHBOARD & LEDGER ---
         const selectedLedgerVendor = ref(null);
         const masterLedgerData = ref([]);
         const ledgerTotals = ref({ generated: 0, recovered: 0, outstanding: 0, variance: 0 });
 
         const refreshLedger = async () => {
-            if (!promoCredits.value) return; // Prevent execution against undefined/null
+            if (!promoCredits.value) return; 
 
-            // Computed ledger simulation for UI wireframe
             const ledger = {};
             const site = activeSite.value;
             const month = activeMonth.value;
             
-            // 1. Process Promo Credits as Discovery/Recovery Events
             promoCredits.value.forEach(c => {
                 if (c.site !== site) return;
-                
-                // NEW: Respect the global month filter
                 if (month !== 'All' && c.trackingMonth !== month) return;
 
                 const v = c.vendor || 'Unknown';
@@ -279,7 +329,6 @@ createApp({
                     };
                 }
                 
-                // DISCOVERY EVENT
                 ledger[v].generated += (parseFloat(c.amount) || 0);
                 ledger[v].generatedCount++;
                 ledger[v].discoveryEvents.push({
@@ -289,8 +338,6 @@ createApp({
                     amount: c.amount
                 });
 
-                // RECOVERY EVENT (Rules: Status MUST be Applied, but logic is separate in ledger)
-                // NEW SYSTEM: This will be sourced from 'promoRecovered' collection.
                 if (c.status === 'Applied') {
                     const recoveredAmount = (parseFloat(c.amount) || 0); 
                     ledger[v].recovered += recoveredAmount;
@@ -307,19 +354,14 @@ createApp({
                 }
             });
 
-            // 2. Finalize Calculations using Definitive Extraction Rules
             const totals = { generated: 0, recovered: 0, outstanding: 0, variance: 0 };
             const siteKey = site === "Redding" ? "redding" : "redBluff";
 
             Object.values(ledger).forEach(item => {
-                // APPLY CRITICAL EXTRACTION RULES:
-                // Treat YTD Received (GL) from Audit sheets as the definitive "Applied" value.
-                // We use the site-specific metric when a site is selected, or 'total' if we were in a global view.
-                const brandMetrics = definitiveBrandMetrics.value[siteKey][item.vendor];
+                const brandMetrics = definitiveBrandMetrics.value[siteKey] ? definitiveBrandMetrics.value[siteKey][item.vendor] : null;
     
                 if (brandMetrics) {
                     item.recovered = brandMetrics.applied;
-                    // If viewing 'All' months, we also use the definitive Generated value to ensure parity
                     if (month === 'All') {
                         item.generated = brandMetrics.generated;
                     }
@@ -328,7 +370,6 @@ createApp({
                 item.outstanding = item.generated - item.recovered;
                 item.variance = 0;
     
-                // Aging calculation based on actual outstanding
                 if (item.outstanding > 0) {
                     item.aging['0-30'] = item.outstanding;
                 }
@@ -346,7 +387,6 @@ createApp({
         watch([promoCredits, activeSite, activeMonth], () => {
             if (activeTab.value === 'Ledger') refreshLedger();
         });
-
 
         const openLegacyVerification = (vendorItem) => {
             alert(`Opening Legacy Verification Stage for ${vendorItem.vendor}...\n\nThis stage allows cross-referencing old 'promoCredits' records against the new Ledger events to ensure no data loss during transition.`);
@@ -417,7 +457,6 @@ createApp({
 
         const searchQueryInput = ref('');
         const searchQuery = ref('');      
-        
         let searchTimeout = null;
         
         watch(searchQueryInput, (newVal) => {
@@ -528,124 +567,6 @@ createApp({
             }
         };
 
-        const monthlyReportSummaries = computed(() => {
-            const groups = {};
-    
-            // Helper to ensure group and brand structure exists
-            const ensureStructure = (m, v) => {
-                if (!groups[m]) {
-                    groups[m] = { month: m, total: 0, count: 0, credits: [], brands: {} };
-                }
-                const vendorName = v || 'Unmapped Brand';
-                if (!groups[m].brands[vendorName]) {
-                    const brandInfo = masterBrands.value.find(b => (b.vendor || '').toLowerCase() === vendorName.toLowerCase()) || {};
-                    groups[m].brands[vendorName] = {
-                        vendor: vendorName,
-                        month: m,
-                        email: brandInfo.email || '',
-                        rep: brandInfo.rep || '',
-                        credits: [],
-                        total: 0,
-                        workbookTotal: 0,
-                        posTotal: 0
-                    };
-                }
-                return groups[m].brands[vendorName];
-            };
-
-            const targetMonth = activeMonth.value;
-            const targetSite = activeSite.value;
-
-            // 1. SOURCE FROM WORKBOOK SHEETS (The Source of Truth)
-            if (masterWorkbook.value && masterWorkbook.value.data) {
-                Object.keys(masterWorkbook.value.data).forEach(sheetName => {
-                    if (!sheetName.includes('2026')) return;
-                    const mName = sheetName.split(' ')[0];
-                    if (targetMonth !== 'All' && mName !== targetMonth) return;
-
-                    const rows = masterWorkbook.value.data[sheetName] || [];
-                    rows.forEach(row => {
-                        const vendor = row["Brand"] || row[0];
-                        if (!vendor || vendor === "Brand" || vendor.toLowerCase().includes('total')) return;
-
-                        // DEFINE SITE KEY BASED ON DROPDOWN
-                        const siteKey = targetSite === "Redding" ? "Redding" : "Red-Bluff";
-
-                        let rawAmt = 0;
-                        const rowKeys = Object.keys(row);
-                        const exactKey = rowKeys.find(k => k.trim().toLowerCase() === targetSite.toLowerCase() || k.trim().toLowerCase() === siteKey.toLowerCase());
-                        
-                        if (exactKey) {
-                            const val = String(row[exactKey]).trim().toLowerCase();
-                            if (val === 'x') {
-                                const promoKey = rowKeys.find(k => k.toLowerCase().includes('promo credits'));
-                                rawAmt = row[promoKey] || 0;
-                            } else {
-                                rawAmt = row[exactKey];
-                            }
-                        } else if (siteKey === "Redding" && row[1] !== undefined) {
-                            rawAmt = row[1];
-                        } else if (siteKey === "Red-Bluff" && row[2] !== undefined) {
-                            rawAmt = row[2];
-                        }
-
-                        const amt = parseFloat(String(rawAmt || 0).replace(/[^0-9.-]+/g,"")) || 0;
-
-                        if (amt > 0) {
-                            const brand = ensureStructure(mName, vendor);
-                            brand.workbookTotal += amt;
-                            brand.total += amt;
-                            groups[mName].total += amt;
-                            groups[mName].count += 1;
-                            
-                            const approvedKey = rowKeys.find(k => k.toLowerCase().includes('approved') || k.toLowerCase().includes('applied') || k.toLowerCase().includes('collected'));
-                            
-                            // Add a simulated credit record for the UI list
-                            brand.credits.push({
-                                id: `sim-${mName}-${vendor}`,
-                                site: targetSite,
-                                trackingMonth: mName,
-                                vendor: vendor,
-                                amount: amt,
-                                creditType: row["Promo Credits"] || 'Aggregated POS Sales',
-                                dates: row["Date Requested"] || 'Workbook Sync',
-                                status: (parseFloat(String(row[approvedKey] || row["Credits Approved"] || 0).replace(/[^0-9.-]+/g,"")) > 0) ? 'Applied' : 'Pending'
-                            });
-                        }
-                    });
-                });
-            }
-
-            // 2. SOURCE FROM TRACKER (For manual entries not in workbook yet)
-            promoCredits.value.forEach(c => {
-                if (!c || c.site !== targetSite) return;
-                if (targetMonth !== 'All' && c.trackingMonth !== targetMonth) return;
-                if (c.invoice === 'WB-V9-SYNC') return; // Avoid double-counting workbook data
-
-                const brand = ensureStructure(c.trackingMonth, c.vendor);
-                brand.credits.push(c);
-                brand.total += (parseFloat(c.amount) || 0);
-                groups[c.trackingMonth].total += (parseFloat(c.amount) || 0);
-                groups[c.trackingMonth].count += 1;
-            });
-
-            // 3. SOURCE FROM RAW POS (To catch brands that have sales but aren't in workbook/tracker yet)
-            treesSalesData.value.forEach(s => {
-                if (!s || s.detectedSite !== targetSite) return;
-                if (targetMonth !== 'All' && s.month !== targetMonth) return;
-        
-                const brand = ensureStructure(s.month, s.brand);
-                brand.posTotal += (parseFloat(s.owed) || 0);
-            });
-
-            return Object.values(groups)
-                .sort((a, b) => calendarMonths.indexOf(a.month) - calendarMonths.indexOf(b.month))
-                .map(group => ({
-                    ...group,
-                    brandList: Object.values(group.brands).sort((a, b) => a.vendor.localeCompare(b.vendor))
-                }));
-        });
-
         const processManualCredits = (credits, promoDates, csvTotal, csvContent) => {
             let runningTotal = csvTotal;
             let runningContent = csvContent;
@@ -667,16 +588,6 @@ createApp({
             return { total: runningTotal, content: runningContent };
         };
 
-        const getStandardizedBrandName = (name) => {
-            if (!name) return '';
-            const clean = String(name).trim();
-            const mappingRows = masterWorkbook.value.data["Brand_Mapping"] || [];
-            // Match legacy name to get standardized name
-            const match = mappingRows.find(r => 
-                String(r["Master Workbook Legacy Name"] || '').trim().toLowerCase() === clean.toLowerCase()
-            );
-            return match ? String(match["Standardized POS Name (CSV)"] || '').trim() : clean;
-        };
 
         const generateAuditStatementCSV = (brand) => {
             return generateAuditStatementService({
@@ -699,7 +610,6 @@ createApp({
             const reportMonth = brand.month || activeMonth.value;
 
             if (!isFullMonth) {
-                // Brand-specific report now uses the Audit-Ready Cumulative Statement format
                 const csvContent = generateAuditStatementCSV(brand);
                 const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
                 const url = URL.createObjectURL(blob);
@@ -716,7 +626,6 @@ createApp({
                 return;
             }
 
-            // Full Month CSV remains itemized as requested
             let csvContent = "Location,Date & Time,Brand,Product Name,Transaction ID,Quantity Sold,Unit Price,Total Before Tax,Discount Title,Discount Amount,Credit Owed,Entry Type\n";
             let csvTotal = 0;
             const cleanStr = cleanString;
@@ -794,7 +703,6 @@ createApp({
             const monthStr = brand.month || activeMonth.value;
             const periodStr = `${monthStr} ${currentYear}`;
             
-            // New Calibrated CSV Summary Statement
             const csvContent = generateAuditStatementCSV(brand);
             const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
             const url = URL.createObjectURL(blob);
@@ -813,7 +721,6 @@ createApp({
             body += `Please let us know if you have any questions or when we can expect the remaining balance to be applied to our account.\n\n`;
             body += `Best regards,\n\n${storeName} Accounting Team\n`;
 
-            // Delegate mailto generation to pure service
             window.location.href = buildMailtoUrl(brand.email, 'accounting@rredco.com', subject, body);
             
             logSystemAction("EXPORT", `Generated Dual-Use Statement for ${brand.vendor}`);
@@ -831,7 +738,6 @@ createApp({
             const currentYear = new Date().getFullYear();
             const targetSite = activeSite.value;
             
-            // PDF Header
             doc.setFontSize(20);
             doc.setTextColor(16, 185, 129); // Emerald-500
             doc.text(`YTD VENDOR VARIANCE AUDIT - ${currentYear}`, 14, 20);
@@ -840,7 +746,6 @@ createApp({
             doc.text(`Generated on: ${new Date().toLocaleString()}`, 14, 26);
             doc.text(`Store Location: ${targetSite}`, 14, 31);
             
-            // Generate pure table data structures from service
             const helpers = { detectSiteFromName, detectMonthFromDate, formatCurrency };
             const { tableHeaders, tableData } = buildYTDVariancePDFData(
                 masterWorkbook.value ? masterWorkbook.value.data : null, 
@@ -876,7 +781,6 @@ createApp({
         const exportBrandCSVReports = (selectedBrand = null) => {
             const targetSite = activeSite.value;
             
-            // Generate entire raw CSV structure purely
             const helpers = { detectSiteFromName, detectMonthFromDate };
             const csvContent = buildBrandVarianceCSV(
                 masterWorkbook.value ? masterWorkbook.value.data : null, 
@@ -886,7 +790,6 @@ createApp({
                 helpers
             );
             
-            // Download Trigger
             const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
             const url = URL.createObjectURL(blob);
             const link = document.createElement('a');
@@ -1076,9 +979,7 @@ createApp({
                 return;
             }
 
-            // Delegate transformation logic to Export Service
             const csvContent = buildAnnualReportCSV(creditsToArchive, formatCurrency);
-
             const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
             const url = URL.createObjectURL(blob);
             const link = document.createElement("a");
@@ -1090,7 +991,6 @@ createApp({
             document.body.removeChild(link);
             setTimeout(() => URL.revokeObjectURL(url), 150);
 
-            // Archive logic disabled as it is now managed via Workbook V9
             alert("Export complete. Archiving is now managed directly through the Master Workbook process.");
         };
 
@@ -1100,10 +1000,7 @@ createApp({
                 return;
             }
 
-            // Delegate grouping and string generation to pure service
             const csvContent = buildVendorsAndBrandsCSV(masterBrands.value);
-
-            // Trigger download
             const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
             const url = URL.createObjectURL(blob);
             const link = document.createElement("a");
@@ -1147,14 +1044,12 @@ createApp({
         
         const form = ref(getEmptyForm());
         
-        // Optimized Listeners state
         let unsubscribeSales = null;
         let unsubscribeCredits = null;
 
         const setupFilteredListeners = () => {
             if (unsubscribeSales) unsubscribeSales();
             
-            // Revert to per-month pull to stay under 5,000 item limits and avoid data dropouts
             let salesQ = query(collection(db, "treesSales"), where("detectedSite", "==", activeSite.value));
 
             if (activeMonth.value !== 'All') {
@@ -1170,7 +1065,6 @@ createApp({
             }, (err) => console.error("Sales Pull Failed:", err));
         };
 
-        // Re-run the pull whenever you change the Month or Site
         watch([activeSite, activeMonth], () => {
             if (isManagerUnlocked.value) setupFilteredListeners();
         });
@@ -1204,79 +1098,6 @@ createApp({
             return workspaceTabs.find(t => t.name === activeTab.value) || { name: 'Unknown', icon: 'help-circle' };
         });
 
-
-        const brandAuditData = computed(() => {
-            if (!masterWorkbook.value || !masterWorkbook.value.data) return [];
-            const targetMonth = activeMonth.value;
-            const targetSite = activeSite.value;
-            const siteKey = targetSite === "Redding" ? "redding" : "redBluff";
-            const start = auditRange.value.start ? new Date(auditRange.value.start) : null;
-            const end = auditRange.value.end ? new Date(auditRange.value.end) : null;
-            const brandMap = {};
-
-            // 1. Process Promo Credits (Mirrors Master Ledger)
-            (promoCredits.value || []).forEach(c => {
-                if (c.site !== targetSite) return;
-
-                // Priority: Specific Date Range Picker, fallback to Global Month Selector
-                if (start || end) {
-                    const creditDate = c.dateRequested || c.dates ? new Date(c.dateRequested || c.dates) : null;
-                    if (creditDate && !isNaN(creditDate.getTime())) {
-                        if (start && creditDate < start) return;
-                        if (end && creditDate > end) return;
-                    }
-                } else if (targetMonth !== 'All' && c.trackingMonth !== targetMonth) {
-                    return;
-                }
-
-                const vendor = c.vendor || 'Unknown Brand';
-                if (!brandMap[vendor]) {
-                    const brandInfo = masterBrands.value.find(b => (b.vendor || '').toLowerCase() === vendor.toLowerCase()) || {};
-                    brandMap[vendor] = {
-                        vendor: vendor,
-                        email: brandInfo.email || '',
-                        rep: brandInfo.rep || '',
-                        generated: 0,
-                        collected: 0,
-                        treezTotal: 0,
-                        credits: []
-                    };
-                }
-
-                const amt = parseFloat(c.amount) || 0;
-                brandMap[vendor].generated += amt;
-
-                // Preliminary collected status from item level
-                if (c.status === 'Applied') {
-                    brandMap[vendor].collected += amt;
-                }
-
-                brandMap[vendor].credits.push({
-                    month: c.trackingMonth,
-                    amount: amt,
-                    dates: c.dateRequested || c.dates || '-',
-                    status: c.status === 'Applied' ? 'Collected' : 'Pending'
-                });
-            });
-
-            // 2. Apply Definitive Extraction Rules (Exact Master Ledger Parity)
-            Object.keys(brandMap).forEach(vendor => {
-                const brandMetrics = definitiveBrandMetrics.value[siteKey] ? definitiveBrandMetrics.value[siteKey][vendor] : null;
-                if (brandMetrics) {
-                    // Override with definitive GL applied credits
-                    brandMap[vendor].collected = brandMetrics.applied;
-                    brandMap[vendor].recovered = brandMetrics.applied;
-                    // If viewing all months and no custom range, sync generated to audit sheet
-                    if (!start && !end && targetMonth === 'All') {
-                        brandMap[vendor].generated = brandMetrics.generated;
-                    }
-                }
-            });
-
-            // 3. Sort by Net Outstanding Balance descending
-            return Object.values(brandMap).sort((a, b) => (b.generated - b.collected) - (a.generated - a.collected));
-        });
-
         const workbookSchema = {
             "Board Recon - Red Bluff": ["Red Bluff - YTD Promo Reconciliation", "Gross Promos Generated", "Store-Funded deductions", "Net Collectibles", "Sage Collected", "Monthly Outstanding", "YTD balances"],
             "Board Recon - Redding": ["Redding - YTD Promo Reconciliation", "Gross Promos Generated", "Store-Funded deductions", "Net Collectibles", "Sage Collected", "Monthly Outstanding", "YTD balances"],
@@ -1304,14 +1125,12 @@ createApp({
         };
 
         const activeWorkbookSheet = ref(Object.keys(workbookSchema)[0]);
-
         const isWorkbookLoaded = ref(false);
 
         const activeWorkbookHeaders = computed(() => {
             const rows = masterWorkbook.value?.data?.[activeWorkbookSheet.value] || [];
             if (rows.length === 0) return workbookSchema[activeWorkbookSheet.value] || [];
             
-            // Get all keys from all rows to ensure we don't miss anything
             const keys = new Set();
             rows.slice(0, 10).forEach(row => {
                 Object.keys(row).forEach(k => {
@@ -1335,13 +1154,11 @@ createApp({
                     const worksheet = workbook.Sheets[sheetName];
                     const json = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
                     
-                    // Prune empty rows
                     const prunedRows = json.filter(row => {
                         return Object.values(row).some(val => val !== "" && val !== null && val !== undefined);
                     });
 
-                    // SAVE EACH SHEET AS A SEPARATE DOCUMENT (Bypasses 1MB limit)
-                    const docId = sheetName.replace(/\//g, '_'); // Replace slashes for safe doc IDs
+                    const docId = sheetName.replace(/\//g, '_'); 
                     const sheetRef = doc(db, "workbook_v9_sheets", docId);
                     
                     batch.set(sheetRef, {
@@ -1350,7 +1167,6 @@ createApp({
                         updatedAt: Date.now()
                     });
                     
-                    // Update local state immediately
                     masterWorkbook.value.data[sheetName] = prunedRows;
                     sheetsImported++;
                 }
@@ -1359,13 +1175,11 @@ createApp({
                 isWorkbookLoaded.value = true;
                 console.log(`Success! ${sheetsImported} sheets broken into individual docs and saved permanently.`);
                 alert(`Permanent Population Complete!\n\n${sheetsImported} sheets have been saved as individual records in Firestore. You will not need to pull the 2MB file from the server again.`);
-
             } catch (err) {
                 console.error("Storage Workbook Error:", err);
                 alert("Failed to pull and batch-save workbook: " + err.message);
             }
         };
-
 
         onMounted(() => {
             refreshIcons();
@@ -1391,7 +1205,6 @@ createApp({
                     isManagerUnlocked.value = true;
                     isSuperAdmin.value = !!managerData.superAdmin;
 
-                    // 1. Permanent Sheet Listeners (The Source of Truth)
                     console.log("Listening to workbook_v9_sheets...");
                     onSnapshot(collection(db, "workbook_v9_sheets"), (snapshot) => {
                         console.log(`Snapshot received: ${snapshot.size} sheets found.`);
@@ -1402,12 +1215,10 @@ createApp({
                         });
                         if (snapshot.size > 0) {
                             isWorkbookLoaded.value = true;
-                            // Recalculate Ledger
                             nextTick(() => { refreshLedger(); });
                         }
                     }, (err) => console.error("Sheets Listener Error:", err));
 
-                    // 2. Master Workbook Metadata (Reactive to Site)
                     watch(activeSite, (newSite) => {
                         const docId = `Board_Report_${newSite.replace(/\s/g, '_')}`;
                         onSnapshot(doc(db, "promo tracker", docId), (docSnap) => {
@@ -1420,10 +1231,8 @@ createApp({
                     }, { immediate: true });
 
 
-                    // 3. Optimized Sales Listener (Discovery Intake)
                     setupFilteredListeners();
 
-                    // 4. Brand Directory Listener
                     onSnapshot(collection(db, "brands"), (snapshot) => {
                         const fetchedBrands = [];
                         snapshot.forEach(docSnap => { fetchedBrands.push({ id: docSnap.id, ...docSnap.data() }); });
@@ -1463,34 +1272,6 @@ createApp({
             showBrandDropdown.value = false;
         };
 
-        const formatCurrency = (val) => {
-            const num = parseFloat(val);
-            if (isNaN(num)) return '$0';
-            // Rounding to 2 decimal places to ensure no floating point errors (e.g. .000000001)
-            const rounded = Math.round(num * 100) / 100;
-            return new Intl.NumberFormat('en-US', { 
-                style: 'currency', 
-                currency: 'USD',
-                minimumFractionDigits: 2,
-                maximumFractionDigits: 2
-            }).format(rounded);
-        };
-        
-        const detectMonthFromDate = (dateString) => {
-            if (!dateString) return 'Unknown';
-            const d = new Date(dateString);
-            if (isNaN(d.getTime())) return 'Unknown';
-            return calendarMonths[d.getMonth()];
-        };
-
-        const detectSiteFromName = (storeNameStr) => {
-            if (!storeNameStr) return activeSite.value; 
-            const s = storeNameStr.toLowerCase();
-            if (s.includes('red bluff') || s.includes('redbluff')) return 'Red Bluff';
-            if (s.includes('redding') || s.includes('sundial')) return 'Redding';
-            return activeSite.value; 
-        };
-
         const filteredCredits = computed(() => {
             let base = promoCredits.value.filter(c => c && c.site === activeSite.value && c.archived !== true);
             if (activeMonth.value !== 'All') base = base.filter(c => c.trackingMonth === activeMonth.value);
@@ -1528,7 +1309,6 @@ createApp({
         const displayTreesSalesData = computed(() => filteredTreesSalesData.value.slice(0, 100));
         
         const totalTreesOwedYTD = computed(() => {
-            // Source from Workbook Definitive Metrics instead of raw Firestore Sales to avoid 5,000 item limit
             let total = 0;
             const siteKey = activeSite.value === "Redding" ? "redding" : "redBluff";
             Object.values(definitiveBrandMetrics.value[siteKey] || {}).forEach(m => {
@@ -1538,11 +1318,8 @@ createApp({
         });
 
         const totalTreesPending = computed(() => treesSalesData.value.filter(s => s.detectedSite === activeSite.value && s.status === 'Unsynced').reduce((sum, s) => sum + (parseFloat(s.owed) || 0), 0));
-
         const totalPending = computed(() => filteredCredits.value.filter(c => c.status === 'Pending').reduce((sum, c) => sum + (parseFloat(c.amount) || 0), 0));
-
         const totalApplied = computed(() => filteredCredits.value.filter(c => c.status === 'Applied').reduce((sum, c) => sum + (parseFloat(c.amount) || 0), 0));
-        
         const unsyncedSalesCount = computed(() => filteredTreesSalesData.value.filter(s => s.status === 'Unsynced').length);
 
         const openPromoModal = () => { form.value = getEmptyForm(); editingId.value = null; showPromoModal.value = true; refreshIcons(); };
@@ -1739,12 +1516,10 @@ createApp({
             const file = e.target.files[0];
             if (!file) return;
 
-            // NEW PHASE 1: PRESERVE CSV TO STORAGE BEFORE PARSING
             const storagePath = `master_csvs/${activeSite.value}/${new Date().getFullYear()}/${activeMonth.value}/${Date.now()}_${file.name}`;
             const fileRef = sRef(storage, storagePath);
             
             try {
-                // 1. Register the upload in Firestore manifest
                 const uploadManifest = {
                     fileName: file.name,
                     storagePath: storagePath,
@@ -1757,7 +1532,6 @@ createApp({
                 const manifestRef = await addDoc(collection(db, "source_uploads"), uploadManifest);
                 const uploadId = manifestRef.id;
 
-                // 2. Upload the raw binary to Storage
                 await uploadBytes(fileRef, file);
                 console.log("CSV preserved to storage:", storagePath);
 
@@ -1765,15 +1539,12 @@ createApp({
                 reader.onload = async (evt) => {
                     try {
                         const text = evt.target.result;
-                        // NEW: Use parseCSVText instead of manual splitting and parsing
                         const { headers: baseHeaders, rows } = parseCSVText(text);
                         if (rows.length === 0) return alert("File is empty or invalid.");
 
-                        // Find the actual header row if it's not the first line
                         let headerIdx = -1;
                         let headers = [];
                         
-                        // Check if base headers are valid, otherwise scan rows
                         const baseValidation = validateHeaders(baseHeaders, ['product brand', 'vendor credit owed']);
                         if (baseValidation.valid) {
                             headers = baseHeaders;
@@ -1804,7 +1575,6 @@ createApp({
                             if (!rows[i].trim()) continue;
                             const cols = parseCSVRow(rows[i]);
                             const rowObj = {};
-                            // NEW: Use cleanString
                             headers.forEach((h, idx) => { rowObj[h] = cols[idx] ? cleanString(cols[idx]) : ''; });
 
                             const brandVal = getVal(rowObj, 'Product Brand', 'Brand');
@@ -1817,14 +1587,13 @@ createApp({
                             const storeString = getVal(rowObj, 'Store Name', 'Location');
                             const detectedSite = detectSiteFromName(storeString);
 
-                            // NEW: Use cleanCurrency
                             const units = parseFloat(getVal(rowObj, 'Units Sold', 'Unit Sold', 'Qty', 'Quantity')) || 0;
                             const unitPrice = cleanCurrency(getVal(rowObj, 'Cost Per Unit', 'Unit Price', 'Price'));
                             const discAmt = cleanCurrency(getVal(rowObj, 'Discounts', 'Discount Amount', 'Discount'));
                             const owedAmt = cleanCurrency(getVal(rowObj, 'Vendor Credit Owed', 'Credit Owed'));
 
                             const newSale = {
-                                uploadId: uploadId, // LINK TO SOURCE CSV
+                                uploadId: uploadId, 
                                 month: parsedMonth, 
                                 brand: brandVal || 'Unknown Brand',
                                 discountTitle: getVal(rowObj, 'Discount Title', 'Discount Name') || '',
@@ -1888,26 +1657,23 @@ createApp({
                         const { headers, rows } = parseCSVText(text);
                         const importedSageData = [];
 
-                        for (let i = 0; i < rows.length; i++) { // Adjusted index since headers are extracted
+                        for (let i = 0; i < rows.length; i++) { 
                             const cols = parseCSVRow(rows[i]);
                             const rowObj = {};
                             headers.forEach((h, idx) => { 
                                 rowObj[h] = cols[idx] ? cleanString(cols[idx]) : ''; 
                             });
                             
-                            // Map Sage Columns to Workbook Schema
-                            // Expected Sage Headers: Posted dt., Store, Location, Memo/Description, Credit
                             importedSageData.push({
                                 "Posted dt.": rowObj["Posted dt."] || rowObj["Date"] || '',
                                 "Store": rowObj["Store"] || rowObj["Location"] || '',
                                 "Location": rowObj["Location"] || '',
                                 "Memo/Description": rowObj["Memo/Description"] || rowObj["Description"] || rowObj["Memo"] || '',
                                 "Credit": cleanCurrency(rowObj["Credit"] || rowObj["Amount"]),
-                                "Mapped Brand": "" // Will be manually mapped or auto-detected later
+                                "Mapped Brand": "" 
                             });
                         }
 
-                        // Push to Master Workbook
                         if (!masterWorkbook.value) return alert("Master Workbook not loaded.");
                         
                         const updatedData = JSON.parse(JSON.stringify(masterWorkbook.value.data));
@@ -1920,7 +1686,6 @@ createApp({
                             updatedAt: Date.now()
                         });
 
-                        // Update summary metadata
                         await setDoc(doc(db, "promo tracker", "Master_Workbook_V9_Board_Report"), {
                             lastModified: Date.now(),
                             modifiedBy: loggedInUser.value
@@ -1954,20 +1719,14 @@ createApp({
 
                     const uploadTime = new Date().toLocaleString();
                     
-                    // REPLACED PARSING LOOP WITH SERVICE EXTRATION
                     const parsedData = normalizeTreezLedger(
-                        rows, 
-                        headers, 
-                        file.name, 
-                        uploadTime, 
-                        normalizeSiteName, 
-                        getStandardizedBrandName
+                        rows, headers, file.name, uploadTime, normalizeSiteName, getStandardizedBrandName
                     );
 
                     if (parsedData.length === 0) {
                         alert("No valid records found in Treez upload. Please check the column formatting.");
                         return;
-                        }
+                    }
 
                     treezLedger.value = parsedData;
                     treezLedgerLastUpload.value = uploadTime;
@@ -1997,14 +1756,8 @@ createApp({
 
                     const uploadTime = new Date().toLocaleString();
 
-                    // REPLACED PARSING LOOP WITH SERVICE EXTRATION
                     const parsedData = normalizeSageLedger(
-                        rows, 
-                        headers, 
-                        file.name, 
-                        uploadTime, 
-                        normalizeSiteName, 
-                        getStandardizedBrandName
+                        rows, headers, file.name, uploadTime, normalizeSiteName, getStandardizedBrandName
                     );
 
                     if (parsedData.length === 0) {
@@ -2277,7 +2030,6 @@ createApp({
             }
 
             try {
-                // Isolated doc per site
                 const docId = `Board_Report_${activeSite.value.replace(/\s/g, '_')}`;
                 await setDoc(doc(db, "promo tracker", docId), {
                     reportMonth: month,
@@ -2309,8 +2061,6 @@ createApp({
                 let creditsDeleted = 0;
                 let brandsAdded = 0;
 
-                // 1. Clear out ALL existing (non-archived) credits first to prevent duplicates
-                // We use the full promoCredits list we currently have in memory
                 promoCredits.value.forEach(c => {
                     if (!c.archived) {
                         batch.delete(doc(db, "promoCredits", c.id));
@@ -2318,30 +2068,24 @@ createApp({
                     }
                 });
 
-                // 2. Loop through all sheets in the workbook
                 for (const sheetName of Object.keys(masterWorkbook.value.data)) {
-                    // We only want the monthly sheets (e.g., "August 2026")
                     if (!sheetName.includes('2026')) continue;
 
-                    const monthName = sheetName.split(' ')[0]; // "August"
+                    const monthName = sheetName.split(' ')[0]; 
                     const rows = masterWorkbook.value.data[sheetName] || [];
 
                     rows.forEach(row => {
                         const vendor = row["Brand"] || row[0];
                         if (!vendor || vendor === "Brand" || vendor.toLowerCase().includes('total')) return; 
 
-                        // Prepare the Credit Record
                         const sites = ["Redding", "Red-Bluff"];
                         sites.forEach(siteKey => {
                             const siteName = siteKey === "Red-Bluff" ? "Red Bluff" : "Redding";
-                            // Get amount, cleaning dollar signs and commas
                             const rawAmt = row[siteKey] || row[sites.indexOf(siteKey) + 1];
                             const amt = parseFloat(String(rawAmt || 0).replace(/[^0-9.-]+/g,"")) || 0;
 
                             if (amt > 0) {
                                 const creditRef = doc(collection(db, "promoCredits"));
-                                
-                                // Determine status based on presence of Approved amount or Date Applied
                                 const approvedAmt = parseFloat(String(row["Credits Approved"] || 0).replace(/[^0-9.-]+/g,"")) || 0;
                                 const isApplied = (approvedAmt > 0) || (!!row["Date Applied"] && row["Date Applied"] !== 'N/A');
 
@@ -2364,7 +2108,6 @@ createApp({
                             }
                         });
 
-                        // Ensure Brand exists in Directory
                         if (!masterBrands.value.find(b => (b.vendor || '').toLowerCase() === vendor.toLowerCase())) {
                             const brandRef = doc(collection(db, "brands"));
                             batch.set(brandRef, {
@@ -2397,7 +2140,6 @@ createApp({
             if (!confirm(`This will merge ${unsynced.length} sales items into the Master Workbook V9 (Cloud Document). New brand totals will be ADDED to existing values. Continue?`)) return;
 
             try {
-                // Clone the workbook data
                 const updatedData = JSON.parse(JSON.stringify(masterWorkbook.value.data));
                 const currentYear = "2026"; 
                 let updatesCount = 0;
@@ -2415,7 +2157,6 @@ createApp({
                     });
 
                     if (!brandRow) {
-                        // Create new row object with correct schema if brand missing
                         brandRow = { 
                             "Brand": sale.brand, 
                             "Redding": 0, 
@@ -2428,7 +2169,6 @@ createApp({
 
                     const siteKey = sale.detectedSite === "Redding" ? "Redding" : "Red-Bluff";
             
-                    // "Without changing existing data" -> Sum the new sales into the existing cells
                     const currentSiteVal = parseFloat(String(brandRow[siteKey] || 0).replace(/[^0-9.-]+/g,"")) || 0;
                     brandRow[siteKey] = currentSiteVal + (sale.owed || 0);
 
@@ -2438,7 +2178,6 @@ createApp({
                     updatesCount++;
                 });
 
-                // Update the specific sheet document instead of the whole workbook
                 const sheetDocId = sheetName.replace(/\//g, '_');
                 await setDoc(doc(db, "workbook_v9_sheets", sheetDocId), {
                     sheetName: sheetName,
@@ -2446,13 +2185,11 @@ createApp({
                     updatedAt: Date.now()
                 });
 
-                // Update summary metadata
                 await setDoc(doc(db, "promo tracker", "Master_Workbook_V9_Board_Report"), {
                     lastModified: Date.now(),
                     modifiedBy: loggedInUser.value
                 }, { merge: true });
 
-                // Mark sales as Synced
                 const batch = writeBatch(db);
                 unsynced.forEach(sale => {
                     batch.update(doc(db, "treesSales", sale.id), { status: 'Synced' });
@@ -2467,154 +2204,6 @@ createApp({
             }
         };
 
-        const sageAuditData = computed(() => {
-            if (!masterWorkbook.value || !masterWorkbook.value.data) return [];
-            
-            const rawSageRows = masterWorkbook.value.data["GL Raw by Store"] || [];
-            if (rawSageRows.length === 0) return [];
-
-            const sageMap = {};
-            const targetSite = activeSite.value;
-            const targetMonth = activeMonth.value;
-
-            rawSageRows.forEach(row => {
-                const site = detectSiteFromName(row["Store"] || row[1] || row["Location"] || row[2]);
-                const dateStr = row["Posted dt."] || row[0] || 'Unknown';
-                const month = detectMonthFromDate(dateStr);
-
-                // FILTER: Only include rows matching selected site and month
-                if (site !== targetSite) return;
-                if (targetMonth !== 'All' && month !== targetMonth) return;
-
-                const brand = row["Mapped Brand"] || row[5] || 'Unmapped';
-                if (brand === "Mapped Brand" || !brand) return;
-
-                if (!sageMap[brand]) {
-                    sageMap[brand] = {
-                        brand: brand,
-                        totalApplied: 0,
-                        totalGenerated: 0,
-                        transactions: [],
-                        sites: { "Redding": 0, "Red Bluff": 0 }
-                    };
-                }
-
-                const amt = parseFloat(String(row["Credit"] || row[4] || 0).replace(/[^0-9.-]+/g,"")) || 0;
-                const memo = row["Memo/Description"] || row[3] || '';
-
-                sageMap[brand].totalApplied += amt;
-                sageMap[brand].sites[site] += amt;
-                sageMap[brand].transactions.push({
-                    date: dateStr,
-                    site: site,
-                    memo: memo,
-                    amount: amt
-                });
-            });
-
-            // Integrate Generated Promos (POS) for comparison in the grid
-            promoCredits.value.forEach(c => {
-                if (c.site !== targetSite) return;
-                if (targetMonth !== 'All' && c.trackingMonth !== targetMonth) return;
-
-                const brand = c.vendor || 'Unknown';
-                if (!sageMap[brand]) {
-                    sageMap[brand] = {
-                        brand: brand,
-                        totalApplied: 0,
-                        totalGenerated: 0,
-                        transactions: [],
-                        sites: { "Redding": 0, "Red Bluff": 0 }
-                    };
-                }
-                sageMap[brand].totalGenerated += (parseFloat(c.amount) || 0);
-            });
-
-            return Object.values(sageMap).sort((a, b) => b.totalApplied - a.totalApplied);
-        });
-
-        // --- AUDIT MODE & EMAIL DRAFT LOGIC ---
-        const emailReportMode = ref('standard');
-        const startMonth = ref('January');
-        const endMonth = ref('September');
-        const showEmailDraftModal = ref(false);
-        const selectedBrandForEmail = ref(null);
-        const emailDraftSubject = ref('');
-        const emailDraftBody = ref('');
-        
-        const getAuditedMonthsList = (startMonth, endMonth) => {
-            const allMonths = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-            const startIdx = allMonths.indexOf(startMonth);
-            const endIdx = allMonths.indexOf(endMonth);
-            if (startIdx === -1 || endIdx === -1 || startIdx > endIdx) return allMonths.slice(0, 9);
-            return allMonths.slice(startIdx, endIdx + 1);
-        };
-        
-        const calculateMonthlyReport = (brandName) => {
-            if (!brandName) return { reddingGenerated: 0, reddingRecovered: 0, redBluffGenerated: 0, redBluffRecovered: 0, totalGenerated: 0, totalRecovered: 0, balance: 0 };
-            let redGen = 0, redRec = 0, rbGen = 0, rbRec = 0;
-            
-            const startIdx = calendarMonths.indexOf(startMonth.value || 'January');
-            const endIdx = calendarMonths.indexOf(endMonth.value || 'September');
-            // Math.max guarantees we don't get negative lengths, +1 ensures the end month is included
-            const auditedMonths = calendarMonths.slice(startIdx, Math.max(startIdx, endIdx) + 1);
-            
-            const standardizedTarget = getStandardizedBrandName(brandName).trim().toLowerCase();
-
-            if (masterWorkbook.value && masterWorkbook.value.data) {
-                auditedMonths.forEach(m => {
-                    const sheetName = `${m} 2026`;
-                    const rows = masterWorkbook.value.data[sheetName] || [];
-                    rows.forEach(row => {
-                        // 1. Dynamically find keys
-                        const keys = Object.keys(row);
-                        const brandKey = keys.find(k => k.trim().toLowerCase() === 'brand');
-                        const promoKey = keys.find(k => k.trim().toLowerCase() === 'promo credits');
-
-                        const reddingKey = keys.find(k => k.trim().toLowerCase().includes('redding'));
-                        const redBluffKey = keys.find(k => k.trim().toLowerCase().includes('red-bluff') || k.trim().toLowerCase().includes('red bluff'));
-                        const rowBrand = brandKey ? String(row[brandKey]).trim() : String(row[0] || '').trim();
-                        
-                        if (rowBrand && getStandardizedBrandName(rowBrand).toLowerCase() === standardizedTarget) {
-                            const promoAmt = promoKey ? parseFloat(String(row[promoKey]).replace(/[^0-9.-]+/g, "")) || 0 : 0;
-                            // 2. Safely evaluate store markers
-                            const isRedding = reddingKey && String(row[reddingKey]).trim().toLowerCase() === 'x';
-                            const isRedBluff = redBluffKey && String(row[redBluffKey]).trim().toLowerCase() === 'x';
-                            
-                            if (isRedding) redGen += promoAmt;
-                            if (isRedBluff) rbGen += promoAmt;
-                        }
-                    });
-                });
-                const sageRows = masterWorkbook.value.data["GL Raw by Store"] || [];
-                sageRows.forEach(row => {
-                    const rowBrand = row["Mapped Brand"] || '';
-                    if (getStandardizedBrandName(rowBrand).trim().toLowerCase() === standardizedTarget) {
-                        const dateStr = row["Posted dt."] || '';
-                        const month = detectMonthFromDate(dateStr);
-                        if (auditedMonths.includes(month)) {
-                            const amt = parseFloat(String(row["Credit"] || 0).replace(/[^0-9.-]+/g, "")) || 0;
-                            const site = detectSiteFromName(row["Store"] || row["Location"]);
-                            if (site === 'Redding') redRec += amt;
-                            if (site === 'Red Bluff') rbRec += amt;
-                        }
-                    }
-                });
-            }
-            let gen = redGen + rbGen;
-            let rec = redRec + rbRec;
-            let bal = gen - rec;
-            return { 
-                reddingGenerated: redGen, 
-                reddingRecovered: redRec, 
-                redBluffGenerated: rbGen, 
-                redBluffRecovered: rbRec, 
-                totalGenerated: gen, 
-                totalRecovered: rec, 
-                balance: bal 
-            };
-        };
-
         const refreshEmailDraft = () => {
             if (!selectedBrandForEmail.value) return;
             const brand = selectedBrandForEmail.value;
@@ -2624,7 +2213,6 @@ createApp({
             
             emailDraftSubject.value = `Promo Credit Statement (${startPeriod} 2026 - ${endPeriod} 2026)`;
             
-            // Prepare config object and calculate data for the pure service
             const vendorName = brand.vendor || brand;
             const reportData = calculateMonthlyReport(vendorName);
             const config = {
@@ -2634,7 +2222,6 @@ createApp({
                 userName: loggedInUser.value || 'Nicholas G.'
             };
 
-            // Route to the appropriate pure service generator
             if (emailReportMode.value === 'standard') {
                 emailDraftBody.value = buildStandardEmail(vendorName, reportData, config);
             } else {
