@@ -1679,7 +1679,7 @@ createApp({
                     if (!file) return;
 
                     const reader = new FileReader();
-                    reader.onload = (evt) => {
+                    reader.onload = async (evt) => {
                         try {
                             const text = evt.target.result;
                             const lines = parseCSVText(text);
@@ -1702,6 +1702,55 @@ createApp({
                             treezLedger.value = parsedData;
                             treezLedgerLastUpload.value = uploadTime;
                             persistLedgers();
+
+                            // --- OPTION B: WORKBOOK INGESTION ---
+                            if (confirm(`Successfully parsed ${parsedData.length} records. Would you like to merge this data into the Master Workbook?`)) {
+                                const updatedData = JSON.parse(JSON.stringify(masterWorkbook.value.data));
+                                const currentYear = "2026";
+                                const affectedSheets = new Set();
+
+                                parsedData.forEach(item => {
+                                    if (!item.isRecoverable) return;
+                            
+                                    const month = detectMonthFromDate(item.promoDate);
+                                    const sheetName = `${month} ${currentYear}`;
+                                    if (!updatedData[sheetName]) return;
+
+                                    affectedSheets.add(sheetName);
+                                    const sheetRows = updatedData[sheetName];
+                                    const cleanBrand = item.brand.trim().toLowerCase();
+
+                                    let brandRow = sheetRows.find(r => {
+                                        const rowBrand = (r["Brand"] || r[0] || '').toLowerCase().trim();
+                                        return rowBrand === cleanBrand;
+                                    });
+
+                                    if (!brandRow) {
+                                        brandRow = { "Brand": item.brand, "Redding": 0, "Red-Bluff": 0, "Promo Credits ": "", "Treez Total": 0 };
+                                        sheetRows.push(brandRow);
+                                    }
+
+                                    const siteKey = item.location.includes('bluff') ? 'Red-Bluff' : 'Redding';
+                                    const currentVal = cleanCurrency(brandRow[siteKey]);
+                                    brandRow[siteKey] = currentVal + item.creditGenerated;
+                            
+                                    const currentTotal = cleanCurrency(brandRow["Treez Total"]);
+                                    brandRow["Treez Total"] = currentTotal + item.creditGenerated;
+                                });
+
+                                // Persist affected sheets
+                                for (const sheetName of affectedSheets) {
+                                    const docId = sheetName.replace(/\//g, '_');
+                                    await setDoc(doc(db, "workbook_v9_sheets", docId), {
+                                        sheetName: sheetName,
+                                        rows: updatedData[sheetName],
+                                        updatedAt: Date.now()
+                                    });
+                                }
+                        
+                                masterWorkbook.value.data = updatedData;
+                                logSystemAction("UPDATE", `Merged Treez Ledger into Workbook (${affectedSheets.size} sheets)`);
+                            }
                             
                             logSystemAction("UPLOAD", `Treez ledger imported (${parsedData.length} records)`);
                             alert(`Treez Ledger: Records Imported: ${parsedData.length}`);
@@ -1719,7 +1768,7 @@ createApp({
                     if (!file) return;
 
                     const reader = new FileReader();
-                    reader.onload = (evt) => {
+                    reader.onload = async (evt) => {
                         try {
                             const text = evt.target.result;
                             const lines = parseCSVText(text);
@@ -1742,6 +1791,34 @@ createApp({
                             sage4545Ledger.value = parsedData;
                             sage4545LedgerLastUpload.value = uploadTime;
                             persistLedgers();
+
+                            // --- OPTION B: WORKBOOK INGESTION ---
+                            if (confirm(`Successfully parsed ${parsedData.length} recovery records. Append these to the Master Workbook GL?`)) {
+                                const updatedData = JSON.parse(JSON.stringify(masterWorkbook.value.data));
+                                const glSheet = updatedData["GL Raw by Store"] || [];
+
+                                parsedData.forEach(item => {
+                                    glSheet.push({
+                                        "Posted dt.": item.postingDate,
+                                        "Store": item.location.includes('bluff') ? 'Red Bluff' : 'Redding',
+                                        "Location": item.location,
+                                        "Memo/Description": `${item.brand} | Doc: ${item.documentNumber}`,
+                                        "Credit": item.amount,
+                                        "Mapped Brand": item.brand
+                                    });
+                                });
+
+                                updatedData["GL Raw by Store"] = glSheet;
+                        
+                                await setDoc(doc(db, "workbook_v9_sheets", "GL Raw by Store"), {
+                                    sheetName: "GL Raw by Store",
+                                    rows: glSheet,
+                                    updatedAt: Date.now()
+                                });
+
+                                masterWorkbook.value.data = updatedData;
+                                logSystemAction("UPDATE", `Appended Sage Ledger to GL Raw by Store (${parsedData.length} rows)`);
+                            }
                             
                             logSystemAction("UPLOAD", `Sage 4545 ledger imported (${parsedData.length} records)`);
                             alert(`Sage Ledger: Records Imported: ${parsedData.length}`);
