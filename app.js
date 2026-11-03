@@ -111,6 +111,11 @@ createApp({
         const auditRange = ref({ start: '', end: '' });
         
         // Form & Audit state
+        const emailReportMode = ref('standard');
+        const showEmailDraftModal = ref(false);
+        const selectedBrandForEmail = ref(null);
+        const emailDraftSubject = ref('');
+        const emailDraftBody = ref('');
         const startMonth = ref('January');
         const endMonth = ref('September');
 
