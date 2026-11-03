@@ -1697,13 +1697,22 @@ createApp({
                             const headers = parseCSVRow(lines[0]).map(normalizeHeader);
                             const rows = lines.slice(1);
 
-                                                        const uploadTime = new Date().toLocaleString();
-                            const importedCount = parsedData.length;
+                                                                                    const uploadTime = new Date().toLocaleString();
+                            const parsedData = normalizeTreezLedger(
+                                rows, headers, file.name, uploadTime, normalizeSiteName, getStandardizedBrandName, masterBrands.value
+                            );
 
+                            if (parsedData.length === 0) {
+                                alert("No valid records found in Treez upload. Please check the column formatting.");
+                                return;
+                            }
+
+                            const importedCount = parsedData.length;
                             treezLedgerCount.value = importedCount;
                             treezLedgerLastUpload.value = uploadTime;
                             treezLedgerSourceFile.value = file.name;
                             persistLedgerMetadata();
+
 
                             // --- OPTION B: WORKBOOK INGESTION ---
                             if (confirm(`Successfully parsed ${importedCount} records. Would you like to merge this data into the Master Workbook?`)) {
