@@ -14,10 +14,9 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf.plugin.autotable.min.js"></script>
 
-        <link href="https://fonts.googleapis.com/css2?family=Calibri:wght@400;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Calibri:wght@400;700&display=swap" rel="stylesheet">
     
-    <!-- External CSS -->
-    <link rel="stylesheet" href="styles.css">
+    <!-- External CSS Removed to resolve the 404 error -->
 </head>
 <body>
     <div id="app" class="h-full flex flex-col bg-gray-100" v-cloak>
@@ -1229,4 +1228,191 @@
                                               'bg-emerald-100 text-emerald-800': log.actionType === 'CREATE',
                                               'bg-amber-100 text-amber-800': log.actionType === 'UPDATE',
                                               'bg-red-100 text-red-800': log.actionType === 'DELETE',
-     
+                                              'bg-blue-100 text-blue-800': log.actionType === 'IMPORT',
+                                              'bg-gray-200 text-gray-800': log.actionType === 'LOGIN' || log.actionType === 'LOGOUT'
+                                          }">
+                                        {{ log.actionType }}
+                                    </span>
+                                </td>
+                                <td class="text-gray-700 w-full">{{ log.details }}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+
+                        <!-- EMAIL DRAFT PREVIEW MODAL -->
+        <div v-if="showEmailDraftModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4">
+            <div class="bg-gray-900 border border-gray-800 rounded-xl shadow-2xl w-full max-w-2xl flex flex-col max-h-[90vh]">
+                <!-- Modal Header -->
+                <div class="flex items-center justify-between px-6 py-4 border-b border-gray-800">
+                    <div>
+                        <h3 class="text-lg font-bold text-gray-100 flex items-center gap-2">
+                            <i data-lucide="mail" class="w-5 h-5 text-emerald-400"></i> Email Draft Preview
+                        </h3>
+                        <p class="text-xs text-gray-400 mt-0.5" v-if="selectedBrandForEmail">
+                            Recipient: <span class="text-emerald-400 font-semibold">{{ selectedBrandForEmail.vendor }}</span>
+                            <span v-if="selectedBrandForEmail.email" class="text-gray-500"> ({{ selectedBrandForEmail.email }})</span>
+                        </p>
+                    </div>
+                    <button @click="showEmailDraftModal = false" class="text-gray-400 hover:text-white transition-colors p-1 rounded-lg hover:bg-gray-800">
+                        <i data-lucide="x" class="w-5 h-5"></i>
+                    </button>
+                </div>
+                <div class="p-6 overflow-y-auto space-y-4 flex-1">
+                    <!-- Controls Bar (Mode & Period Selectors) -->
+                    <div class="flex flex-wrap items-center justify-between gap-3 bg-gray-950/60 p-3 rounded-xl border border-gray-800">
+                        <!-- Mode Toggle Buttons -->
+                        <div class="flex items-center bg-gray-800 p-1 rounded-lg border border-gray-700">
+                            <button 
+                                type="button"
+                                @click="emailReportMode = 'standard'; refreshEmailDraft();"
+                                :class="emailReportMode === 'standard' ? 'bg-amber-500 text-black font-semibold' : 'text-gray-400 hover:text-white'"
+                                class="px-3 py-1.5 rounded-md text-xs transition-all">
+                                Standard Draft
+                            </button>
+                            <button 
+                                type="button"
+                                @click="emailReportMode = 'audit_statement'; refreshEmailDraft();"
+                                :class="emailReportMode === 'audit_statement' ? 'bg-emerald-500 text-black font-semibold' : 'text-gray-400 hover:text-white'"
+                                class="px-3 py-1.5 rounded-md text-xs transition-all">
+                                Audit Finding Statement
+                            </button>
+                        </div>
+                        <!-- Date Range & Quick Select (Audit Mode Only) -->
+                        <div v-if="emailReportMode === 'audit_statement'" class="flex items-center gap-2">
+                            <span class="text-xs text-gray-400">Audit Period:</span>
+                            <label for="audit-start-month-modal" class="sr-only">Start Month</label>
+                            <select 
+                                id="audit-start-month-modal" name="auditStartMonthModal"
+                                v-model="auditStartMonth"
+                                @change="refreshEmailDraft()"
+                                class="bg-gray-800 text-white text-xs border border-gray-700 rounded-lg px-2 py-1 focus:border-emerald-500 outline-none">
+                                <option v-for="m in calendarMonths" :key="m" :value="m">{{ m }}</option>
+                            </select>
+                            <span class="text-xs text-gray-500">to</span>
+                            <label for="audit-end-month-modal" class="sr-only">End Month</label>
+                            <select 
+                                id="audit-end-month-modal" name="auditEndMonthModal"
+                                v-model="auditEndMonth"
+                                @change="refreshEmailDraft()"
+                                class="bg-gray-800 text-white text-xs border border-gray-700 rounded-lg px-2 py-1 focus:border-emerald-500 outline-none">
+                                <option v-for="m in calendarMonths" :key="m" :value="m">{{ m }}</option>
+                            </select>
+                            <div class="flex items-center gap-1.5 ml-2 border-l border-gray-700 pl-3">
+                                <button type="button" @click="auditStartMonth='January'; auditEndMonth='March'; refreshEmailDraft();" class="px-2 py-1 bg-gray-800 hover:bg-emerald-600 rounded text-[10px] font-bold transition-colors text-white">Q1</button>
+                                <button type="button" @click="auditStartMonth='April'; auditEndMonth='June'; refreshEmailDraft();" class="px-2 py-1 bg-gray-800 hover:bg-emerald-600 rounded text-[10px] font-bold transition-colors text-white">Q2</button>
+                                <button type="button" @click="auditStartMonth='July'; auditEndMonth='September'; refreshEmailDraft();" class="px-2 py-1 bg-gray-800 hover:bg-emerald-600 rounded text-[10px] font-bold transition-colors text-white">Q3</button>
+                                <button type="button" @click="auditStartMonth='October'; auditEndMonth='December'; refreshEmailDraft();" class="px-2 py-1 bg-gray-800 hover:bg-emerald-600 rounded text-[10px] font-bold transition-colors text-white">Q4</button>
+                                <button type="button" @click="auditStartMonth='January'; auditEndMonth='December'; refreshEmailDraft();" class="px-2 py-1 bg-emerald-700 hover:bg-emerald-500 rounded text-[10px] font-bold transition-colors text-white shadow-sm">YTD</button>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Subject Input -->
+                    <div>
+                        <label for="draft-subject" class="block text-xs font-bold uppercase tracking-wider text-gray-400 mb-1">Subject</label>
+                        <input id="draft-subject" name="draftSubject" type="text" v-model="emailDraftSubject" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 outline-none focus:border-emerald-500 font-medium">
+                    </div>
+                    <!-- Body Textarea -->
+                    <div>
+                        <label for="draft-body" class="block text-xs font-bold uppercase tracking-wider text-gray-400 mb-1">Message Body</label>
+                        <textarea id="draft-body" name="draftBody" v-model="emailDraftBody" rows="14" class="w-full bg-gray-800 border border-gray-700 rounded-lg p-3 text-xs text-gray-200 font-mono outline-none focus:border-emerald-500 resize-none leading-relaxed"></textarea>
+                    </div>
+                </div>
+                <!-- Modal Footer Actions -->
+                <div class="px-6 py-4 border-t border-gray-800 flex items-center justify-between bg-gray-900/50">
+                    <button type="button" @click="copyEmailToClipboard" class="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-200 rounded-lg text-xs font-bold transition-colors border border-gray-700 flex items-center gap-2">
+                        <i data-lucide="copy" class="w-4 h-4"></i> Copy to Clipboard
+                    </button>
+                    <div class="flex items-center gap-3">
+                        <button type="button" @click="showEmailDraftModal = false" class="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg text-xs font-bold transition-colors">
+                            Cancel
+                        </button>
+                        <button type="button" @click="sendEmailDraft" class="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition-colors flex items-center gap-2 shadow">
+                            <i data-lucide="send" class="w-4 h-4"></i> {{ emailReportMode === 'standard' ? 'Download CSV & Open Mail' : 'Open in Mail Client' }}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ADD/EDIT PROMO MODAL -->
+        <div v-if="isManagerUnlocked && showPromoModal" class="fixed inset-0 bg-black/60 flex items-center justify-center z-50 backdrop-blur-sm p-2" @click.self="closePromoModal">
+
+            <div class="bg-white rounded-2xl shadow-2xl w-full md:w-[700px] max-w-[95vw] flex flex-col overflow-hidden max-h-[95vh] md:max-h-[80vh]">
+                <div class="px-4 md:px-6 py-4 border-b bg-gray-50 flex justify-between items-center shrink-0">
+                    <h2 class="font-bold text-lg md:text-xl text-gray-900 flex items-center gap-2"><i data-lucide="file-edit" class="w-5 h-5 text-emerald-600"></i> {{ editingId ? 'Edit Promo Credit' : 'Log New Credit' }}</h2>
+                    <button @click="closePromoModal" class="text-gray-500 hover:text-red-600 transition-colors p-1 hover:bg-gray-200 rounded"><i data-lucide="x" class="w-5 h-5"></i></button>
+                </div>
+                
+                <div class="p-4 md:p-6 grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4 overflow-y-auto">
+                    <div class="col-span-1 md:col-span-2">
+                        <label for="promo-tracking-month" class="text-[11px] font-bold text-gray-500 uppercase tracking-wide">Tracking Month</label>
+                        <select id="promo-tracking-month" name="trackingMonth" v-model="form.trackingMonth" class="border border-gray-300 p-2.5 w-full rounded-lg mt-1 font-bold focus:ring-2 focus:ring-emerald-500 outline-none">
+                            <option v-for="m in calendarMonths" :key="m" :value="m">{{ m }}</option>
+                        </select>
+                    </div>
+                    <div class="col-span-1 md:col-span-2 border-t border-gray-200 pt-2"></div>
+                    <div class="col-span-1 md:col-span-2 relative">
+                        <label for="promo-vendor" class="text-[11px] font-bold text-gray-500 uppercase tracking-wide">Vendor (Brand)</label>
+                        <input id="promo-vendor" name="vendor" type="text" v-model="form.vendor" @focus="showBrandDropdown = true" @input="showBrandDropdown = true" class="border border-gray-300 p-2.5 w-full rounded-lg mt-1 font-bold focus:ring-2 focus:ring-emerald-500 outline-none" placeholder="Search Brand Name...">
+                        <div v-if="showBrandDropdown && filteredBrands.length > 0" class="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 shadow-xl rounded-lg max-h-48 overflow-y-auto z-50">
+                            <div v-for="brand in filteredBrands" :key="brand.vendor" @click="selectBrand(brand)" class="px-4 py-2 hover:bg-emerald-50 cursor-pointer border-b border-gray-100 last:border-0 flex justify-between items-center">
+                                <span class="font-bold text-gray-900">{{ brand.vendor }}</span>
+                                <span class="text-xs font-medium text-gray-400">{{ brand.distributor }}</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div><label for="promo-distributor" class="text-[11px] font-bold text-gray-500 uppercase tracking-wide">Distributor</label><input id="promo-distributor" name="distributor" type="text" v-model="form.distributor" class="border border-gray-300 bg-gray-50 p-2.5 w-full rounded-lg mt-1 text-sm focus:ring-2 focus:ring-emerald-500 outline-none"></div>
+                    <div><label for="promo-credit-type" class="text-[11px] font-bold text-gray-500 uppercase tracking-wide">Credit Type</label><input id="promo-credit-type" name="creditType" type="text" v-model="form.creditType" class="border border-gray-300 p-2.5 w-full rounded-lg mt-1 text-sm focus:ring-2 focus:ring-emerald-500 outline-none"></div>
+                    <div><label for="promo-dates" class="text-[11px] font-bold text-gray-500 uppercase tracking-wide">Dates</label><input id="promo-dates" name="dates" type="text" v-model="form.dates" class="border border-gray-300 p-2.5 w-full rounded-lg mt-1 text-sm focus:ring-2 focus:ring-emerald-500 outline-none"></div>
+                    <div>
+                        <label for="promo-amount" class="text-[11px] font-bold text-gray-500 uppercase tracking-wide">Credit Amount $$$</label>
+                        <div class="relative"><span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 font-bold">$</span><input id="promo-amount" name="amount" type="number" v-model.number="form.amount" class="border border-gray-300 pl-7 p-2.5 w-full rounded-lg mt-1 font-bold text-gray-900 focus:ring-2 focus:ring-emerald-500 outline-none" step="0.01"></div>
+                    </div>
+                    <div class="col-span-1 md:col-span-2 border-t border-gray-200 pt-2"></div>
+                    <div><label for="promo-date-requested" class="text-[11px] font-bold text-gray-500 uppercase tracking-wide">Date Requested</label><input id="promo-date-requested" name="dateRequested" type="date" v-model="form.dateRequested" class="border border-gray-300 p-2.5 w-full rounded-lg mt-1 text-sm focus:ring-2 focus:ring-emerald-500 outline-none"></div>
+                    <div><label for="promo-date-received" class="text-[11px] font-bold text-gray-500 uppercase tracking-wide">Date Received</label><input id="promo-date-received" name="dateReceived" type="date" v-model="form.dateReceived" class="border border-gray-300 p-2.5 w-full rounded-lg mt-1 text-sm focus:ring-2 focus:ring-emerald-500 outline-none"></div>
+                    <div><label for="promo-invoice" class="text-[11px] font-bold text-gray-500 uppercase tracking-wide">Invoice / Credit Memo #</label><input id="promo-invoice" name="invoice" type="text" v-model="form.invoice" class="border border-gray-300 p-2.5 w-full rounded-lg mt-1 font-mono text-sm focus:ring-2 focus:ring-emerald-500 outline-none"></div>
+                    <div>
+                        <label for="promo-status" class="text-[11px] font-bold text-gray-500 uppercase tracking-wide">Status</label>
+                        <select id="promo-status" name="status" v-model="form.status" class="border border-gray-300 p-2.5 w-full rounded-lg mt-1 font-bold cursor-pointer focus:ring-2 focus:ring-emerald-500 outline-none" :class="{'bg-emerald-50 text-emerald-800': form.status === 'Applied', 'bg-amber-50 text-amber-800': form.status === 'Pending', 'bg-gray-50 text-gray-800': form.status === 'Uncollectable'}">
+                            <option value="Pending">Pending</option><option value="Applied">Applied</option><option value="Uncollectable">Uncollectable</option>
+                        </select>
+                    </div>
+                    <div class="col-span-1 md:col-span-2 mt-2">
+                        <label for="promo-file-upload" class="text-[11px] font-bold text-gray-500 uppercase tracking-wide mb-1 block">Vendor Outcome Proof (PDF or Image)</label>
+                        <div class="border-2 border-dashed border-gray-300 rounded-xl p-4 text-center bg-gray-50 hover:bg-gray-100 cursor-pointer transition-colors relative">
+                            <input id="promo-file-upload" name="fileUpload" type="file" @change="handleFileUpload" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" accept="application/pdf,image/*">
+                            <i data-lucide="paperclip" class="w-6 h-6 text-gray-400 mx-auto mb-2"></i>
+                            <span v-if="!form.attachmentName" class="text-sm font-medium text-gray-500">Tap to upload email PDF/Image</span>
+                            <span v-else class="text-sm font-bold text-emerald-600">{{ form.attachmentName }}</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="px-4 md:px-6 py-4 border-t bg-gray-50 flex flex-col md:flex-row justify-between items-center shrink-0 gap-3">
+                    <button v-if="editingId" @click="deleteCredit" class="text-red-500 hover:text-red-700 text-sm font-bold flex items-center justify-center gap-1 w-full md:w-auto py-2"><i data-lucide="trash-2" class="w-4 h-4"></i> Delete Credit</button>
+                    <div v-else class="hidden md:block"></div>
+                    <div class="flex gap-3 w-full md:w-auto">
+                        <button @click="closePromoModal" class="flex-1 md:px-5 py-2.5 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded-lg font-bold transition-colors">Cancel</button>
+                        <button @click="saveCredit" class="flex-1 md:px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold shadow-md transition-colors flex items-center justify-center gap-2"><i data-lucide="save" class="w-4 h-4"></i> Save</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Application Script -->
+    <script type="module" src="app.js"></script>
+
+    <script>
+        // Check for App Check Debug Token in URL
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.has('debug')) {
+            window.FIREBASE_APPCHECK_DEBUG_TOKEN = true;
+        }
+    </script>
+</body>
+</html>
