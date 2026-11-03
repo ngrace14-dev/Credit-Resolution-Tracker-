@@ -1674,79 +1674,87 @@ createApp({
             }
         };
 
-        const handleTreezLedgerUpload = (e) => {
-            const file = e.target.files[0];
-            if (!file) return;
+                const handleTreezLedgerUpload = (e) => {
+                    const file = e.target.files[0];
+                    if (!file) return;
 
-            const reader = new FileReader();
-            reader.onload = (evt) => {
-                try {
-                    const text = evt.target.result;
-                    const { headers, rows } = parseCSVText(text);
-                    if (rows.length === 0) return alert("File is empty or invalid.");
+                    const reader = new FileReader();
+                    reader.onload = (evt) => {
+                        try {
+                            const text = evt.target.result;
+                            const lines = parseCSVText(text);
+                            if (lines.length === 0) return alert("File is empty or invalid.");
 
-                    const uploadTime = new Date().toLocaleString();
+                            const headers = parseCSVRow(lines[0]).map(normalizeHeader);
+                            const rows = lines.slice(1);
+
+                            const uploadTime = new Date().toLocaleString();
                     
-                    const parsedData = normalizeTreezLedger(
-                        rows, headers, file.name, uploadTime, normalizeSiteName, getStandardizedBrandName
-                    );
+                            const parsedData = normalizeTreezLedger(
+                                rows, headers, file.name, uploadTime, normalizeSiteName, getStandardizedBrandName
+                            );
 
-                    if (parsedData.length === 0) {
-                        alert("No valid records found in Treez upload. Please check the column formatting.");
-                        return;
-                    }
+                            if (parsedData.length === 0) {
+                                alert("No valid records found in Treez upload. Please check the column formatting.");
+                                return;
+                            }
 
-                    treezLedger.value = parsedData;
-                    treezLedgerLastUpload.value = uploadTime;
-                    persistLedgers();
+                            treezLedger.value = parsedData;
+                            treezLedgerLastUpload.value = uploadTime;
+                            persistLedgers();
                             
-                    logSystemAction("UPLOAD", `Treez ledger imported (${parsedData.length} records)`);
-                    alert(`Treez Ledger: Records Imported: ${parsedData.length}`);
-                    e.target.value = '';
-                } catch (error) {
-                    console.error("Treez Ledger Parse Error:", error);
-                    alert("Error parsing Treez Ledger CSV.");
-                }
-            };
-            reader.readAsText(file);
-        };
+                            logSystemAction("UPLOAD", `Treez ledger imported (${parsedData.length} records)`);
+                            alert(`Treez Ledger: Records Imported: ${parsedData.length}`);
+                            e.target.value = '';
+                        } catch (error) {
+                            console.error("Treez Ledger Parse Error:", error);
+                            alert("Error parsing Treez Ledger CSV.");
+                        }
+                    };
+                    reader.readAsText(file);
+                };
 
-        const handleSage4545Upload = (e) => {
-            const file = e.target.files[0];
-            if (!file) return;
+                const handleSage4545Upload = (e) => {
+                    const file = e.target.files[0];
+                    if (!file) return;
 
-            const reader = new FileReader();
-            reader.onload = (evt) => {
-                try {
-                    const text = evt.target.result;
-                    const { headers, rows } = parseCSVText(text);
-                    if (rows.length === 0) return alert("File is empty or invalid.");
+                    const reader = new FileReader();
+                    reader.onload = (evt) => {
+                        try {
+                            const text = evt.target.result;
+                            const lines = parseCSVText(text);
+                            if (lines.length === 0) return alert("File is empty or invalid.");
 
-                    const uploadTime = new Date().toLocaleString();
+                            const headers = parseCSVRow(lines[0]).map(normalizeHeader);
+                            const rows = lines.slice(1);
 
-                    const parsedData = normalizeSageLedger(
-                        rows, headers, file.name, uploadTime, normalizeSiteName, getStandardizedBrandName
-                    );
+                            const uploadTime = new Date().toLocaleString();
 
-                    if (parsedData.length === 0) {
-                        alert("No valid 4545/Promo Credit records found in Sage upload. Please check the GL Account filtering.");
-                        return;
-                    }
+                            const parsedData = normalizeSageLedger(
+                                rows, headers, file.name, uploadTime, normalizeSiteName, getStandardizedBrandName
+                            );
 
-                    sage4545Ledger.value = parsedData;
-                    sage4545LedgerLastUpload.value = uploadTime;
-                    persistLedgers();
+                            if (parsedData.length === 0) {
+                                alert("No valid 4545/Promo Credit records found in Sage upload. Please check the GL Account filtering.");
+                                return;
+                            }
+
+                            sage4545Ledger.value = parsedData;
+                            sage4545LedgerLastUpload.value = uploadTime;
+                            persistLedgers();
                             
-                    logSystemAction("UPLOAD", `Sage 4545 ledger imported (${parsedData.length} records)`);
-                    alert(`Sage Ledger: Records Imported: ${parsedData.length}`);
-                    e.target.value = '';
-                } catch (error) {
-                    console.error("Sage 4545 Ledger Parse Error:", error);
-                    alert("Error parsing Sage 4545 Ledger CSV.");
-                }
-            };
-            reader.readAsText(file);
-        };
+                            logSystemAction("UPLOAD", `Sage 4545 ledger imported (${parsedData.length} records)`);
+                            alert(`Sage Ledger: Records Imported: ${parsedData.length}`);
+                            e.target.value = '';
+                        } catch (error) {
+                            console.error("Sage 4545 Ledger Parse Error:", error);
+                            alert("Error parsing Sage 4545 Ledger CSV.");
+                        }
+                    };
+                    reader.readAsText(file);
+                };
+
+
 
         const pushToMainTracker = async () => {
             const unsynced = treesSalesData.value.filter(s => s.status === 'Unsynced');
