@@ -1,117 +1,36 @@
 /* styles.css */
+/* Mobile viewport height fix */
+body { font-family: 'Calibri', sans-serif; background-color: #f3f4f6; margin: 0; height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
 
-/* Viewport height container with fallback */
-html {
-    height: 100%;
-}
-
-body {
-    font-family: 'Calibri', 'Carlito', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    background-color: #f3f4f6;
-    margin: 0;
-    height: 100vh;
-    height: 100dvh;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-}
-
-/* Excel Data Grid Styling */
-.excel-table {
-    border-collapse: separate;
-    border-spacing: 0;
-    font-size: 12px;
-    background-color: #ffffff;
-    min-width: 100%;
-    text-align: left;
-}
-
-.excel-table th,
-.excel-table td {
-    border-bottom: 1px solid #e5e7eb;
-    border-right: 1px solid #e5e7eb;
-    padding: 10px 14px;
-    white-space: nowrap;
-}
-
-.excel-table th {
-    font-weight: 800;
-    background-color: #f9fafb;
-    color: #374151;
-    border-top: 1px solid #e5e7eb;
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
+.excel-table { border-collapse: separate; border-spacing: 0; font-size: 12px; background-color: white; min-width: 100%; text-align: left; }
+.excel-table th, .excel-table td { border-bottom: 1px solid #e5e7eb; border-right: 1px solid #e5e7eb; padding: 10px 14px; white-space: nowrap; }
+.excel-table th { 
+    font-weight: 800; 
+    background-color: #f9fafb; 
+    color: #374151; 
+    border-top: 1px solid #e5e7eb; 
+    text-transform: uppercase; 
+    letter-spacing: 0.1em; 
     font-size: 10px;
     position: sticky;
     top: 0;
     z-index: 20;
     box-shadow: inset 0 -1px 0 #e5e7eb;
 }
+.excel-table th:first-child, .excel-table td:first-child { border-left: 1px solid #e5e7eb; }
 
-.excel-table th:first-child,
-.excel-table td:first-child {
-    border-left: 1px solid #e5e7eb;
-}
+[v-cloak] { display: none; }
 
-/* Pinned Left Header Intersection */
-.excel-table th.sticky-left,
-.excel-table th:first-child.sticky-corner {
-    position: sticky;
-    left: 0;
-    top: 0;
-    z-index: 30;
-    background-color: #f9fafb;
-    box-shadow: inset 0 -1px 0 #e5e7eb, 1px 0 0 #e5e7eb;
-}
+::-webkit-scrollbar { height: 8px; width: 8px; }
+::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 4px; }
+::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
 
-[v-cloak] {
-    display: none !important;
-}
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
-/* Custom Scrollbars */
-::-webkit-scrollbar {
-    height: 8px;
-    width: 8px;
-}
-
-::-webkit-scrollbar-track {
-    background: #f1f1f1;
-    border-radius: 4px;
-}
-
-::-webkit-scrollbar-thumb {
-    background: #cbd5e1;
-    border-radius: 4px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-    background: #94a3b8;
-}
-
-.no-scrollbar::-webkit-scrollbar {
-    display: none;
-}
-
-.no-scrollbar {
-    -ms-overflow-style: none;
-    scrollbar-width: none;
-}
-
-/* Pinned Right Actions Column (Desktop Only) */
+/* Only make actions column sticky on Desktop to save mobile screen space */
 @media (min-width: 768px) {
-    .sticky-col {
-        position: sticky;
-        right: 0;
-        background-color: #ffffff;
-        box-shadow: -3px 0 5px rgba(0, 0, 0, 0.05);
-        z-index: 10;
-    }
-    .sticky-head {
-        position: sticky;
-        right: 0;
-        top: 0;
-        background-color: #f9fafb;
-        box-shadow: -3px 0 5px rgba(0, 0, 0, 0.05), inset 0 -1px 0 #e5e7eb;
-        z-index: 30;
-    }
+    .sticky-col { position: sticky; right: 0; background-color: white; box-shadow: -3px 0 5px rgba(0,0,0,0.05); z-index: 10; }
+    .sticky-head { position: sticky; right: 0; background-color: #f8f9fa; box-shadow: -3px 0 5px rgba(0,0,0,0.05); z-index: 15; }
 }
