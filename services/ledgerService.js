@@ -1,21 +1,54 @@
 // services/ledgerService.js
 import { parseCSVRow, cleanString, cleanCurrency } from './csvService.js';
 
-export const normalizeTreezLedger = (rows, headers, fileName, uploadTime, normalizeSiteFn, standardizeBrandFn) => {
+export const normalizeTreezLedger = (rows, headers, fileName, uploadTime, normalizeSiteFn, standardizeBrandFn, masterBrands = []) => {
     const parsedData = [];
+    const HOLIDAY_PROGRAMS = ['fundial friday', 'vendor day', 'pop up', 'holiday blast'];
+    const EXCLUDED_KEYWORDS = ['employee', 'industry', 'senior', 'military', 'veteran', 'wisdom', 'staff', 'internal', 'test'];
+
     for (let i = 0; i < rows.length; i++) {
         const cols = parseCSVRow(rows[i]);
         const rowObj = {};
         headers.forEach((h, idx) => { rowObj[h] = cols[idx] ? cleanString(cols[idx]) : ''; });
 
         const rawBrand = rowObj['brand'] || rowObj['product brand'] || rowObj['vendor'];
+        const promoName = String(rowObj['promotion name'] || rowObj['discount title'] || rowObj['discount'] || '').toLowerCase();
         if (!rawBrand) continue;
+
+        const standardizedBrand = standardizeBrandFn(rawBrand);
+        let promoType = 'UNKNOWN';
+        let isRecoverable = false;
+
+        // Classification Engine
+        const hasBrandMatch = masterBrands.some(b => 
+            promoName.includes(String(b.vendor || '').toLowerCase()) || 
+            promoName.includes(standardizedBrand.toLowerCase())
+        );
+
+        const isExcluded = EXCLUDED_KEYWORDS.some(key => promoName.includes(key));
+        const isHoliday = HOLIDAY_PROGRAMS.some(prog => promoName.includes(promoName));
+
+        if (isExcluded) {
+            if (promoName.includes('employee')) promoType = 'EMPLOYEE';
+            else if (promoName.includes('industry')) promoType = 'INDUSTRY';
+            else if (promoName.includes('senior')) promoType = 'SENIOR';
+            else promoType = 'IN_HOUSE';
+        } else if (hasBrandMatch) {
+            promoType = 'VENDOR_PROMO';
+            isRecoverable = true;
+        } else if (isHoliday) {
+            promoType = 'HOLIDAY_PROMO';
+            isRecoverable = true;
+        }
 
         parsedData.push({
             promoDate: rowObj['date closed'] || rowObj['date'] || rowObj['created at'] || '',
             location: normalizeSiteFn(rowObj['store name'] || rowObj['location'] || rowObj['site']),
-            brand: standardizeBrandFn(rawBrand),
-            creditGenerated: cleanCurrency(rowObj['vendor credit owed'] || rowObj['credit owed'] || rowObj['owed']),
+            brand: standardizedBrand,
+            promoName: rowObj['promotion name'] || rowObj['discount title'] || 'Unnamed Promo',
+            creditGenerated: isRecoverable ? cleanCurrency(rowObj['vendor credit owed'] || rowObj['credit owed'] || rowObj['owed']) : 0,
+            promoType,
+            isRecoverable,
             sourceFile: fileName,
             uploadTimestamp: uploadTime
         });

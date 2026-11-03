@@ -1691,7 +1691,7 @@ createApp({
                             const uploadTime = new Date().toLocaleString();
                     
                             const parsedData = normalizeTreezLedger(
-                                rows, headers, file.name, uploadTime, normalizeSiteName, getStandardizedBrandName
+                                rows, headers, file.name, uploadTime, normalizeSiteName, getStandardizedBrandName, masterBrands.value
                             );
 
                             if (parsedData.length === 0) {
