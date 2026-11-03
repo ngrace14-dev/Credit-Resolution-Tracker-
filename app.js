@@ -51,6 +51,15 @@ const { createApp, ref, computed, nextTick, onMounted, watch } = window.Vue;
 
 createApp({
         setup() {
+        const parseExcelDate = (value) => {
+            if (!value || value === 'N/A') return null;
+            if (typeof value === 'number') return new Date(Math.round((value - 25569) * 86400 * 1000));
+            const d = new Date(value);
+            return isNaN(d.getTime()) ? null : d;
+        };
+        const csvEscape = (value) => `"${String(value ?? '').replace(/"/g, '""')}"`;
+        const normalizeSiteName = (val) => String(val || '').toLowerCase().replace(/[\s_-]/g, '');
+
         const isManagerUnlocked = ref(false);
         const loggedInUser = ref('');
         const emailInput = ref('');
@@ -652,94 +661,97 @@ createApp({
             return match ? String(match["Standardized POS Name (CSV)"] || '').trim() : clean;
         };
 
-                                                const generateAuditStatementCSV = (brand) => {
+                                                                                                const generateAuditStatementCSV = (brand) => {
             const targetSite = activeSite.value;
             const targetBrand = brand.vendor;
             const standardizedTarget = getStandardizedBrandName(targetBrand).trim().toLowerCase();
-            const currentYear = "2026";
+            const currentYear = "2026"; // Consistent with Workbook V9 Schema
             
-            // Period,Location,Brand,New_Credits_Generated,Running_Total_Generated,Credits_Applied,Cumulative_Applied,Remaining_Unapplied_Balance,Status
-            let csvLines = ["Period,Location,Brand,New_Credits_Generated,Running_Total_Generated,Credits_Applied,Cumulative_Applied,Remaining_Unapplied_Balance,Status"];
+            if (!masterWorkbook.value || !masterWorkbook.value.data) return "Error: Workbook data missing.";
+
+            const headers = ["Period", "Promo_Dates", "Beginning_Balance", "New_Credits_Generated", "Credits_Applied", "Ending_Balance", "Status"];
+            let csvLines = [headers.join(",")];
             
-            let runningTotalGenerated = 0;
-            let cumulativeApplied = 0;
-            
-            // DYNAMIC DATE RANGE: Use startMonth and endMonth values from the UI
+            let runningBalance = 0, totalGenerated = 0, totalApplied = 0;
             const startIdx = calendarMonths.indexOf(startMonth.value || 'January');
             const endIdx = calendarMonths.indexOf(endMonth.value || 'September');
-            const monthsToProcess = calendarMonths.slice(startIdx, Math.max(startIdx, endIdx) + 1);
-            
-            monthsToProcess.forEach(month => {
-                let monthlyGenerated = 0;
-                let monthlyApplied = 0;
-                
-                // 1. Get Generated Credits from monthly sheet
-                const sheetName = `${month} ${currentYear}`;
+
+            const fullYearStats = calendarMonths.map((m, idx) => {
+                let monthlyGen = 0, monthlyApp = 0, missingDateCount = 0;
+                const promoDays = new Set();
+                const sheetName = `${m} ${currentYear}`;
                 const monthlyRows = masterWorkbook.value.data[sheetName] || [];
                 
                 monthlyRows.forEach(row => {
-                                        const rowKeys = Object.keys(row);
+                    const rowKeys = Object.keys(row);
                     const brandKey = rowKeys.find(k => k.trim().toLowerCase() === 'brand');
                     const rowBrand = brandKey ? row[brandKey] : row[0];
-                    if (!rowBrand) return;
-                    
-                    if (getStandardizedBrandName(rowBrand).trim().toLowerCase() === standardizedTarget) {
+                    if (getStandardizedBrandName(rowBrand || '').trim().toLowerCase() === standardizedTarget) {
+                        const siteKey = rowKeys.find(k => normalizeSiteName(k) === normalizeSiteName(targetSite));
                         let rawAmt = 0;
-                        // FIX: Dynamic Store Key Lookup (Resilient to 'Red-Bluff' vs 'Red Bluff' vs 'Redding ')
-                        const siteKey = rowKeys.find(k => k.trim().toLowerCase() === targetSite.toLowerCase() || (targetSite === 'Red Bluff' && k.trim().toLowerCase() === 'red-bluff'));
-                        
                         if (siteKey) {
                             const val = String(row[siteKey]).trim().toLowerCase();
                             if (val === 'x') {
-                                const promoKey = rowKeys.find(k => k.trim().toLowerCase() === 'promo credits');
-                                rawAmt = promoKey ? row[promoKey] : 0;
-                            } else {
-                                rawAmt = row[siteKey];
-                            }
+                                const pk = rowKeys.find(k => k.trim().toLowerCase() === 'promo credits');
+                                rawAmt = pk ? row[pk] : 0;
+                            } else rawAmt = row[siteKey];
                         }
+                        const amt = parseFloat(String(rawAmt || 0).replace(/[^0-9.-]+/g, "")) || 0;
+                        monthlyGen += amt;
 
-                        monthlyGenerated += parseFloat(String(rawAmt || 0).replace(/[^0-9.-]+/g, "")) || 0;
-                    }
-                });
-                
-                // 2. Get Applied Credits from GL Raw by Store
-                const glRows = masterWorkbook.value.data["GL Raw by Store"] || [];
-                glRows.forEach(row => {
-                    const rowStore = detectSiteFromName(row["Store"] || row["Location"]);
-                    if (rowStore !== targetSite) return;
-                    
-                    const rowBrand = row["Mapped Brand"] || '';
-                    if (getStandardizedBrandName(rowBrand).trim().toLowerCase() === standardizedTarget) {
-                        const dateStr = row["Posted dt."] || '';
-                        if (detectMonthFromDate(dateStr) === month) {
-                            const amt = parseFloat(String(row["Credit"] || 0).replace(/[^0-9.-]+/g, "")) || 0;
-                            monthlyApplied += amt;
+                        if (amt > 0) {
+                            const dk = rowKeys.find(k => k.trim().toLowerCase() === 'date requested');
+                            const d = parseExcelDate(dk ? row[dk] : null);
+                            if (d) promoDays.add(d.getDate());
+                            else missingDateCount++;
                         }
                     }
                 });
                 
-                runningTotalGenerated += monthlyGenerated;
-                cumulativeApplied += monthlyApplied;
-                const balance = runningTotalGenerated - cumulativeApplied;
-                
-                let status = "No Activity";
-                if (balance <= 0.01 && (monthlyGenerated > 0 || monthlyApplied > 0)) {
-                    status = "Reconciled / Settled";
-                } else if (monthlyApplied > 0 && balance > 0.01) {
-                    status = "Partial Payment";
-                } else if (monthlyGenerated > 0 && monthlyApplied === 0) {
-                    status = "Outstanding";
+                (masterWorkbook.value.data["GL Raw by Store"] || []).forEach(row => {
+                    const rowSiteNormalized = normalizeSiteName(detectSiteFromName(row["Store"] || row["Location"]));
+                    if (rowSiteNormalized === normalizeSiteName(targetSite) && 
+                        getStandardizedBrandName(row["Mapped Brand"] || '').trim().toLowerCase() === standardizedTarget &&
+                        detectMonthFromDate(row["Posted dt."] || '') === m) {
+                        monthlyApp += parseFloat(String(row["Credit"] || 0).replace(/[^0-9.-]+/g, "")) || 0;
+                    }
+                });
+
+                return { month: m, monthNum: idx + 1, generated: monthlyGen, applied: monthlyApp, days: Array.from(promoDays).sort((a, b) => a - b), missingDateCount };
+            });
+
+            fullYearStats.forEach((stat, idx) => {
+                const begBal = runningBalance;
+                const endBal = begBal + stat.generated - stat.applied;
+                totalGenerated += stat.generated; totalApplied += stat.applied;
+
+                if (idx >= startIdx && idx <= endIdx) {
+                    let promoDatesStr = "";
+                    if (stat.days.length > 0) {
+                        const mm = String(stat.monthNum).padStart(2, '0');
+                        promoDatesStr = `${mm}/${stat.days.map(d => String(d).padStart(2, '0')).join(',')}/${currentYear}`;
+                    }
+
+                    let status = "No Activity";
+                    if (stat.missingDateCount > 0 && stat.generated > 0) {
+                        status = "Audit Review Required";
+                        console.warn(`[Audit Discrepancy] ${stat.month} ${currentYear} has ${stat.missingDateCount} credits without date support for ${targetBrand}.`);
+                    } else if (stat.generated === 0 && stat.applied === 0) status = "No Activity";
+                    else if (Math.abs(endBal) <= 0.01) status = "Reconciled / Settled";
+                    else if (stat.applied > 0) status = "Partial Payment";
+                    else if (endBal > 0.01) status = "Outstanding";
+                    else status = "Credit Balance / Overpaid";
+
+                    csvLines.push([csvEscape(`${stat.month} ${currentYear}`), csvEscape(promoDatesStr), begBal.toFixed(2), stat.generated.toFixed(2), stat.applied.toFixed(2), endBal.toFixed(2), csvEscape(status)].join(","));
                 }
-                
-                csvLines.push(`${month} ${currentYear},"${targetSite}","${targetBrand}",${monthlyGenerated.toFixed(2)},${runningTotalGenerated.toFixed(2)},${monthlyApplied.toFixed(2)},${cumulativeApplied.toFixed(2)},${balance.toFixed(2)},"${status}"`);
+                runningBalance = endBal;
             });
             
-            // Append YTD Total row
-            const finalBalance = runningTotalGenerated - cumulativeApplied;
-            const finalStatus = finalBalance > 0.01 ? "ACTION REQUIRED" : "Settled";
-            csvLines.push(`YTD Total,"${targetSite}","${targetBrand}",${runningTotalGenerated.toFixed(2)},${runningTotalGenerated.toFixed(2)},${cumulativeApplied.toFixed(2)},${cumulativeApplied.toFixed(2)},${finalBalance.toFixed(2)},"${finalStatus}"`);
+            const ytdBalance = totalGenerated - totalApplied;
+            let ytdStatus = Math.abs(ytdBalance) <= 0.01 ? "Settled" : (ytdBalance > 0 ? "Outstanding Balance" : "Credit Balance / Overpaid");
+            csvLines.push([csvEscape("YTD Total"), "", "0.00", totalGenerated.toFixed(2), totalApplied.toFixed(2), ytdBalance.toFixed(2), csvEscape(ytdStatus)].join(","));
             
-            return csvLines.join("\n");
+            return csvLines.join("\r\n");
         };
 
 
@@ -2728,13 +2740,13 @@ const handleSageCsvUpload = async (e) => {
             
             const startIdx = calendarMonths.indexOf(startMonth.value || 'January');
             const endIdx = calendarMonths.indexOf(endMonth.value || 'September');
-            // Math.max guarantees we don't get negative lengths, +1 ensures the end month is included
-            const monthsToProcess = calendarMonths.slice(startIdx, Math.max(startIdx, endIdx) + 1);
+                        // Math.max guarantees we don't get negative lengths, +1 ensures the end month is included
+            const auditedMonths = calendarMonths.slice(startIdx, Math.max(startIdx, endIdx) + 1);
             
             const standardizedTarget = getStandardizedBrandName(brandName).trim().toLowerCase();
 
             if (masterWorkbook.value && masterWorkbook.value.data) {
-                monthsToProcess.forEach(m => {
+                auditedMonths.forEach(m => {
                     const sheetName = `${m} 2026`;
                     const rows = masterWorkbook.value.data[sheetName] || [];
                     rows.forEach(row => {
@@ -2764,7 +2776,7 @@ const handleSageCsvUpload = async (e) => {
                     if (getStandardizedBrandName(rowBrand).trim().toLowerCase() === standardizedTarget) {
                         const dateStr = row["Posted dt."] || '';
                         const month = detectMonthFromDate(dateStr);
-                        if (monthsToProcess.includes(month)) {
+                        if (auditedMonths.includes(month)) {
                             const amt = parseFloat(String(row["Credit"] || 0).replace(/[^0-9.-]+/g, "")) || 0;
                             const site = detectSiteFromName(row["Store"] || row["Location"]);
                             if (site === 'Redding') redRec += amt;
@@ -2788,7 +2800,7 @@ const handleSageCsvUpload = async (e) => {
         };
 
 
-        // Duplicate generateAuditStatementCSV removed
+        
 
 
 
