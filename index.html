@@ -174,47 +174,50 @@
 
                     <!-- LEDGER MANAGEMENT PANEL -->
                     <div class="flex flex-col sm:flex-row gap-4 w-full lg:w-auto">
-                        <!-- TREEZ UPLOAD -->
-                        <div class="bg-white border border-gray-300 rounded-xl p-3 flex flex-col gap-2 shadow-sm min-w-[240px]">
+                                                <!-- TREEZ UPLOAD -->
+                        <div class="bg-white border border-gray-300 rounded-xl p-4 flex flex-col gap-3 shadow-sm min-w-[260px]">
                             <div class="flex items-center justify-between">
                                 <span class="text-[10px] font-black uppercase tracking-widest text-emerald-600">Treez Credits Generated</span>
-                                <span v-if="treezLedger.length > 0" class="flex h-2 w-2 rounded-full bg-emerald-500"></span>
-                                <span v-else class="flex h-2 w-2 rounded-full bg-gray-300"></span>
+                                <div class="flex items-center gap-1.5">
+                                    <span class="text-[10px] font-bold text-gray-400 uppercase">{{ treezLedger.length > 0 ? 'Loaded' : 'Missing' }}</span>
+                                    <span v-if="treezLedger.length > 0" class="flex h-2 w-2 rounded-full bg-emerald-500"></span>
+                                    <span v-else class="flex h-2 w-2 rounded-full bg-gray-300"></span>
+                                </div>
                             </div>
-                            <div class="flex justify-between items-end">
-                                <div>
-                                    <div class="text-xs font-bold text-gray-900">{{ treezLedger.length }} Records</div>
-                                    <div class="text-[9px] text-gray-400 font-medium">Last: {{ treezLedgerLastUpload || 'Never' }}</div>
-                                </div>
-                                <div class="relative overflow-hidden">
-                                    <button class="bg-emerald-600 hover:bg-emerald-500 text-white p-1.5 rounded-lg shadow transition-colors">
-                                        <i data-lucide="file-up" class="w-4 h-4"></i>
-                                    </button>
-                                    <input type="file" @change="handleTreezLedgerUpload" accept=".csv" class="absolute inset-0 opacity-0 cursor-pointer">
-                                </div>
+                            <div class="space-y-1">
+                                <div class="text-sm font-bold text-gray-900">{{ treezLedger.length }} Records</div>
+                                <div class="text-[10px] text-gray-500 font-medium">Last Upload: {{ treezLedgerLastUpload || 'Never' }}</div>
+                            </div>
+                            <div class="relative">
+                                <button class="w-full py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-bold text-xs shadow-sm transition-all flex items-center justify-center gap-2">
+                                    <i data-lucide="file-up" class="w-3.5 h-3.5"></i> Upload Treez CSV
+                                </button>
+                                <input type="file" @change="handleTreezLedgerUpload" accept=".csv" class="absolute inset-0 opacity-0 cursor-pointer">
                             </div>
                         </div>
 
                         <!-- SAGE UPLOAD -->
-                        <div class="bg-white border border-gray-300 rounded-xl p-3 flex flex-col gap-2 shadow-sm min-w-[240px]">
+                        <div class="bg-white border border-gray-300 rounded-xl p-4 flex flex-col gap-3 shadow-sm min-w-[260px]">
                             <div class="flex items-center justify-between">
                                 <span class="text-[10px] font-black uppercase tracking-widest text-amber-600">Sage 4545 Credits Applied</span>
-                                <span v-if="sage4545Ledger.length > 0" class="flex h-2 w-2 rounded-full bg-amber-500"></span>
-                                <span v-else class="flex h-2 w-2 rounded-full bg-gray-300"></span>
+                                <div class="flex items-center gap-1.5">
+                                    <span class="text-[10px] font-bold text-gray-400 uppercase">{{ sage4545Ledger.length > 0 ? 'Loaded' : 'Missing' }}</span>
+                                    <span v-if="sage4545Ledger.length > 0" class="flex h-2 w-2 rounded-full bg-amber-500"></span>
+                                    <span v-else class="flex h-2 w-2 rounded-full bg-gray-300"></span>
+                                </div>
                             </div>
-                            <div class="flex justify-between items-end">
-                                <div>
-                                    <div class="text-xs font-bold text-gray-900">{{ sage4545Ledger.length }} Records</div>
-                                    <div class="text-[9px] text-gray-400 font-medium">Last: {{ sage4545LedgerLastUpload || 'Never' }}</div>
-                                </div>
-                                <div class="relative overflow-hidden">
-                                    <button class="bg-amber-500 hover:bg-amber-400 text-gray-950 p-1.5 rounded-lg shadow transition-colors">
-                                        <i data-lucide="landmark" class="w-4 h-4"></i>
-                                    </button>
-                                    <input type="file" @change="handleSage4545Upload" accept=".csv" class="absolute inset-0 opacity-0 cursor-pointer">
-                                </div>
+                            <div class="space-y-1">
+                                <div class="text-sm font-bold text-gray-900">{{ sage4545Ledger.length }} Records</div>
+                                <div class="text-[10px] text-gray-500 font-medium">Last Upload: {{ sage4545LedgerLastUpload || 'Never' }}</div>
+                            </div>
+                            <div class="relative">
+                                <button class="w-full py-2 bg-amber-500 hover:bg-amber-400 text-gray-950 rounded-lg font-bold text-xs shadow-sm transition-all flex items-center justify-center gap-2">
+                                    <i data-lucide="landmark" class="w-3.5 h-3.5"></i> Upload Sage 4545 CSV
+                                </button>
+                                <input type="file" @change="handleSage4545Upload" accept=".csv" class="absolute inset-0 opacity-0 cursor-pointer">
                             </div>
                         </div>
+
                     </div>
                 </div>
 
