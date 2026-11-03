@@ -164,34 +164,60 @@
                 </div>
             </div>
 
-            <!-- TAB 1: MASTER LEDGER -->
+                        <!-- TAB 1: MASTER LEDGER -->
             <main v-if="activeTab === 'Ledger'" class="flex-1 flex flex-col p-4 md:p-6 bg-gray-100 overflow-hidden">
-                <div class="flex justify-between items-end mb-4 shrink-0">
+                <div class="flex flex-col lg:flex-row justify-between items-start lg:items-end mb-4 shrink-0 gap-4">
                     <div>
                         <h2 class="text-xl font-bold text-gray-900 leading-tight">Master Ledger (BETA)</h2>
                         <p class="text-sm text-gray-500 mt-1">Unified financial workspace derived from Discovery and Recovery events.</p>
                     </div>
-                    <div class="flex items-center gap-2.5">
-                        <input type="file" ref="sageFileInput" accept=".csv" class="hidden" @change="handleSageGLUpload" />
-                        <input type="file" ref="treezFileInput" accept=".csv" class="hidden" @change="handleTreezPOSUpload" />
-                        
-                        <button type="button" @click="$refs.sageFileInput.click()" :disabled="isProcessingUpload"
-                                class="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 rounded-lg shadow-sm transition-colors disabled:opacity-50">
-                            <i data-lucide="file-spreadsheet" class="w-4 h-4 text-emerald-600"></i>
-                            <span>Upload Sage GL (4545)</span>
-                        </button>
-                        <button type="button" @click="$refs.treezFileInput.click()" :disabled="isProcessingUpload"
-                                class="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-300 rounded-lg shadow-sm transition-colors disabled:opacity-50">
-                            <i data-lucide="file-up" class="w-4 h-4 text-blue-600"></i>
-                            <span>Upload Treez POS</span>
-                        </button>
-                        <button type="button" @click="recalculateMasterLedger" :disabled="isRecalculating"
-                                class="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-semibold text-gray-700 bg-white hover:bg-gray-50 border border-gray-300 rounded-lg shadow-sm transition-colors">
-                            <i data-lucide="refresh-cw" class="w-4 h-4 text-gray-500" :class="{'animate-spin': isRecalculating}"></i>
-                            <span>Recalculate</span>
-                        </button>
+
+                    <!-- LEDGER MANAGEMENT PANEL -->
+                    <div class="flex flex-col sm:flex-row gap-4 w-full lg:w-auto">
+                        <!-- TREEZ UPLOAD -->
+                        <div class="bg-white border border-gray-300 rounded-xl p-3 flex flex-col gap-2 shadow-sm min-w-[240px]">
+                            <div class="flex items-center justify-between">
+                                <span class="text-[10px] font-black uppercase tracking-widest text-emerald-600">Treez Credits Generated</span>
+                                <span v-if="treezLedger.length > 0" class="flex h-2 w-2 rounded-full bg-emerald-500"></span>
+                                <span v-else class="flex h-2 w-2 rounded-full bg-gray-300"></span>
+                            </div>
+                            <div class="flex justify-between items-end">
+                                <div>
+                                    <div class="text-xs font-bold text-gray-900">{{ treezLedger.length }} Records</div>
+                                    <div class="text-[9px] text-gray-400 font-medium">Last: {{ treezLedgerLastUpload || 'Never' }}</div>
+                                </div>
+                                <div class="relative overflow-hidden">
+                                    <button class="bg-emerald-600 hover:bg-emerald-500 text-white p-1.5 rounded-lg shadow transition-colors">
+                                        <i data-lucide="file-up" class="w-4 h-4"></i>
+                                    </button>
+                                    <input type="file" @change="handleTreezLedgerUpload" accept=".csv" class="absolute inset-0 opacity-0 cursor-pointer">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- SAGE UPLOAD -->
+                        <div class="bg-white border border-gray-300 rounded-xl p-3 flex flex-col gap-2 shadow-sm min-w-[240px]">
+                            <div class="flex items-center justify-between">
+                                <span class="text-[10px] font-black uppercase tracking-widest text-amber-600">Sage 4545 Credits Applied</span>
+                                <span v-if="sage4545Ledger.length > 0" class="flex h-2 w-2 rounded-full bg-amber-500"></span>
+                                <span v-else class="flex h-2 w-2 rounded-full bg-gray-300"></span>
+                            </div>
+                            <div class="flex justify-between items-end">
+                                <div>
+                                    <div class="text-xs font-bold text-gray-900">{{ sage4545Ledger.length }} Records</div>
+                                    <div class="text-[9px] text-gray-400 font-medium">Last: {{ sage4545LedgerLastUpload || 'Never' }}</div>
+                                </div>
+                                <div class="relative overflow-hidden">
+                                    <button class="bg-amber-500 hover:bg-amber-400 text-gray-950 p-1.5 rounded-lg shadow transition-colors">
+                                        <i data-lucide="landmark" class="w-4 h-4"></i>
+                                    </button>
+                                    <input type="file" @change="handleSage4545Upload" accept=".csv" class="absolute inset-0 opacity-0 cursor-pointer">
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
+
 
                 <div class="flex flex-col lg:flex-row gap-6 flex-1 min-h-0 overflow-hidden">
                     <div class="bg-white rounded-xl border border-gray-300 shadow-sm flex-1 flex flex-col min-h-0 overflow-hidden">
