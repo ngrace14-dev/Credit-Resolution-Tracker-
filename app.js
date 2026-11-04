@@ -334,7 +334,7 @@ createApp({
         const masterLedgerData = ref([]);
         const ledgerTotals = ref({ generated: 0, recovered: 0, outstanding: 0, variance: 0 });
 
-                const refreshLedger = async () => {
+                                const refreshLedger = async () => {
             if (!promoCredits.value) return; 
 
             const ledger = {};
@@ -343,7 +343,7 @@ createApp({
             
             promoCredits.value.forEach(c => {
                 if (c.site !== site) return;
-
+                
                 const v = c.vendor || 'Unknown';
 
                 if (!ledger[v]) {
@@ -355,7 +355,7 @@ createApp({
                     };
                 }
                 
-                // 1. GLOBAL YTD CALCULATIONS (Card Totals)
+                // 1. GLOBAL YTD CALCULATIONS (Card Totals Always cumulative)
                 ledger[v].generated += (parseFloat(c.amount) || 0);
                 ledger[v].generatedCount++;
 
@@ -411,6 +411,8 @@ createApp({
             ledgerTotals.value = totals;
             masterLedgerData.value = Object.values(ledger).sort((a, b) => b.outstanding - a.outstanding);
         };
+
+
 
 
         watch([promoCredits, activeSite, activeMonth], () => {
@@ -1702,7 +1704,7 @@ createApp({
             }
         };
 
-                                const handleTreezLedgerUpload = (e) => {
+                                                const handleTreezLedgerUpload = (e) => {
                     const file = e.target.files[0];
                     if (!file) return;
 
@@ -1733,9 +1735,11 @@ createApp({
                             persistLedgerMetadata();
 
                             if (confirm(`Successfully parsed ${importedCount} records. Would you like to merge this data into the Master Workbook in optimized batches?`)) {
+                                // FIXED: Use a single master copy prepared BEFORE batching to avoid cross-batch staining
+                                const updatedData = JSON.parse(JSON.stringify(masterWorkbook.value.data));
+                                
                                 startBatchProcessing('Treez', parsedData, async (chunk, startIndex) => {
-                                    const updatedData = JSON.parse(JSON.stringify(masterWorkbook.value.data));
-                                    const affectedSheets = new Set();
+                                    const affectedSheetsInChunk = new Set();
 
                                     chunk.forEach(item => {
                                         if (!item.isRecoverable) return;
@@ -1743,7 +1747,7 @@ createApp({
                                         const sheetName = `${month} 2026`;
                                         if (!updatedData[sheetName]) return;
 
-                                        affectedSheets.add(sheetName);
+                                        affectedSheetsInChunk.add(sheetName);
                                         const sheetRows = updatedData[sheetName];
                                         const cleanBrand = item.brand.trim().toLowerCase();
 
@@ -1764,16 +1768,17 @@ createApp({
                                         brandRow["Treez Total"] = currentTotal + item.creditGenerated;
                                     });
 
-                                                                        for (const sheetName of affectedSheets) {
+                                    for (const sheetName of affectedSheetsInChunk) {
                                         const docId = sheetToDocId(sheetName);
                                         await setDoc(doc(db, "workbook_v9_sheets", docId), {
-
                                             sheetName: sheetName,
                                             rows: updatedData[sheetName],
                                             updatedAt: Date.now()
                                         });
                                     }
-                                    masterWorkbook.value.data = updatedData;
+                                    
+                                    // Update local UI state
+                                    masterWorkbook.value.data = JSON.parse(JSON.stringify(updatedData));
                                 });
                             }
                             
@@ -1786,6 +1791,7 @@ createApp({
                     };
                     reader.readAsText(file);
                 };
+
 
                 const handleSage4545Upload = (e) => {
                     const file = e.target.files[0];
@@ -1830,9 +1836,11 @@ createApp({
                             sage4545LedgerSourceFile.value = file.name;
                             persistLedgerMetadata();
 
-                            if (confirm(`Successfully parsed ${importedCount} recovery records. Append these to the Master Workbook GL in optimized batches?`)) {
+                                                        if (confirm(`Successfully parsed ${importedCount} recovery records. Append these to the Master Workbook GL in optimized batches?`)) {
+                                // FIXED: Hoist updatedData clone for batch stability
+                                const updatedData = JSON.parse(JSON.stringify(masterWorkbook.value.data));
+                                
                                 startBatchProcessing('Sage', parsedData, async (chunk, startIndex) => {
-                                    const updatedData = JSON.parse(JSON.stringify(masterWorkbook.value.data));
                                     const glSheet = updatedData["GL Raw by Store"] || [];
 
                                     chunk.forEach(item => {
@@ -1852,9 +1860,11 @@ createApp({
                                         rows: glSheet,
                                         updatedAt: Date.now()
                                     });
-                                    masterWorkbook.value.data = updatedData;
+                                    
+                                    masterWorkbook.value.data = JSON.parse(JSON.stringify(updatedData));
                                 });
                             }
+
                             
                             logSystemAction("UPLOAD", `Sage 4545 ledger imported (${parsedData.length} records)`);
                             e.target.value = '';
