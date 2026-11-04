@@ -109,7 +109,7 @@ createApp({
             console.error("Error loading persisted ledger metadata:", e);
         }
 
-        const persistLedgerMetadata = () => {
+                const persistLedgerMetadata = () => {
             try {
                 localStorage.setItem('treezLedgerCount', treezLedgerCount.value.toString());
                 localStorage.setItem('sage4545LedgerCount', sage4545LedgerCount.value.toString());
@@ -121,6 +121,9 @@ createApp({
                 console.error("Error persisting ledger metadata:", e);
             }
         };
+
+        const sheetToDocId = (name) => String(name || '').replace(/[\s\/]/g, '_');
+
 
 
         // 1. DATA SOURCE: Master Workbook Fragments
@@ -1182,12 +1185,13 @@ createApp({
                     const worksheet = workbook.Sheets[sheetName];
                     const json = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
                     
-                    const prunedRows = json.filter(row => {
+                                        const prunedRows = json.filter(row => {
                         return Object.values(row).some(val => val !== "" && val !== null && val !== undefined);
                     });
 
-                    const docId = sheetName.replace(/\//g, '_'); 
+                    const docId = sheetToDocId(sheetName); 
                     const sheetRef = doc(db, "workbook_v9_sheets", docId);
+
                     
                     batch.set(sheetRef, {
                         sheetName: sheetName,
@@ -1209,8 +1213,12 @@ createApp({
             }
         };
 
-        onMounted(() => {
+                onMounted(() => {
+            // CRITICAL STORAGE CLEANUP
+            localStorage.removeItem('treesSalesData');
+            
             refreshIcons();
+
 
             onAuthStateChanged(auth, (user) => {
                 showImportModal.value = false;
@@ -1754,9 +1762,10 @@ createApp({
                                         brandRow["Treez Total"] = currentTotal + item.creditGenerated;
                                     });
 
-                                    for (const sheetName of affectedSheets) {
-                                        const docId = sheetName.replace(/\//g, '_');
+                                                                        for (const sheetName of affectedSheets) {
+                                        const docId = sheetToDocId(sheetName);
                                         await setDoc(doc(db, "workbook_v9_sheets", docId), {
+
                                             sheetName: sheetName,
                                             rows: updatedData[sheetName],
                                             updatedAt: Date.now()
@@ -2243,7 +2252,7 @@ createApp({
                     updatesCount++;
                 });
 
-                const sheetDocId = sheetName.replace(/\//g, '_');
+                                const sheetDocId = sheetToDocId(sheetName);
                 await setDoc(doc(db, "workbook_v9_sheets", sheetDocId), {
                     sheetName: sheetName,
                     rows: updatedData[sheetName],
