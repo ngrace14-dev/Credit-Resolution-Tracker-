@@ -1070,8 +1070,8 @@ createApp({
             'Dates', 'Credit amount $$$', 'Date requested', 'Date received', 'Invoice / Credit Memo', 'Status'
         ]);
         
-        const getEmptyForm = () => ({ 
-            trackingMonth: activeMonth.value === 'All' ? 'August' : activeMonth.value,
+                const getEmptyForm = () => ({ 
+            trackingMonth: '', 
             vendor: '', distributor: '', creditType: '', dates: '', 
             amount: '', dateRequested: '', dateReceived: '', 
             invoice: '', status: 'Pending', attachmentName: '', attachmentData: null 
@@ -1421,8 +1421,8 @@ createApp({
             });
         };
 
-        const processImport = async () => {
-            const { creditsToCreate, brandsToCreate, importedCount } = buildGridImportPayloads(
+                const processImport = async () => {
+            const { creditsToCreate, brandsToCreate, importedCount, skippedCount, errorRecords } = buildGridImportPayloads(
                 pastedGrid.value,
                 mappedHeaders.value,
                 { activeSite: activeSite.value, activeMonth: activeMonth.value },
@@ -1430,23 +1430,40 @@ createApp({
                 { detectMonthInString }
             );
 
-            if (importedCount === 0) {
+            if (importedCount === 0 && skippedCount === 0) {
                 return alert("No valid credits found in paste data to import.");
             }
 
             try {
-                const batch = writeBatch(db);
-                creditsToCreate.forEach(credit => {
-                    const newDocRef = doc(collection(db, "promoCredits"));
-                    batch.set(newDocRef, credit);
-                });
-                brandsToCreate.forEach(brand => {
-                    const newBrandRef = doc(collection(db, "brands"));
-                    batch.set(newBrandRef, brand);
-                });
+                if (importedCount > 0) {
+                    const batch = writeBatch(db);
+                    creditsToCreate.forEach(credit => {
+                        const newDocRef = doc(collection(db, "promoCredits"));
+                        batch.set(newDocRef, credit);
+                    });
+                    brandsToCreate.forEach(brand => {
+                        const newBrandRef = doc(collection(db, "brands"));
+                        batch.set(newBrandRef, brand);
+                    });
+                    await batch.commit();
+                }
 
-                await batch.commit();
-                alert(`Successfully extracted and saved ${importedCount} promo credits to Firebase!`);
+                let alertMsg = `Import Processed:\n- Saved: ${importedCount} items`;
+                if (skippedCount > 0) {
+                    alertMsg += `\n- ⚠️ Quarantined: ${skippedCount} items (Unknown Month)`;
+                    
+                    const csvErrorContent = "Vendor,Amount,Detected Month,Error\n" + errorRecords.map(r => `"${r.vendor}","${r.amount}","${r.trackingMonth}","${r.error}"`).join('\n');
+                    const errorBlob = new Blob(['\ufeff' + csvErrorContent], { type: 'text/csv;charset=utf-8;' });
+                    const errorUrl = URL.createObjectURL(errorBlob);
+                    const errorLink = document.createElement("a");
+                    errorLink.setAttribute("href", errorUrl);
+                    errorLink.setAttribute("download", `Quarantine_Grid_Import_${activeMonth.value}_${Date.now()}.csv`);
+                    document.body.appendChild(errorLink);
+                    errorLink.click();
+                    document.body.removeChild(errorLink);
+                }
+                
+                alert(alertMsg);
                 closeImportModal();
                 refreshIcons();
             } catch (err) {
@@ -1568,6 +1585,8 @@ createApp({
 
                         const batch = writeBatch(db);
                         let count = 0;
+                        let skippedCount = 0;
+                        const errorRecords = [];
 
                         for (let i = headerIdx + 1; i < rows.length; i++) {
                             if (!rows[i].trim()) continue;
@@ -1580,8 +1599,15 @@ createApp({
 
                             if (!brandVal && !trackingVal) continue;
 
-                            const dateStr = getVal(rowObj, 'Date Closed', 'Date');
-                            const parsedMonth = detectMonthFromDate(dateStr) !== 'Unknown' ? detectMonthFromDate(dateStr) : 'August';
+                                                        const dateStr = getVal(rowObj, 'Date Closed', 'Date');
+                            const parsedMonth = detectMonthFromDate(dateStr);
+                            
+                            if (parsedMonth === 'Unknown') {
+                                skippedCount++;
+                                errorRecords.push({ brand: brandVal, date: dateStr, amount: owedAmt, reason: "Unknown Month" });
+                                continue;
+                            }
+
                             const storeString = getVal(rowObj, 'Store Name', 'Location');
                             const detectedSite = detectSiteFromName(storeString);
 
@@ -1618,10 +1644,28 @@ createApp({
                         }
 
                         await batch.commit();
-                        await updateDoc(doc(db, "source_uploads", uploadId), { status: 'Parsed', rowCount: count });
+                        await updateDoc(doc(db, "source_uploads", uploadId), { status: 'Parsed', rowCount: count, skippedCount: skippedCount });
                 
-                        logSystemAction("IMPORT", `Uploaded ${count} raw sales items from Trees CSV (ID: ${uploadId})`);
-                        alert(`Successfully uploaded ${count} sales items and preserved source CSV to cloud storage!`);
+                        logSystemAction("IMPORT", `Uploaded ${count} raw sales items from Trees CSV. Skipped ${skippedCount} items.`);
+                        
+                        let alertMsg = `Successfully uploaded ${count} sales items!\n- Preserved source CSV to cloud storage.`;
+                        if (skippedCount > 0) {
+                            alertMsg += `\n- ⚠️ WARNING: ${skippedCount} items skipped due to unknown months.`;
+                        }
+                        alert(alertMsg);
+
+                        if (errorRecords.length > 0) {
+                            const csvErrorContent = "Brand,Date,Amount,Reason\n" + errorRecords.map(r => `"${r.brand}","${r.date}","${r.amount}","${r.reason}"`).join('\n');
+                            const errorBlob = new Blob(['\ufeff' + csvErrorContent], { type: 'text/csv;charset=utf-8;' });
+                            const errorUrl = URL.createObjectURL(errorBlob);
+                            const errorLink = document.createElement("a");
+                            errorLink.setAttribute("href", errorUrl);
+                            errorLink.setAttribute("download", `Quarantine_Report_${activeMonth.value}_${Date.now()}.csv`);
+                            document.body.appendChild(errorLink);
+                            errorLink.click();
+                            document.body.removeChild(errorLink);
+                        }
+                        
                         e.target.value = ''; 
                     } catch (error) { 
                         console.error(error);
@@ -1704,7 +1748,7 @@ createApp({
             }
         };
 
-                                                const handleTreezLedgerUpload = (e) => {
+                                                                const handleTreezLedgerUpload = (e) => {
                     const file = e.target.files[0];
                     if (!file) return;
 
@@ -1735,17 +1779,28 @@ createApp({
                             persistLedgerMetadata();
 
                             if (confirm(`Successfully parsed ${importedCount} records. Would you like to merge this data into the Master Workbook in optimized batches?`)) {
-                                // FIXED: Use a single master copy prepared BEFORE batching to avoid cross-batch staining
                                 const updatedData = JSON.parse(JSON.stringify(masterWorkbook.value.data));
-                                
+                                let skippedInBatch = 0;
+                                const errorRecordsBatch = [];
+
                                 startBatchProcessing('Treez', parsedData, async (chunk, startIndex) => {
                                     const affectedSheetsInChunk = new Set();
 
                                     chunk.forEach(item => {
                                         if (!item.isRecoverable) return;
                                         const month = detectMonthFromDate(item.promoDate);
+                                        if (month === 'Unknown') {
+                                            skippedInBatch++;
+                                            errorRecordsBatch.push({ brand: item.brand, date: item.promoDate, amount: item.creditGenerated, reason: "Unknown Month" });
+                                            return;
+                                        }
+
                                         const sheetName = `${month} 2026`;
-                                        if (!updatedData[sheetName]) return;
+                                        if (!updatedData[sheetName]) {
+                                            skippedInBatch++;
+                                            errorRecordsBatch.push({ brand: item.brand, date: item.promoDate, amount: item.creditGenerated, reason: `Sheet ${sheetName} Missing` });
+                                            return;
+                                        }
 
                                         affectedSheetsInChunk.add(sheetName);
                                         const sheetRows = updatedData[sheetName];
@@ -1777,8 +1832,20 @@ createApp({
                                         });
                                     }
                                     
-                                    // Update local UI state
                                     masterWorkbook.value.data = JSON.parse(JSON.stringify(updatedData));
+                                }, () => {
+                                    if (skippedInBatch > 0) {
+                                        const csvErrorContent = "Brand,Date,Amount,Reason\n" + errorRecordsBatch.map(r => `"${r.brand}","${r.date}","${r.amount}","${r.reason}"`).join('\n');
+                                        const errorBlob = new Blob(['\ufeff' + csvErrorContent], { type: 'text/csv;charset=utf-8;' });
+                                        const errorUrl = URL.createObjectURL(errorBlob);
+                                        const errorLink = document.createElement("a");
+                                        errorLink.setAttribute("href", errorUrl);
+                                        errorLink.setAttribute("download", `Treez_Ledger_Quarantine_${Date.now()}.csv`);
+                                        document.body.appendChild(errorLink);
+                                        errorLink.click();
+                                        document.body.removeChild(errorLink);
+                                        alert(`Treez Merge Complete with Warnings:\n- ${skippedInBatch} records quarantined due to Unknown Months/Sheets.`);
+                                    }
                                 });
                             }
                             
@@ -1876,19 +1943,19 @@ createApp({
                     reader.readAsText(file);
                 };
 
-                const startBatchProcessing = async (type, data, processFn) => {
+                                const startBatchProcessing = async (type, data, processFn, onComplete) => {
                     isBatchProcessing.value = true;
                     batchType.value = type;
                     batchTotal.value = data.length;
                     batchProgress.value = 0;
                     batchError.value = null;
-                    batchContext = { data, processFn, currentIndex: 0 };
+                    batchContext = { data, processFn, currentIndex: 0, onComplete };
                     
                     await runBatchLoop();
                 };
 
                 const runBatchLoop = async () => {
-                    const { data, processFn, currentIndex } = batchContext;
+                    const { data, processFn, currentIndex, onComplete } = batchContext;
                     const chunkSize = 500;
                     
                     for (let i = currentIndex; i < data.length; i += chunkSize) {
@@ -1906,13 +1973,17 @@ createApp({
                                 end: end,
                                 message: err.message
                             };
-                            return; // Stop processing on error
+                            return; 
                         }
                     }
                     
                     isBatchProcessing.value = false;
+                    const finalType = batchType.value;
+                    const finalOnComplete = batchContext.onComplete;
                     batchContext = null;
-                    alert(`${batchType.value} Batch Processing Complete!`);
+                    
+                    if (finalOnComplete) finalOnComplete();
+                    alert(`${finalType} Batch Processing Complete!`);
                 };
 
                 const continueBatch = async () => {

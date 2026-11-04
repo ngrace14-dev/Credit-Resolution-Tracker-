@@ -1,6 +1,6 @@
 // services/importService.js
 
-const getEmptyCreditForm = (defaultMonth = 'August') => ({
+const getEmptyCreditForm = (defaultMonth = '') => ({
     trackingMonth: defaultMonth,
     vendor: '',
     distributor: '',
@@ -98,19 +98,20 @@ export const buildTrackerSyncPayloads = (unsyncedSales, masterBrands, options = 
  * @param {Object} config { activeSite, activeMonth }
  * @param {Array} masterBrands 
  * @param {Object} helpers { detectMonthInString }
- * @returns {{ creditsToCreate: Array, brandsToCreate: Array, importedCount: number }}
+ * @returns {{ creditsToCreate: Array, brandsToCreate: Array, importedCount: number, skippedCount: number, errorRecords: Array }}
  */
 export const buildGridImportPayloads = (pastedGrid, mappedHeaders, config, masterBrands, helpers) => {
     const { activeSite, activeMonth } = config;
     const { detectMonthInString } = helpers;
-    const defaultFallbackMonth = activeMonth === 'All' ? 'August' : activeMonth;
 
     const creditsToCreate = [];
     const brandsToCreate = [];
     let importedCount = 0;
+    let skippedCount = 0;
+    const errorRecords = [];
 
     if (!pastedGrid || pastedGrid.length < 3) {
-        return { creditsToCreate, brandsToCreate, importedCount: 0 };
+        return { creditsToCreate, brandsToCreate, importedCount: 0, skippedCount: 0, errorRecords: [] };
     }
 
     const superHeaders = pastedGrid[0];
@@ -118,9 +119,29 @@ export const buildGridImportPayloads = (pastedGrid, mappedHeaders, config, maste
         (masterBrands || []).map(b => (b.vendor || '').toLowerCase().trim()).filter(Boolean)
     );
 
+    const validateAndPush = (credit, chunkMonth) => {
+        if (!credit.vendor) return;
+
+        // Use detected month from column super-header OR fallback to Tracking Month column
+        const finalMonth = chunkMonth !== 'Unknown' ? chunkMonth : (credit.trackingMonth || 'Unknown');
+
+        if (!finalMonth || finalMonth === 'Unknown') {
+            skippedCount++;
+            errorRecords.push({ ...credit, error: "Missing or Unknown Month" });
+            return;
+        }
+
+        credit.site = activeSite;
+        credit.trackingMonth = finalMonth;
+        credit.amount = parseFloat(String(credit.amount).replace(/[^0-9.-]+/g, "")) || 0;
+        credit.createdAt = Date.now();
+        creditsToCreate.push({ ...credit });
+        importedCount++;
+    };
+
     for (let r = 2; r < pastedGrid.length; r++) {
         const row = pastedGrid[r];
-        let currentCredit = getEmptyCreditForm(defaultFallbackMonth);
+        let currentCredit = getEmptyCreditForm(''); 
         let hasData = false;
         let seenHeadersInChunk = new Set();
         let currentChunkMonth = 'Unknown';
@@ -133,15 +154,10 @@ export const buildGridImportPayloads = (pastedGrid, mappedHeaders, config, maste
             if (header === '-- Ignore Column --') continue;
 
             if (seenHeadersInChunk.has(header)) {
-                if (hasData && currentCredit.vendor) {
-                    currentCredit.site = activeSite;
-                    currentCredit.trackingMonth = currentChunkMonth !== 'Unknown' ? currentChunkMonth : defaultFallbackMonth;
-                    currentCredit.amount = parseFloat(String(currentCredit.amount).replace(/[^0-9.-]+/g, "")) || 0;
-                    currentCredit.createdAt = Date.now();
-                    creditsToCreate.push({ ...currentCredit });
-                    importedCount++;
+                if (hasData) {
+                    validateAndPush(currentCredit, currentChunkMonth);
                 }
-                currentCredit = getEmptyCreditForm(defaultFallbackMonth);
+                currentCredit = getEmptyCreditForm('');
                 hasData = false;
                 seenHeadersInChunk.clear();
             }
@@ -163,20 +179,17 @@ export const buildGridImportPayloads = (pastedGrid, mappedHeaders, config, maste
             }
         }
 
-        if (hasData && currentCredit.vendor) {
-            currentCredit.site = activeSite;
-            currentCredit.trackingMonth = currentChunkMonth !== 'Unknown' ? currentChunkMonth : defaultFallbackMonth;
-            currentCredit.amount = parseFloat(String(currentCredit.amount).replace(/[^0-9.-]+/g, "")) || 0;
-            currentCredit.createdAt = Date.now();
-            creditsToCreate.push({ ...currentCredit });
-            importedCount++;
+        if (hasData) {
+            validateAndPush(currentCredit, currentChunkMonth);
         }
     }
 
     return {
         creditsToCreate,
         brandsToCreate,
-        importedCount
+        importedCount,
+        skippedCount,
+        errorRecords
     };
 };
 
