@@ -73,7 +73,7 @@ export const buildTrackerSyncPayloads = (unsyncedSales, masterBrands, options = 
                 amount: data.totalOwed,
                 dateRequested: dateStr,
                 dateReceived: '',
-                invoice: 'CSV-AUTO-SYNC',
+                invoice: 'WB-V9-SYNC',
                 status: 'Pending',
                 createdAt: timestamp
             };
