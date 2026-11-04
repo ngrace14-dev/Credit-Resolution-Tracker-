@@ -1665,7 +1665,7 @@ createApp({
                         const updatedData = JSON.parse(JSON.stringify(masterWorkbook.value.data));
                         updatedData["GL Raw by Store"] = [...(updatedData["GL Raw by Store"] || []), ...importedSageData];
 
-                        const sheetDocId = "GL Raw by Store";
+                        const sheetDocId = "GL_Raw_by_Store";
                         await setDoc(doc(db, "workbook_v9_sheets", sheetDocId), {
                             sheetName: "GL Raw by Store",
                             rows: updatedData["GL Raw by Store"],
@@ -1836,7 +1836,7 @@ createApp({
                                     });
 
                                     updatedData["GL Raw by Store"] = glSheet;
-                                    await setDoc(doc(db, "workbook_v9_sheets", "GL Raw by Store"), {
+                                    await setDoc(doc(db, "workbook_v9_sheets", "GL_Raw_by_Store"), {
                                         sheetName: "GL Raw by Store",
                                         rows: glSheet,
                                         updatedAt: Date.now()
