@@ -192,7 +192,7 @@ createApp({
             if (!masterWorkbook.value || !masterWorkbook.value.data) return [];
 
             Object.keys(masterWorkbook.value.data).forEach(sheetName => {
-                if (sheetName.includes('2026')) {
+                                if (sheetName.includes('2026')) {
                     const monthName = sheetName.split(' ')[0];
                     const rows = masterWorkbook.value.data[sheetName] || [];
 
@@ -215,10 +215,10 @@ createApp({
                                 } else {
                                     rawAmt = row[exactKey];
                                 }
-                            } else if (siteKey === "Redding" && row[1] !== undefined) {
-                                rawAmt = row[1];
-                            } else if (siteKey === "Red-Bluff" && row[2] !== undefined) {
-                                rawAmt = row[2];
+                            } else if (siteKey === "Redding" && row["Redding"] !== undefined) {
+                                rawAmt = row["Redding"];
+                            } else if (siteKey === "Red-Bluff" && row["Red-Bluff"] !== undefined) {
+                                rawAmt = row["Red-Bluff"];
                             }
 
                             const amt = parseFloat(String(rawAmt || 0).replace(/[^0-9.-]+/g,"")) || 0;
@@ -240,6 +240,7 @@ createApp({
                                     dateReceived: row[dateKey] || row["Date Applied"] || '',
                                     status: isApplied ? "Applied" : "Pending",
                                     archived: false,
+                                    distributor: 'Workbook Sync', // Mark as synced for duplication check
                                     workbookRef: { sheet: sheetName, rowIdx: idx }
                                 });
                             }

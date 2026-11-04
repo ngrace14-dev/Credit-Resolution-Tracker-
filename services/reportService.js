@@ -59,26 +59,30 @@ export const buildMonthlyReportSummaries = (params) => {
 
             const rows = masterWorkbookData[sheetName] || [];
             rows.forEach(row => {
-                const vendor = row["Brand"] || row[0];
+                                const vendor = row["Brand"] || row[0];
                 if (!vendor || vendor === "Brand" || vendor.toLowerCase().includes('total')) return;
 
                 const siteKey = targetSite === "Redding" ? "Redding" : "Red-Bluff";
                 let rawAmt = 0;
                 const rowKeys = Object.keys(row);
+                
+                // Directly check the column matching the target site
                 const exactKey = rowKeys.find(k => k.trim().toLowerCase() === targetSite.toLowerCase() || k.trim().toLowerCase() === siteKey.toLowerCase());
                 
                 if (exactKey) {
                     const val = String(row[exactKey]).trim().toLowerCase();
+                    // If the cell has an 'x' or 'X', it means we need to pull the amount from the Promo Credits column
                     if (val === 'x') {
                         const promoKey = rowKeys.find(k => k.toLowerCase().includes('promo credits'));
                         rawAmt = row[promoKey] || 0;
                     } else {
+                        // Otherwise the cell likely contains the amount directly
                         rawAmt = row[exactKey];
                     }
-                } else if (siteKey === "Redding" && row[1] !== undefined) {
-                    rawAmt = row[1];
-                } else if (siteKey === "Red-Bluff" && row[2] !== undefined) {
-                    rawAmt = row[2];
+                } else if (siteKey === "Redding" && row["Redding"] !== undefined) {
+                    rawAmt = row["Redding"];
+                } else if (siteKey === "Red-Bluff" && row["Red-Bluff"] !== undefined) {
+                    rawAmt = row["Red-Bluff"];
                 }
 
                 const amt = parseFloat(String(rawAmt || 0).replace(/[^0-9.-]+/g,"")) || 0;
@@ -103,10 +107,14 @@ export const buildMonthlyReportSummaries = (params) => {
         });
     }
 
-    promoCredits.forEach(c => {
+        promoCredits.forEach(c => {
         if (!c || c.site !== targetSite) return;
         if (targetMonth !== 'All' && c.trackingMonth !== targetMonth) return;
         if (c.invoice === 'WB-V9-SYNC') return;
+
+        // Skip adding workbook/ledger credits from promoCredits 
+        // to avoid duplicating the masterWorkbookData processing above.
+        if (c.distributor === 'Workbook Sync' || (c.dates && c.dates === 'Workbook Sync') || c.creditType === 'Variance Record') return;
 
         const brand = ensureStructure(c.trackingMonth, c.vendor);
         brand.credits.push(c);
