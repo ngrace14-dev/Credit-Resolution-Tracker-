@@ -334,7 +334,7 @@ createApp({
         const masterLedgerData = ref([]);
         const ledgerTotals = ref({ generated: 0, recovered: 0, outstanding: 0, variance: 0 });
 
-        const refreshLedger = async () => {
+                const refreshLedger = async () => {
             if (!promoCredits.value) return; 
 
             const ledger = {};
@@ -343,7 +343,6 @@ createApp({
             
             promoCredits.value.forEach(c => {
                 if (c.site !== site) return;
-                if (month !== 'All' && c.trackingMonth !== month) return;
 
                 const v = c.vendor || 'Unknown';
 
@@ -356,27 +355,30 @@ createApp({
                     };
                 }
                 
+                // 1. GLOBAL YTD CALCULATIONS (Card Totals)
                 ledger[v].generated += (parseFloat(c.amount) || 0);
                 ledger[v].generatedCount++;
-                ledger[v].discoveryEvents.push({
-                    id: c.id,
-                    type: c.creditType,
-                    date: c.dateRequested || c.dates,
-                    amount: c.amount
-                });
 
-                if (c.status === 'Applied') {
-                    const recoveredAmount = (parseFloat(c.amount) || 0); 
-                    ledger[v].recovered += recoveredAmount;
-                    
-                    if (recoveredAmount > 0) {
-                        ledger[v].recoveredCount++;
-                        ledger[v].recoveryEvents.push({
-                            id: 'rec-' + c.id,
-                            ref: c.invoice || 'CREDIT-MEMO',
-                            date: c.dateReceived || 'Confirmed',
-                            amount: recoveredAmount
-                        });
+                // 2. FILTERED EVENT LISTS (Drill-down Drawer Only)
+                if (month === 'All' || c.trackingMonth === month) {
+                    ledger[v].discoveryEvents.push({
+                        id: c.id,
+                        type: c.creditType,
+                        date: c.dateRequested || c.dates,
+                        amount: c.amount
+                    });
+
+                    if (c.status === 'Applied') {
+                        const recoveredAmount = (parseFloat(c.amount) || 0); 
+                        if (recoveredAmount > 0) {
+                            ledger[v].recoveredCount++;
+                            ledger[v].recoveryEvents.push({
+                                id: 'rec-' + c.id,
+                                ref: c.invoice || 'CREDIT-MEMO',
+                                date: c.dateReceived || 'Confirmed',
+                                amount: recoveredAmount
+                            });
+                        }
                     }
                 }
             });
@@ -388,12 +390,11 @@ createApp({
                 const brandMetrics = definitiveBrandMetrics.value[siteKey] ? definitiveBrandMetrics.value[siteKey][item.vendor] : null;
     
                 if (brandMetrics) {
+                    // Recovered is ALWAYS YTD from Store Audit fragments
                     item.recovered = brandMetrics.applied;
-                    if (month === 'All') {
-                        item.generated = brandMetrics.generated;
-                    }
                 }
 
+                // Outstanding is now YTD - YTD
                 item.outstanding = item.generated - item.recovered;
                 item.variance = 0;
     
@@ -410,6 +411,7 @@ createApp({
             ledgerTotals.value = totals;
             masterLedgerData.value = Object.values(ledger).sort((a, b) => b.outstanding - a.outstanding);
         };
+
 
         watch([promoCredits, activeSite, activeMonth], () => {
             if (activeTab.value === 'Ledger') refreshLedger();
