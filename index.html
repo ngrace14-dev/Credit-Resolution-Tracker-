@@ -188,11 +188,52 @@
                                                         <div class="text-sm font-bold text-gray-900">{{ treezLedgerCount }} Records</div>
                                                         <div class="text-[10px] text-gray-500 font-medium">Last Upload: {{ treezLedgerLastUpload || 'Never' }}</div>
                                                     </div>
-                                                    <div class="relative">
-                                                        <button class="w-full py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-bold text-xs shadow-sm transition-all flex items-center justify-center gap-2">
-                                                            <i data-lucide="file-up" class="w-3.5 h-3.5"></i> Upload Treez CSV
+                                                                                                        <div class="relative">
+                                                        <button :disabled="isBatchProcessing" class="w-full py-2 bg-emerald-600 hover:bg-emerald-500 disabled:bg-gray-400 text-white rounded-lg font-bold text-xs shadow-sm transition-all flex items-center justify-center gap-2">
+                                                            <i data-lucide="file-up" class="w-3.5 h-3.5"></i> {{ isBatchProcessing && batchType === 'Treez' ? 'Processing...' : 'Upload Treez CSV' }}
                                                         </button>
-                                                        <input type="file" @change="handleTreezLedgerUpload" accept=".csv" class="absolute inset-0 opacity-0 cursor-pointer">
+                                                        <input type="file" @change="handleTreezLedgerUpload" accept=".csv" class="absolute inset-0 opacity-0 cursor-pointer" :disabled="isBatchProcessing">
+                                                    </div>
+                                                </div>
+
+                                                <!-- PROGRESS OVERLAY -->
+                                                <div v-if="isBatchProcessing" class="fixed inset-0 z-[200] bg-black/60 flex items-center justify-center backdrop-blur-sm p-4">
+                                                    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8 border border-gray-200">
+                                                        <div class="text-center mb-6">
+                                                            <div class="bg-emerald-50 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 animate-pulse">
+                                                                <i data-lucide="upload-cloud" class="w-8 h-8 text-emerald-600"></i>
+                                                            </div>
+                                                            <h3 class="text-xl font-bold text-gray-900">{{ batchType }} Ingestion</h3>
+                                                            <p class="text-gray-500 text-sm mt-1">Processing records in optimized batches...</p>
+                                                        </div>
+
+                                                        <div class="space-y-4">
+                                                            <div class="flex justify-between items-end">
+                                                                <span class="text-sm font-bold text-gray-700">{{ batchProgress }} / {{ batchTotal }} records</span>
+                                                                <span class="text-sm font-black text-emerald-600">{{ Math.round((batchProgress / batchTotal) * 100) }}%</span>
+                                                            </div>
+                                                            <div class="w-full bg-gray-200 rounded-full h-3 overflow-hidden shadow-inner">
+                                                                <div class="bg-emerald-500 h-full transition-all duration-300 ease-out" :style="{ width: (batchProgress / batchTotal) * 100 + '%' }"></div>
+                                                            </div>
+                                                        </div>
+
+                                                        <div v-if="batchError" class="mt-6 p-4 bg-red-50 border border-red-200 rounded-xl">
+                                                            <div class="flex items-start gap-3">
+                                                                <i data-lucide="alert-octagon" class="w-5 h-5 text-red-600 shrink-0 mt-0.5"></i>
+                                                                <div>
+                                                                    <div class="text-sm font-bold text-red-900">Batch Failed</div>
+                                                                    <div class="text-xs text-red-700 mt-1 leading-relaxed">
+                                                                        Chunk: {{ batchError.chunk }}<br>
+                                                                        Records: {{ batchError.start }} - {{ batchError.end }}<br>
+                                                                        {{ batchError.message }}
+                                                                    </div>
+                                                                    <div class="flex gap-2 mt-4">
+                                                                        <button @click="continueBatch" class="px-4 py-1.5 bg-red-600 text-white text-xs font-bold rounded-lg shadow-sm hover:bg-red-700 transition-colors">Retry Chunk</button>
+                                                                        <button @click="isBatchProcessing = false; batchError = null" class="px-4 py-1.5 bg-white border border-red-200 text-red-600 text-xs font-bold rounded-lg hover:bg-red-50 transition-colors">Abort</button>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        </div>
                                                     </div>
                                                 </div>
 
@@ -211,12 +252,13 @@
                                                         <div class="text-[10px] text-gray-500 font-medium">Last Upload: {{ sage4545LedgerLastUpload || 'Never' }}</div>
                                                     </div>
                                                     <div class="relative">
-                                                        <button class="w-full py-2 bg-amber-500 hover:bg-amber-400 text-gray-950 rounded-lg font-bold text-xs shadow-sm transition-all flex items-center justify-center gap-2">
-                                                            <i data-lucide="landmark" class="w-3.5 h-3.5"></i> Upload Sage 4545 CSV
+                                                        <button :disabled="isBatchProcessing" class="w-full py-2 bg-amber-500 hover:bg-amber-400 disabled:bg-gray-400 text-gray-950 rounded-lg font-bold text-xs shadow-sm transition-all flex items-center justify-center gap-2">
+                                                            <i data-lucide="landmark" class="w-3.5 h-3.5"></i> {{ isBatchProcessing && batchType === 'Sage' ? 'Processing...' : 'Upload Sage 4545 CSV' }}
                                                         </button>
-                                                        <input type="file" @change="handleSage4545Upload" accept=".csv" class="absolute inset-0 opacity-0 cursor-pointer">
+                                                        <input type="file" @change="handleSage4545Upload" accept=".csv" class="absolute inset-0 opacity-0 cursor-pointer" :disabled="isBatchProcessing">
                                                     </div>
                                                 </div>
+
 
 
                     </div>
