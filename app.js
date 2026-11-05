@@ -621,11 +621,12 @@ createApp({
         };
 
 
-        const generateAuditStatementCSV = (brand) => {
+                const generateAuditStatementCSV = (brand) => {
             return generateAuditStatementService({
                 brandVendor: brand.vendor,
                 targetSite: activeSite.value,
                 masterWorkbookData: masterWorkbook.value ? masterWorkbook.value.data : null,
+                promoCredits: promoCredits.value,
                 startMonthName: startMonth.value,
                 endMonthName: endMonth.value,
                 calendarMonths,
@@ -782,11 +783,12 @@ createApp({
             doc.text(`Generated on: ${new Date().toLocaleString()}`, 14, 26);
             doc.text(`Store Location: ${targetSite}`, 14, 31);
             
-            const helpers = { detectSiteFromName, detectMonthFromDate, formatCurrency };
+                        const helpers = { detectSiteFromName, detectMonthFromDate, formatCurrency };
             const { tableHeaders, tableData } = buildYTDVariancePDFData(
                 masterWorkbook.value ? masterWorkbook.value.data : null, 
                 targetSite, 
                 calendarMonths, 
+                promoCredits.value,
                 helpers
             );
             
@@ -814,7 +816,7 @@ createApp({
             logSystemAction("EXPORT", `Generated YTD Variance PDF for ${targetSite}`);
         };
 
-        const exportBrandCSVReports = (selectedBrand = null) => {
+                const exportBrandCSVReports = (selectedBrand = null) => {
             const targetSite = activeSite.value;
             
             const helpers = { detectSiteFromName, detectMonthFromDate };
@@ -823,6 +825,7 @@ createApp({
                 targetSite, 
                 selectedBrand, 
                 calendarMonths,
+                promoCredits.value,
                 helpers
             );
             

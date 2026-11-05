@@ -11,6 +11,7 @@ export const generateAuditStatementCSV = ({
     brandVendor,
     targetSite,
     masterWorkbookData,
+    promoCredits = [],
     startMonthName,
     endMonthName,
     calendarMonths,
@@ -49,7 +50,7 @@ export const generateAuditStatementCSV = ({
         let generatedCredits = 0;
         let appliedCredits = 0;
 
-        // GENERATED CREDITS SOURCE
+        // 1. WORKBOOK SOURCE (Generated)
         const sheetName = `${month} ${currentYear}`;
         const monthlyRows = masterWorkbookData[sheetName] || [];
         monthlyRows.forEach(row => {
@@ -71,13 +72,34 @@ export const generateAuditStatementCSV = ({
             }
         });
 
-        // APPLIED CREDITS SOURCE
+        // 2. PROMOCREDITS SOURCE (Manual & Aggregated - Generated)
+        promoCredits.forEach(c => {
+            if (c.site === targetSite && 
+                c.trackingMonth === month && 
+                getStandardizedBrandName(c.vendor || '').trim().toLowerCase() === standardizedTarget &&
+                c.invoice !== 'WB-V9-SYNC') { // Don't double count synced workbooks
+                generatedCredits += (parseFloat(c.amount) || 0);
+            }
+        });
+
+        // 3. WORKBOOK SOURCE (Applied GL)
         (masterWorkbookData["GL Raw by Store"] || []).forEach(row => {
             const rowSiteNormalized = normalizeSiteName(detectSiteFromName(row["Store"] || row["Location"]));
             if (rowSiteNormalized === normalizeSiteName(targetSite) && 
                 getStandardizedBrandName(row["Mapped Brand"] || '').trim().toLowerCase() === standardizedTarget &&
                 detectMonthFromDate(row["Posted dt."]) === month) {
                 appliedCredits += cleanCurrency(row["Credit"]);
+            }
+        });
+
+        // 4. PROMOCREDITS SOURCE (Applied Status)
+        promoCredits.forEach(c => {
+            if (c.site === targetSite && 
+                c.trackingMonth === month && 
+                getStandardizedBrandName(c.vendor || '').trim().toLowerCase() === standardizedTarget &&
+                c.status === 'Applied' &&
+                c.invoice !== 'WB-V9-SYNC') { // Don't double count if it was already in the GL sheet via WB Sync
+                appliedCredits += (parseFloat(c.amount) || 0);
             }
         });
 

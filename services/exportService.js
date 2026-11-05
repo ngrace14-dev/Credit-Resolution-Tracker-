@@ -55,7 +55,7 @@ export const buildAnnualReportCSV = (creditsToArchive, formatCurrency) => {
     return csvContent;
 };
 
-export const buildBrandVarianceCSV = (masterWorkbookData, targetSite, selectedBrand, calendarMonths, helpers) => {
+export const buildBrandVarianceCSV = (masterWorkbookData, targetSite, selectedBrand, calendarMonths, promoCredits = [], helpers) => {
     const { detectSiteFromName, detectMonthFromDate } = helpers;
     const brands = {};
     
@@ -98,6 +98,24 @@ export const buildBrandVarianceCSV = (masterWorkbookData, targetSite, selectedBr
             }
         });
     }
+
+    // PROMOCREDITS INTEGRATION
+    promoCredits.forEach(c => {
+        if (c.site !== targetSite || c.invoice === 'WB-V9-SYNC') return;
+        const brand = c.vendor || 'Unknown';
+        const monthIdx = calendarMonths.indexOf(c.trackingMonth);
+        if (monthIdx === -1) return;
+
+        if (!brands[brand]) {
+            brands[brand] = { name: brand, months: Array(12).fill(0), collections: Array(12).fill(0) };
+        }
+
+        const amt = parseFloat(c.amount) || 0;
+        brands[brand].months[monthIdx] += amt;
+        if (c.status === 'Applied') {
+            brands[brand].collections[monthIdx] += amt;
+        }
+    });
     
     const headers = ['Brand/Vendor', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec', 'YTD Total'];
     let csvContent = headers.join(',') + '\n';
@@ -134,7 +152,7 @@ export const buildBrandVarianceCSV = (masterWorkbookData, targetSite, selectedBr
     return csvContent;
 };
 
-export const buildYTDVariancePDFData = (masterWorkbookData, targetSite, calendarMonths, helpers) => {
+export const buildYTDVariancePDFData = (masterWorkbookData, targetSite, calendarMonths, promoCredits = [], helpers) => {
     const { detectSiteFromName, detectMonthFromDate, formatCurrency } = helpers;
     const tableHeaders = [
         ['Brand/Vendor', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec', 'YTD Total']
@@ -181,6 +199,24 @@ export const buildYTDVariancePDFData = (masterWorkbookData, targetSite, calendar
             }
         });
     }
+
+    // PROMOCREDITS INTEGRATION
+    promoCredits.forEach(c => {
+        if (c.site !== targetSite || c.invoice === 'WB-V9-SYNC') return;
+        const brand = c.vendor || 'Unknown';
+        const monthIdx = calendarMonths.indexOf(c.trackingMonth);
+        if (monthIdx === -1) return;
+
+        if (!brands[brand]) {
+            brands[brand] = { name: brand, months: Array(12).fill(0), collections: Array(12).fill(0) };
+        }
+
+        const amt = parseFloat(c.amount) || 0;
+        brands[brand].months[monthIdx] += amt;
+        if (c.status === 'Applied') {
+            brands[brand].collections[monthIdx] += amt;
+        }
+    });
     
     Object.values(brands).sort((a, b) => a.name.localeCompare(b.name)).forEach(b => {
         const row = [b.name];
