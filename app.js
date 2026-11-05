@@ -1448,17 +1448,39 @@ createApp({
                 // --- ZERO-PROMPT AUTOMATED WORKBOOK BASELINE ROLLBACK ---
         const rollbackShardsToWorkbook = async () => {
             try {
-                if (!masterWorkbook.value || !masterWorkbook.value.data) {
-                    alert("Master Workbook data is not loaded yet. Please ensure the workbook is loaded before rolling back.");
-                    return;
-                }
+                                // --- 1. RESOLVE MASTER WORKBOOK (MEMORY OR STORAGE) ---
+let workbookData = masterWorkbook.value?.data;
+if (!workbookData || Object.keys(workbookData).length === 0) {
+console.log("[Rollback] In-memory workbook empty. Fetching 'Master_Workbook_V9_Board_Report.xlsx' directly from Firebase Storage...");
+try {
+// Target the exact file verified in Firebase Storage
+const storageFileRef = sRef(storage, "Master_Workbook_V9_Board_Report.xlsx");
+const arrayBuffer = await getBytes(storageFileRef);
+// Parse Excel with SheetJS
+const wb = XLSX.read(new Uint8Array(arrayBuffer), { type: 'array' });
+workbookData = {};
+wb.SheetNames.forEach(sheetName => {
+workbookData[sheetName] = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], { defval: "" });
+});
+// Cache in reactive memory for subsequent operations
+masterWorkbook.value = {
+fileName: "Master_Workbook_V9_Board_Report.xlsx",
+data: workbookData
+};
+console.log("[Rollback] Successfully downloaded and parsed sheets:", Object.keys(workbookData));
+} catch (storageErr) {
+console.error("[Rollback] Failed to fetch workbook from Storage:", storageErr);
+alert(`Could not load Master Workbook from Firebase Storage: ${storageErr.message}`);
+return;
+}
+}
                 if (!confirm("Rollback all shards to the Master Workbook baseline? This will clear recent intake syncs and reset all discovery rows to Unsynced.")) {
                     return;
                 }
                 // 1. Fetch all existing masterLedger shards
                 const ledgerSnap = await getDocs(collection(db, "masterLedger"));
                                 // 2. Build baseline events from masterWorkbook.value.data
-const workbookData = masterWorkbook.value.data || {};
+workbookData = masterWorkbook.value.data || workbookData || {};
 const baselineEvents = [];
 const detectedSheets = Object.keys(workbookData);
 console.log("[Rollback] Master Workbook sheets detected:", detectedSheets);
