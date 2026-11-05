@@ -12,7 +12,7 @@ import { parseCSVText, parseCSVRow, cleanString, cleanCurrency, csvEscape, norma
 import { normalizeTreezLedger, normalizeSageLedger } from './services/ledgerService.js';
 import { parseExcelDate, generateAuditStatementCSV as generateAuditStatementService } from './services/auditService.js';
 import { buildStandardEmail, buildAuditFindingEmail, buildMailtoUrl } from './services/emailService.js';
-import { buildVendorsAndBrandsCSV, buildAnnualReportCSV, buildBrandVarianceCSV, buildYTDVariancePDFData } from './services/exportService.js';
+import { buildVendorsAndBrandsCSV, buildAnnualReportCSV, buildBrandVarianceCSV, buildYTDVariancePDFData, generateWorkbookSyncPayload } from './services/exportService.js';
 import { buildDefinitiveBrandMetrics, buildMonthlyReportSummaries, buildBrandAuditData, buildSageAuditData, calculateMonthlyReportData } from './services/reportService.js';
 import { buildTrackerSyncPayloads, buildGridImportPayloads, buildBrandImportPayloads } from './services/importService.js';
 import { processTreezUpload, processSageUpload } from './services/uploadService.js';
@@ -1387,7 +1387,25 @@ createApp({
         refreshLedger, refreshIcons, formatCurrency, setupFilteredListeners,
         handleTreezLedgerUpload, handleSage4545Upload, handleTreesCsvUpload, 
         handleSageCsvUpload, continueBatch, openWorkbookSyncModal,
-        updateWorkbookFromSales: () => { alert('Updating Workbook...'); }, 
+        updateWorkbookFromSales: () => { 
+try {
+const eventsToUse = masterLedgerData.value || []; 
+const payload = generateWorkbookSyncPayload(
+eventsToUse, 
+calendarMonths, 
+['Redding', 'Red-Bluff']
+);
+const jsonString = JSON.stringify(payload, null, 2);
+if (navigator.clipboard) {
+navigator.clipboard.writeText(jsonString).catch(err => console.warn("Clipboard write failed", err));
+}
+workbookPasteData.value = jsonString;
+showWorkbookSyncModal.value = true;
+} catch (err) {
+console.error("Failed to generate sync payload:", err);
+alert("Error generating JSON payload. Check console.");
+}
+}, 
         pushToMainTracker: () => { alert('Pushing to Tracker...'); },
         openEmailDraft: draftEmail, markReportGroupAsSent,
         downloadMonthlyReport, exportYTDVariancePDF, exportBrandCSVReports,

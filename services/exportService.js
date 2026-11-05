@@ -186,4 +186,45 @@ tableData.push(['', '', '', '', '', '', '', '', '', '', '', '', '', '']);
 return { tableHeaders, tableData };
 };
 
+export const generateWorkbookSyncPayload = (ledgerEvents, calendarMonths, sites = ['Redding', 'Red-Bluff']) => {
+const payload = {
+version: "1.0",
+generated_at: new Date().toISOString(),
+target_year: 2026,
+operational_sheets: {}
+};
+// 1. Rebuild Monthly Claim Sheets
+calendarMonths.forEach(month => {
+const sheetName = `${month} 2026`;
+const monthEvents = ledgerEvents.filter(e => e.isolation_month === month && (e.type === 'GENERATED' || e.type === 'ADJUSTMENT'));
+const brandMap = {};
+monthEvents.forEach(e => {
+const brand = e.brand || 'UNKNOWN';
+if (!brandMap[brand]) {
+brandMap[brand] = { Brand: brand };
+sites.forEach(s => brandMap[brand][s] = 0);
+}
+if (sites.includes(e.site)) {
+brandMap[brand][e.site] += (e.amount || 0);
+}
+});
+payload.operational_sheets[sheetName] = Object.values(brandMap);
+});
+// 2. Rebuild GL Raw / Recovery Sheet
+payload.operational_sheets['GL Raw by Store'] = ledgerEvents
+.filter(e => e.type === 'RECOVERY')
+.map(e => ({
+Date: e.date || '',
+Brand: e.brand || 'UNKNOWN',
+Site: e.site || 'UNKNOWN',
+Month: e.isolation_month || '',
+Amount: e.amount || 0,
+Type: 'RECOVERY',
+Status: e.status || 'Applied',
+Invoice: e.invoice_ref || '',
+UploadId: e.upload_id || ''
+}));
+return payload;
+};
+
 
