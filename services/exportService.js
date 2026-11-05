@@ -143,6 +143,47 @@ export const generateMasterWorkbookArtifact = (ledgerEvents, calendarMonths, sit
         "Memo/Description": e.invoice_ref
     }));
 
-        return workbookData;
+                return workbookData;
 };
+
+export const buildYTDVariancePDFData = (selectedBrand, brands, formatCurrency) => {
+const tableHeaders = ['Brand / Metric', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec', 'YTD'];
+const tableData = [];
+const brandList = selectedBrand 
+? [brands[selectedBrand]].filter(Boolean) 
+: Object.values(brands).sort((a, b) => a.name.localeCompare(b.name));
+brandList.forEach(b => {
+if (!b) return;
+const row = [b.name];
+let ytdTotal = 0;
+for (let i = 0; i < 12; i++) {
+const val = b.months ? (b.months[i] || 0) : 0;
+row.push(formatCurrency ? formatCurrency(val) : val.toFixed(2));
+ytdTotal += val;
+}
+row.push(formatCurrency ? formatCurrency(ytdTotal) : ytdTotal.toFixed(2));
+tableData.push(row);
+const collRow = ['   ↳ Collected (GL)'];
+let ytdColl = 0;
+for (let i = 0; i < 12; i++) {
+const val = b.collections ? (b.collections[i] || 0) : 0;
+collRow.push(formatCurrency ? formatCurrency(val) : val.toFixed(2));
+ytdColl += val;
+}
+collRow.push(formatCurrency ? formatCurrency(ytdColl) : ytdColl.toFixed(2));
+tableData.push(collRow);
+const varRow = ['   ↳ Balance Owed'];
+for (let i = 0; i < 12; i++) {
+const gen = b.months ? (b.months[i] || 0) : 0;
+const coll = b.collections ? (b.collections[i] || 0) : 0;
+const diff = gen - coll;
+varRow.push(formatCurrency ? formatCurrency(diff) : diff.toFixed(2));
+}
+varRow.push(formatCurrency ? formatCurrency(ytdTotal - ytdColl) : (ytdTotal - ytdColl).toFixed(2));
+tableData.push(varRow);
+tableData.push(['', '', '', '', '', '', '', '', '', '', '', '', '', '']);
+});
+return { tableHeaders, tableData };
+};
+
 
