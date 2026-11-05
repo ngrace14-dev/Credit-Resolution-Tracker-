@@ -15,6 +15,13 @@ import { buildStandardEmail, buildAuditFindingEmail, buildMailtoUrl } from './se
 import { buildVendorsAndBrandsCSV, buildAnnualReportCSV, buildBrandVarianceCSV, buildYTDVariancePDFData } from './services/exportService.js';
 import { buildDefinitiveBrandMetrics, buildMonthlyReportSummaries, buildBrandAuditData, buildSageAuditData, calculateMonthlyReportData } from './services/reportService.js';
 import { buildTrackerSyncPayloads, buildGridImportPayloads, buildBrandImportPayloads } from './services/importService.js';
+import { 
+    createLedgerEvent, 
+    queryEventsByMonth, 
+    queryEventsByBrand, 
+    calculateCanonicalBalance, 
+    runCanonicalMigration 
+} from './services/ledgerEventService.js';
 
 // 2. FIREBASE CONFIGURATION
 const firebaseConfig = {
@@ -70,6 +77,8 @@ createApp({
         const promoCreditsList = ref([]);
         const calendarMonths = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
         const activeMonth = ref('August');
+        const ledgerEventsList = ref([]);
+        const USE_CANONICAL_LEDGER = ref(true);
                 const masterBrands = ref([]);
         const selectedBrands = ref([]);
 
@@ -336,9 +345,12 @@ createApp({
         const ledgerTotals = ref({ generated: 0, recovered: 0, outstanding: 0, variance: 0 });
 
                                 const refreshLedger = async () => {
-            if (!promoCredits.value) return; 
+                                    if (USE_CANONICAL_LEDGER.value) {
+                                        return await refreshLedgerCanonical();
+                                    }
+                                    if (!promoCredits.value) return; 
 
-            const ledger = {};
+                                    const ledger = {};
             const site = activeSite.value;
             const month = activeMonth.value;
             
@@ -420,9 +432,69 @@ createApp({
             if (activeTab.value === 'Ledger') refreshLedger();
         });
 
-        const openLegacyVerification = (vendorItem) => {
-            alert(`Opening Legacy Verification Stage for ${vendorItem.vendor}...\n\nThis stage allows cross-referencing old 'promoCredits' records against the new Ledger events to ensure no data loss during transition.`);
+                const refreshLedgerCanonical = async () => {
+            const site = activeSite.value;
+            const month = activeMonth.value;
+            const ledger = {};
+            
+            ledgerEventsList.value.forEach(event => {
+                if (event.site !== site) return;
+                
+                const v = event.brand || 'Unknown';
+                if (!ledger[v]) {
+                    ledger[v] = { 
+                        vendor: v, site: site, generated: 0, recovered: 0, outstanding: 0, 
+                        variance: 0, discoveryEvents: [], recoveryEvents: [],
+                        generatedCount: 0, recoveredCount: 0,
+                        aging: { '0-30': 0, '31-60': 0, '61-90': 0, '91+': 0 }
+                    };
+                }
+
+                // Aggregates
+                if (event.type === 'GENERATED') {
+                    ledger[v].generated += event.amount;
+                    ledger[v].generatedCount++;
+                    if (month === 'All' || event.isolation_month === month) {
+                        ledger[v].discoveryEvents.push({ id: event.id, type: 'Generated', date: event.isolation_month, amount: event.amount });
+                    }
+                } else if (event.type === 'RECOVERY') {
+                    ledger[v].recovered += event.amount;
+                    ledger[v].recoveredCount++;
+                    if (month === 'All' || event.isolation_month === month) {
+                        ledger[v].recoveryEvents.push({ id: event.id, ref: event.invoice_ref, date: event.isolation_month, amount: event.amount });
+                    }
+                }
+            });
+
+            const totals = { generated: 0, recovered: 0, outstanding: 0, variance: 0 };
+            Object.values(ledger).forEach(item => {
+                item.outstanding = item.generated - item.recovered;
+                totals.generated += item.generated;
+                totals.recovered += item.recovered;
+                totals.outstanding += item.outstanding;
+            });
+
+            ledgerTotals.value = totals;
+            masterLedgerData.value = Object.values(ledger).sort((a, b) => b.outstanding - a.outstanding);
         };
+
+        const runMigration = async () => {
+            if (!confirm("This will migrate all workbook and manual data into the new Canonical Ledger. Proceed?")) return;
+            try {
+                isBatchProcessing.value = true;
+                const helpers = { getStandardizedBrandName, detectSiteFromName, detectMonthFromDate, normalizeSiteName };
+                const stats = await runCanonicalMigration(db, masterWorkbook.value.data, promoCreditsList.value, helpers);
+                alert(`Migration Complete!\nGenerated: ${stats.generated}\nRecovery: ${stats.recovery}\nManual: ${stats.manual}`);
+            } catch (err) {
+                console.error(err);
+                alert("Migration failed: " + err.message);
+            } finally {
+                isBatchProcessing.value = false;
+            }
+        };
+
+        window.runLedgerMigration = runMigration;
+
 
         const systemUsers = {
             'lenay@rredco.com': { name: 'Lenay A.', access: ['Red Bluff', 'Redding'], active: false },
@@ -1292,6 +1364,7 @@ createApp({
                         masterBrands.value = fetchedBrands;
                     }, (err) => console.error("Brands Listener Failed:", err));
 
+                                        console.log("Listening to systemLogs...");
                     if (managerData.superAdmin) {
                         onSnapshot(collection(db, "systemLogs"), (snapshot) => {
                             const logs = [];
@@ -1300,6 +1373,16 @@ createApp({
                             systemLogs.value = logs;
                         });
                     }
+
+                    console.log("Listening to ledger_events...");
+                    onSnapshot(collection(db, "ledger_events"), (snapshot) => {
+                        const fetched = [];
+                        snapshot.forEach(docSnap => {
+                            fetched.push({ id: docSnap.id, ...docSnap.data() });
+                        });
+                        ledgerEventsList.value = fetched;
+                        if (activeTab.value === 'Ledger') refreshLedger();
+                    }, (err) => console.error("Ledger Listener Failed:", err));
                 }
             });
         });
