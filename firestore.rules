@@ -29,17 +29,40 @@ service cloud.firestore {
     }
 
         // ==========================================
-    // WORKBOOK & BOARD REPORTS
-    // ==========================================
-    match /promo tracker/{document} {
-      allow read: if isAuthorizedManager();
-      allow write: if isNicholas();
-    }
+        // CANONICAL LEDGER (PCRP V1.0)
+        // ==========================================
+        match /ledger_events/{document} {
+          allow read: if isAuthorizedManager();
+          allow create, update: if isAuthorizedManager() 
+            && request.resource.data.brand is string
+            && request.resource.data.site in ['Redding', 'Red Bluff', 'Red-Bluff']
+            && request.resource.data.amount is number
+            && request.resource.data.isolation_month is string;
+          allow delete: if false; // All purges must use rollback manifest logic
+        }
 
-    match /workbook_v9_sheets/{document=**} {
-      allow read: if isAuthorizedManager();
-      allow write: if isNicholas();
-    }
+        match /upload_manifests/{document} {
+          allow read: if isAuthorizedManager();
+          allow create: if isAuthorizedManager();
+          allow update, delete: if isNicholas();
+        }
+
+        match /system_locks/{document} {
+          allow read, write: if isAuthorizedManager();
+        }
+
+        // ==========================================
+        // WORKBOOK & BOARD REPORTS (READ-ONLY ARCHIVE)
+        // ==========================================
+        match /promo tracker/{document} {
+          allow read: if isAuthorizedManager();
+          allow write: if isNicholas();
+        }
+
+        match /workbook_v9_sheets/{document=**} {
+          allow read: if isAuthorizedManager();
+          allow write: if false; // Frozen for archival
+        }
 
     // ==========================================
     // SOURCE UPLOAD MANIFESTS
