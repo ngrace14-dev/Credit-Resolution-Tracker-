@@ -41,6 +41,8 @@ if (location.hostname === 'localhost' ||
 }
 
 
+// Enable AppCheck debug token for dev / github.io execution
+self.FIREBASE_APPCHECK_DEBUG_TOKEN = true;
 try {
     initializeAppCheck(firebaseApp, {
         provider: new ReCaptchaEnterpriseProvider("6LeNEb8tAAAAAN454U2BgfO-ot6wN8T3VexIgIMq"),
@@ -99,9 +101,61 @@ createApp({
         const isBatchProcessing = ref(false);
         const batchProgress = ref(0);
         const batchTotal = ref(0);
-        const batchType = ref('');
+                const batchType = ref('');
         const batchError = ref(null);
         let batchContext = null; // Store data for continuation
+
+        // --- MODAL REFS & HANDLERS ---
+        const showEmailDraftModal = ref(false);
+        const showBrandImportModal = ref(false);
+        const selectedBrandForEmail = ref(null);
+        const emailDraftSubject = ref('');
+        const emailDraftBody = ref('');
+        const brandPastedGrid = ref([]);
+        const brandPasteData = ref('');
+        const brandMappedHeaders = ref([]);
+        const brandAvailableHeaders = ref(['Brand', 'Redding', 'Red-Bluff', 'Email', 'Contact']);
+        
+        const refreshEmailDraft = () => {
+            console.log('Refreshing email draft...');
+        };
+        
+        const copyEmailToClipboard = () => {
+            if (navigator.clipboard && emailDraftBody.value) {
+                navigator.clipboard.writeText(emailDraftBody.value).then(() => {
+                    alert('Email content copied to clipboard!');
+                }).catch(err => console.error("Clipboard copy failed:", err));
+            }
+        };
+        
+        const sendEmailDraft = () => {
+            const to = selectedBrandForEmail.value?.email || '';
+            const subject = encodeURIComponent(emailDraftSubject.value || '');
+            const body = encodeURIComponent(emailDraftBody.value || '');
+            window.open(`mailto:${to}?subject=${subject}&body=${body}`, '_blank');
+        };
+        
+        const processBrandRawPaste = () => {
+            if (!brandPasteData.value) {
+                brandPastedGrid.value = [];
+                return;
+            }
+            const lines = brandPasteData.value.trim().split('\n');
+            brandPastedGrid.value = lines.map(line => line.split('\t').map(c => c.trim()));
+            if (brandPastedGrid.value.length > 0) {
+                brandMappedHeaders.value = brandPastedGrid.value[0].map(() => 'Brand');
+            }
+        };
+        
+        const resetBrandImport = () => {
+            brandPastedGrid.value = [];
+            brandPasteData.value = '';
+            brandMappedHeaders.value = [];
+        };
+        
+        const processBrandImport = () => {
+            showBrandImportModal.value = false;
+        };
 
 
                 // LEDGER MANAGEMENT STATE
@@ -153,12 +207,8 @@ createApp({
         const treesSalesData = ref([]); 
         const auditRange = ref({ start: '', end: '' });
         
-        // Form & Audit state
+                // Form & Audit state
         const emailReportMode = ref('standard');
-        const showEmailDraftModal = ref(false);
-        const selectedBrandForEmail = ref(null);
-        const emailDraftSubject = ref('');
-        const emailDraftBody = ref('');
         const startMonth = ref('January');
         const endMonth = ref('September');
 
@@ -1166,19 +1216,10 @@ createApp({
             logSystemAction("EXPORT", "Downloaded Vendors and Brands Directory CSV");
         };
 
-        const showImportModal = ref(false);
+                const showImportModal = ref(false);
         const rawPasteData = ref('');
         const pastedGrid = ref([]);
         const mappedHeaders = ref([]);
-        
-        const showBrandImportModal = ref(false);
-        const brandPasteData = ref('');
-        const brandPastedGrid = ref([]);
-        const brandMappedHeaders = ref([]);
-        const brandAvailableHeaders = ref([
-            '-- Ignore Column --', 'Brand', 'Rep', 'Email', 'Name as appears in TREES',
-            'Distro', 'Asset Library', 'Order From', 'Payee', 'Notes'
-        ]);
         
         const availableHeaders = ref([
             '-- Ignore Column --', 'Tracking Month', 'Vendor', 'Distributor', 'Credit Type',
@@ -1508,7 +1549,7 @@ createApp({
             }
         };
 
-        // --- 8. TEMPLATE BINDINGS RETURN ---
+                // --- 8. TEMPLATE BINDINGS RETURN ---
                 return {
         // State
         isManagerUnlocked, loggedInUser, emailInput, passwordInput, authError,
@@ -1525,6 +1566,12 @@ createApp({
         activeWorkbookHeaders, brandAuditData, auditRange, sageAuditData,
         masterBrands, selectedBrands, allBrandsSelected, systemLogs,
         showWorkbookSyncModal, workbookPasteData,
+        // Modal State & Handlers
+        showEmailDraftModal, showBrandImportModal, selectedBrandForEmail,
+        emailDraftSubject, emailDraftBody, brandPastedGrid, brandPasteData,
+        brandMappedHeaders, brandAvailableHeaders, refreshEmailDraft,
+        copyEmailToClipboard, sendEmailDraft, processBrandRawPaste,
+        resetBrandImport, processBrandImport,
         // Methods
         handleLogin, forceLock, selectWorkspace, scrollMonths, scrollWorkbookTabs,
         refreshLedger, refreshIcons, formatCurrency, setupFilteredListeners,
@@ -1583,9 +1630,9 @@ alert("Error pushing records to Main Tracker. Check console for details.");
 },
         openEmailDraft: draftEmail, markReportGroupAsSent,
         downloadMonthlyReport, exportYTDVariancePDF, exportBrandCSVReports,
-        exportVendorsAndBrandsCSV, regenerateMonthReports, regenerateBrandSummary,
+                exportVendorsAndBrandsCSV, regenerateMonthReports, regenerateBrandSummary,
         openLegacyVerification: (item) => { alert(`Verifying Legacy Data for ${item?.vendor || 'Vendor'}...`); },
-        deleteSelectedBrands, toggleAllBrands, updateBrandField, resetBrandImport: () => {},
+        deleteSelectedBrands, toggleAllBrands, updateBrandField,
         openDimeHelper: (brand) => window.open('https://brand.dime.industries', '_blank'),
         clearAllSalesData: () => { if(confirm('Clear all Discovery data?')) treesSalesData.value = []; }
         };
