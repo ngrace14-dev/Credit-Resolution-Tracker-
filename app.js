@@ -15,14 +15,8 @@ import { buildStandardEmail, buildAuditFindingEmail, buildMailtoUrl } from './se
 import { buildVendorsAndBrandsCSV, buildAnnualReportCSV, buildBrandVarianceCSV, buildYTDVariancePDFData } from './services/exportService.js';
 import { buildDefinitiveBrandMetrics, buildMonthlyReportSummaries, buildBrandAuditData, buildSageAuditData, calculateMonthlyReportData } from './services/reportService.js';
 import { buildTrackerSyncPayloads, buildGridImportPayloads, buildBrandImportPayloads } from './services/importService.js';
-import { 
-    createLedgerEvent, 
-    queryEventsByMonth, 
-    queryEventsByBrand, 
-    calculateCanonicalBalance, 
-    runCanonicalMigration,
-    validateMonthContainment
-} from './services/ledgerEventService.js';
+import { processTreezUpload, processSageUpload } from './services/uploadService.js';
+import { createUploadManifest, rollbackUpload } from './services/syncService.js';
 
 // 2. FIREBASE CONFIGURATION
 const firebaseConfig = {
@@ -1791,130 +1785,41 @@ createApp({
                     if (!file) return;
 
                     const reader = new FileReader();
-                    reader.onload = async (evt) => {
-                        try {
-                            const text = evt.target.result;
-                            const lines = parseCSVText(text);
-                            if (lines.length === 0) return alert("File is empty or invalid.");
-
-                            const headers = parseCSVRow(lines[0]).map(normalizeHeader);
-                            const rows = lines.slice(1);
-                            const uploadTime = new Date().toLocaleString();
-                            const uploadId = `TREEZ_${Date.now()}`;
-
-                            const parsedData = normalizeTreezLedger(
-                                rows, headers, file.name, uploadTime, normalizeSiteName, getStandardizedBrandName, masterBrands.value
-                            );
-
-                            const validEvents = [];
-                            const quarantined = [];
-
-                            parsedData.forEach(item => {
-                                const containment = validateMonthContainment(item.promoDate, activeMonth.value, calendarMonths);
-                                if (containment.valid && item.isRecoverable) {
-                                    validEvents.push({
-                                        ...item,
-                                        isolation_month: activeMonth.value,
-                                        type: 'GENERATED',
-                                        source: 'TREEZ',
-                                        upload_id: uploadId
-                                    });
-                                } else {
-                                    quarantined.push({ ...item, reason: containment.reason || 'NOT_RECOVERABLE' });
-                                }
-                            });
-
-                            if (confirm(`Parsed ${validEvents.length} valid events for ${activeMonth.value}. (${quarantined.length} quarantined). Proceed with Batch Commit?`)) {
-                                startBatchProcessing('Treez', validEvents, async (chunk) => {
-                                    const batch = writeBatch(db);
-                                    chunk.forEach(event => {
-                                        const payloadForHash = { brand: event.brand, site: event.location, month: event.isolation_month, amount: event.creditGenerated };
-                                        const hash = Math.abs(JSON.stringify(payloadForHash).split("").reduce((a,b)=>{a=((a<<5)-a)+b.charCodeAt(0);return a&a},0)).toString(16);
-                                        const docId = `${event.brand.toUpperCase()}_${event.location.replace(/\s/g, '-')}_${event.isolation_month}_GENERATED_${hash}`;
-                                        batch.set(doc(db, "ledger_events", docId), {
-                                            id: docId,
-                                            brand: event.brand.toUpperCase(),
-                                            site: event.location,
-                                            type: 'GENERATED',
-                                            amount: event.creditGenerated,
-                                            isolation_month: event.isolation_month,
-                                            fiscal_year: 2026,
-                                            source: 'TREEZ',
-                                            status: 'Outstanding',
-                                            upload_id: uploadId,
-                                            created_at: serverTimestamp(),
-                                            updated_at: serverTimestamp()
-                                        }, { merge: true });
-                                    });
-                                    await batch.commit();
-                                });
-                            }
-                        } catch (err) { alert("Treez Upload Failed: " + err.message); }
-                    };
-                    reader.readAsText(file);
-                };
-
-
-                const handleSage4545Upload = (e) => {
+                const handleTreezLedgerUpload = (e) => {
                     const file = e.target.files[0];
                     if (!file) return;
 
                     const reader = new FileReader();
                     reader.onload = async (evt) => {
                         try {
-                            const text = evt.target.result;
-                            const lines = parseCSVText(text);
-                            const headers = parseCSVRow(lines[0]).map(normalizeHeader);
-                            const rows = lines.slice(1);
-                            const uploadId = `SAGE_${Date.now()}`;
+                            const { validEvents, quarantined } = processTreezUpload(evt.target.result, 
+                                { targetMonth: activeMonth.value, calendarMonths, masterBrands: masterBrands.value },
+                                { normalizeTreezLedger, normalizeSiteName, getStandardizedBrandName }
+                            );
 
-                            const parsedData = normalizeSageLedger(rows, headers, file.name, new Date().toLocaleString(), normalizeSiteName, getStandardizedBrandName);
-
-                            const validEvents = [];
-                            const quarantined = [];
-
-                            parsedData.forEach(item => {
-                                const containment = validateMonthContainment(item.postingDate, activeMonth.value, calendarMonths);
-                                if (containment.valid) {
-                                    validEvents.push({
-                                        ...item,
-                                        isolation_month: activeMonth.value,
-                                        type: 'RECOVERY',
-                                        source: 'SAGE',
-                                        upload_id: uploadId
-                                    });
-                                } else {
-                                    quarantined.push({ ...item, reason: containment.reason });
-                                }
-                            });
-
-                            if (confirm(`Parsed ${validEvents.length} recoveries for ${activeMonth.value}. (${quarantined.length} quarantined). Proceed with Batch Commit?`)) {
-                                startBatchProcessing('Sage', validEvents, async (chunk) => {
+                            if (confirm(`Parsed ${validEvents.length} valid events. Proceed?`)) {
+                                const uploadId = `TREEZ_${Date.now()}`;
+                                await startBatchProcessing('Treez', validEvents, async (chunk) => {
                                     const batch = writeBatch(db);
                                     chunk.forEach(event => {
-                                        const payloadForHash = { brand: event.brand, site: event.location, month: event.isolation_month, amount: event.amount, ref: event.documentNumber };
-                                        const hash = Math.abs(JSON.stringify(payloadForHash).split("").reduce((a,b)=>{a=((a<<5)-a)+b.charCodeAt(0);return a&a},0)).toString(16);
-                                        const docId = `${event.brand.toUpperCase()}_${event.location.replace(/\s/g, '-')}_${event.isolation_month}_RECOVERY_${hash}`;
-                                        batch.set(doc(db, "ledger_events", docId), {
-                                            id: docId,
-                                            brand: event.brand.toUpperCase(),
-                                            site: event.location,
-                                            type: 'RECOVERY',
-                                            amount: event.amount,
-                                            isolation_month: event.isolation_month,
-                                            fiscal_year: 2026,
-                                            source: 'SAGE',
-                                            status: 'Applied',
-                                            invoice_ref: event.documentNumber,
-                                            upload_id: uploadId,
-                                            created_at: serverTimestamp(),
-                                            updated_at: serverTimestamp()
+                                        const docId = `${event.brand.toUpperCase()}_${event.location.replace(/\s/g, '-')}_${event.isolation_month}_GENERATED_${Math.random().toString(16)}`;
+                                        batch.set(doc(db, "ledger_events", docId), { 
+                                            ...event, id: docId, upload_id: uploadId, site: event.location, 
+                                            fiscal_year: 2026, status: 'Outstanding', created_at: serverTimestamp(), updated_at: serverTimestamp() 
                                         }, { merge: true });
                                     });
                                     await batch.commit();
                                 });
+                                await createUploadManifest(db, { upload_id: uploadId, source: 'TREEZ', site: activeSite.value, target_month: activeMonth.value, record_count: validEvents.length });
                             }
-                        } catch (err) { alert("Sage Upload Failed: " + err.message); }
+                        } catch (err) { alert(err.message); }
                     };
                     reader.readAsText(file);
+                };
+
+                const undoLastUpload = async (uploadId) => {
+                    if (confirm("Rollback this upload?")) {
+                        const count = await rollbackUpload(db, uploadId, loggedInUser.value);
+                        alert(`Deleted ${count} records.`);
+                    }
                 };
