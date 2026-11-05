@@ -1501,28 +1501,29 @@ return;
 }
 const rows = workbookData[sheetName] || [];
 console.log(`[Rollback] Parsing ${rows.length} rows from sheet: ${sheetName} (mapped to ${matchedMonth})`);
-// Log exact keys of the first row to calibrate
-if (rows.length > 0) {
-console.log(`[Rollback] Sample row keys for ${sheetName}:`, Object.keys(rows[0]));
-}
+
 rows.forEach(row => {
-const brand = row["Brand"] || row["brand"] || row[0];
+// Brand is typically the first key, or labeled 'Brand'
+const brandKeys = Object.keys(row).filter(k => k.toLowerCase().includes('brand') || k === Object.keys(row)[0]);
+const brand = row[brandKeys[0]] || row[0];
+
 if (!brand || String(brand).toLowerCase().includes('total') || brand === "Brand") return;
 
-// Fallback search: Iterate through all keys to find a match for Redding / Red Bluff
-// Some Excel exports might have spaces or weird characters in the keys
-let reddingKey = Object.keys(row).find(k => k.toLowerCase().includes('redding'));
-let redBluffKey = Object.keys(row).find(k => k.toLowerCase().includes('red bluff') || k.toLowerCase().includes('red-bluff') || k.toLowerCase().includes('redbluff'));
+// Store column is typically just an 'x' indicating which store this row applies to
+const isRedding = Object.keys(row).some(k => k.toLowerCase().includes('redding') && String(row[k]).toLowerCase().trim() === 'x');
+const isRedBluff = Object.keys(row).some(k => (k.toLowerCase().includes('red bluff') || k.toLowerCase().includes('red-bluff') || k.toLowerCase().includes('redbluff')) && String(row[k]).toLowerCase().trim() === 'x');
 
-const reddingAmt = parseFloat(String(reddingKey ? row[reddingKey] : (row["Redding"] || row["redding"] || 0)).replace(/[^0-9.-]+/g, "")) || 0;
-const redBluffAmt = parseFloat(String(redBluffKey ? row[redBluffKey] : (row["Red Bluff"] || row["Red-Bluff"] || row["red bluff"] || 0)).replace(/[^0-9.-]+/g, "")) || 0;
-if (reddingAmt > 0) {
+// The amount is in 'Promo Credits ' (notice trailing space possible)
+const promoCreditKey = Object.keys(row).find(k => k.toLowerCase().includes('promo credit'));
+const amount = parseFloat(String(promoCreditKey ? row[promoCreditKey] : 0).replace(/[^0-9.-]+/g, "")) || 0;
+
+if (isRedding && amount > 0) {
 baselineEvents.push({
 date: new Date().toISOString().slice(0, 10),
 brand: String(brand).trim(),
 site: 'Redding',
 isolation_month: matchedMonth,
-amount: reddingAmt,
+amount: amount,
 type: 'GENERATED',
 status: 'Applied',
 source: 'WORKBOOK_BASELINE',
@@ -1530,13 +1531,13 @@ createdAt: serverTimestamp(),
 syncedBy: loggedInUser.value || 'system'
 });
 }
-if (redBluffAmt > 0) {
+if (isRedBluff && amount > 0) {
 baselineEvents.push({
 date: new Date().toISOString().slice(0, 10),
 brand: String(brand).trim(),
 site: 'Red Bluff',
 isolation_month: matchedMonth,
-amount: redBluffAmt,
+amount: amount,
 type: 'GENERATED',
 status: 'Applied',
 source: 'WORKBOOK_BASELINE',
@@ -1550,17 +1551,26 @@ syncedBy: loggedInUser.value || 'system'
 const glSheetName = detectedSheets.find(s => s.toLowerCase().includes('gl raw'));
 if (glSheetName && workbookData[glSheetName]) {
 workbookData[glSheetName].forEach(row => {
-const amt = parseFloat(String(row.Amount || row.amount || 0).replace(/[^0-9.-]+/g, "")) || 0;
+const amountKey = Object.keys(row).find(k => k.toLowerCase().includes('amount') || k.toLowerCase().includes('credit'));
+const amt = parseFloat(String(amountKey ? row[amountKey] : 0).replace(/[^0-9.-]+/g, "")) || 0;
+
 if (amt > 0) {
+const dateKey = Object.keys(row).find(k => k.toLowerCase().includes('date') || k.toLowerCase().includes('posted'));
+const brandKey = Object.keys(row).find(k => k.toLowerCase().includes('brand'));
+const siteKey = Object.keys(row).find(k => k.toLowerCase().includes('site') || k.toLowerCase().includes('store'));
+const monthKey = Object.keys(row).find(k => k.toLowerCase().includes('month'));
+const invoiceKey = Object.keys(row).find(k => k.toLowerCase().includes('invoice') || k.toLowerCase().includes('memo'));
+const statusKey = Object.keys(row).find(k => k.toLowerCase().includes('status'));
+
 baselineEvents.push({
-date: row.Date || '',
-brand: row.Brand || 'UNKNOWN',
-site: row.Site || 'Redding',
-isolation_month: row.Month || '',
+date: dateKey ? (row[dateKey] || '') : '',
+brand: brandKey ? (row[brandKey] || 'UNKNOWN') : 'UNKNOWN',
+site: siteKey ? (row[siteKey] || 'Redding') : 'Redding',
+isolation_month: monthKey ? (row[monthKey] || '') : '',
 amount: amt,
 type: 'RECOVERY',
-status: row.Status || 'Applied',
-invoice_ref: row.Invoice || '',
+status: statusKey ? (row[statusKey] || 'Applied') : 'Applied',
+invoice_ref: invoiceKey ? (row[invoiceKey] || '') : '',
 upload_id: row.UploadId || '',
 source: 'WORKBOOK_BASELINE',
 createdAt: serverTimestamp(),
