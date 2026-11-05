@@ -1366,7 +1366,7 @@ createApp({
         if (typeof unsubscribeCredits === 'function') { unsubscribeCredits(); unsubscribeCredits = null; }
         });
         // --- 8. TEMPLATE BINDINGS RETURN ---
-        return {
+                return {
         // State
         isManagerUnlocked, loggedInUser, emailInput, passwordInput, authError,
         activeSite, activeTab, isSuperAdmin, showAdminMenu, showWorkspaceMenu,
@@ -1387,6 +1387,7 @@ createApp({
         refreshLedger, refreshIcons, formatCurrency, setupFilteredListeners,
         handleTreezLedgerUpload, handleSage4545Upload, handleTreesCsvUpload, 
         handleSageCsvUpload, continueBatch, openWorkbookSyncModal,
+        syncDiscoveryToShards, rollbackShardsToWorkbook,
         updateWorkbookFromSales: () => { 
 try {
 const eventsToUse = masterLedgerData.value || []; 
@@ -1406,6 +1407,94 @@ console.error("Failed to generate sync payload:", err);
 alert("Error generating JSON payload. Check console.");
 }
 }, 
+        syncDiscoveryToShards: async () => {
+            try {
+                const unsyncedItems = (filteredTreesSalesData.value || []).filter(s => s.status === 'Unsynced');
+                if (unsyncedItems.length === 0) {
+                    alert("No unsynced sales items found to sync.");
+                    return;
+                }
+                if (!confirm(`Are you sure you want to push ${unsyncedItems.length} record(s) to the Master Ledger shards?`)) {
+                    return;
+                }
+                
+                // Acquire lock to prevent concurrent sync operations
+                const lockAcquired = await acquireSystemLock(db, "discovery_sync", loggedInUser.value || 'system');
+                if (!lockAcquired) return;
+                
+                try {
+                    // Generate batch payloads using importService
+                    const payloads = buildTrackerSyncPayloads(unsyncedItems, activeSite.value);
+                    const batch = writeBatch(db);
+                    
+                    // Create an upload manifest for this sync event
+                    const uploadId = `discovery_sync_${Date.now()}`;
+                    await createUploadManifest(db, {
+                        upload_id: uploadId,
+                        type: 'DISCOVERY_SYNC',
+                        record_count: payloads.length,
+                        site: activeSite.value,
+                        user: loggedInUser.value || 'system'
+                    });
+
+                    // Commit payloads to Firestore
+                    payloads.forEach(item => {
+                        const docRef = doc(collection(db, "masterLedger"));
+                        batch.set(docRef, {
+                            ...item,
+                            upload_id: uploadId,
+                            createdAt: serverTimestamp(),
+                            syncedBy: loggedInUser.value || 'system'
+                        });
+                    });
+                    await batch.commit();
+
+                    // Optimistically mark local items as synced
+                    unsyncedItems.forEach(s => s.status = 'Synced');
+                    
+                    // Add system log entry
+                    await addDoc(collection(db, "systemLogs"), {
+                        timestamp: Date.now(),
+                        user: loggedInUser.value || 'system',
+                        actionType: 'SYNC',
+                        details: `Forward Synced ${payloads.length} discovery records to active shards`
+                    });
+                    
+                    alert(`Successfully pushed ${payloads.length} record(s) to the Master Ledger shards!`);
+                } finally {
+                    await releaseSystemLock(db, "discovery_sync");
+                }
+            } catch (err) {
+                console.error("Failed to sync to shards:", err);
+                alert("Error pushing records to Master Ledger. Check console for details.");
+            }
+        },
+        rollbackShardsToWorkbook: async () => {
+            try {
+                const uploadId = prompt("Enter the Upload ID of the sync operation to rollback:");
+                if (!uploadId) return;
+
+                if (!confirm(`Are you absolutely sure you want to rollback upload [${uploadId}]?\n\nThis will remove the synced records from the active shards.`)) {
+                    return;
+                }
+
+                // Acquire lock for rollback
+                const lockAcquired = await acquireSystemLock(db, "discovery_rollback", loggedInUser.value || 'system');
+                if (!lockAcquired) return;
+                
+                try {
+                    // Perform rollback
+                    const deletedCount = await rollbackUpload(db, uploadId, loggedInUser.value || 'system');
+                    alert(`Rollback successful. Removed ${deletedCount} records and reverted to Master Workbook baseline.`);
+                } catch (err) {
+                    alert(`Rollback failed: ${err.message}`);
+                } finally {
+                    await releaseSystemLock(db, "discovery_rollback");
+                }
+            } catch (err) {
+                console.error("Rollback failed:", err);
+            }
+        },
         pushToMainTracker: async () => {
 try {
 const unsyncedItems = (filteredTreesSalesData.value || []).filter(s => s.status === 'Unsynced');
