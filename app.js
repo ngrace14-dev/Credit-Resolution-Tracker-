@@ -2,7 +2,7 @@
 
 // 1. FIREBASE IMPORTS
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-app.js";
-import { getFirestore, collection, addDoc, doc, updateDoc, deleteDoc, writeBatch, onSnapshot, setDoc, query, where, limit } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js";
+import { getFirestore, collection, addDoc, doc, updateDoc, deleteDoc, writeBatch, onSnapshot, setDoc, query, where, limit, serverTimestamp } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js";
 import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js";
 import { getStorage, ref as sRef, uploadBytes, getBytes } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-storage.js";
 import { initializeAppCheck, ReCaptchaEnterpriseProvider } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-app-check.js";
@@ -1406,7 +1406,37 @@ console.error("Failed to generate sync payload:", err);
 alert("Error generating JSON payload. Check console.");
 }
 }, 
-        pushToMainTracker: () => { alert('Pushing to Tracker...'); },
+        pushToMainTracker: async () => {
+try {
+const unsyncedItems = (filteredTreesSalesData.value || []).filter(s => s.status === 'Unsynced');
+if (unsyncedItems.length === 0) {
+alert("No unsynced sales items found to push.");
+return;
+}
+if (!confirm(`Are you sure you want to push ${unsyncedItems.length} record(s) to the Main Tracker?`)) {
+return;
+}
+// Generate batch payloads using importService
+const payloads = buildTrackerSyncPayloads(unsyncedItems, activeSite.value);
+// Commit payloads to Firestore "ledger" or "masterTracker" collection
+const batch = writeBatch(db);
+payloads.forEach(item => {
+const docRef = doc(collection(db, "masterLedger"));
+batch.set(docRef, {
+...item,
+createdAt: serverTimestamp(),
+syncedBy: loggedInUser.value || 'system'
+});
+});
+await batch.commit();
+// Optimistically mark local items as synced
+unsyncedItems.forEach(s => s.status = 'Synced');
+alert(`Successfully pushed ${payloads.length} record(s) to the Main Tracker!`);
+} catch (err) {
+console.error("Failed to push to tracker:", err);
+alert("Error pushing records to Main Tracker. Check console for details.");
+}
+},
         openEmailDraft: draftEmail, markReportGroupAsSent,
         downloadMonthlyReport, exportYTDVariancePDF, exportBrandCSVReports,
         exportVendorsAndBrandsCSV, regenerateMonthReports, regenerateBrandSummary,
