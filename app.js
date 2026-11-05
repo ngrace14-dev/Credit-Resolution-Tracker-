@@ -16,7 +16,7 @@ import { buildVendorsAndBrandsCSV, buildAnnualReportCSV, buildBrandVarianceCSV, 
 import { buildDefinitiveBrandMetrics, buildMonthlyReportSummaries, buildBrandAuditData, buildSageAuditData, calculateMonthlyReportData } from './services/reportService.js';
 import { buildTrackerSyncPayloads, buildGridImportPayloads, buildBrandImportPayloads } from './services/importService.js';
 import { processTreezUpload, processSageUpload } from './services/uploadService.js';
-import { createUploadManifest, rollbackUpload } from './services/syncService.js';
+import { createUploadManifest, rollbackUpload, acquireSystemLock, releaseSystemLock } from './services/syncService.js';
 
 // 2. FIREBASE CONFIGURATION
 const firebaseConfig = {
@@ -1785,13 +1785,15 @@ createApp({
                     if (!file) return;
 
                     const reader = new FileReader();
-                const handleTreezLedgerUpload = (e) => {
+                                const handleTreezLedgerUpload = (e) => {
                     const file = e.target.files[0];
                     if (!file) return;
 
                     const reader = new FileReader();
                     reader.onload = async (evt) => {
                         try {
+                            await acquireSystemLock(db, 'upload', loggedInUser.value);
+                            
                             const { validEvents, quarantined } = processTreezUpload(evt.target.result, 
                                 { targetMonth: activeMonth.value, calendarMonths, masterBrands: masterBrands.value },
                                 { normalizeTreezLedger, normalizeSiteName, getStandardizedBrandName }
@@ -1805,21 +1807,33 @@ createApp({
                                         const docId = `${event.brand.toUpperCase()}_${event.location.replace(/\s/g, '-')}_${event.isolation_month}_GENERATED_${Math.random().toString(16)}`;
                                         batch.set(doc(db, "ledger_events", docId), { 
                                             ...event, id: docId, upload_id: uploadId, site: event.location, 
-                                            fiscal_year: 2026, status: 'Outstanding', created_at: serverTimestamp(), updated_at: serverTimestamp() 
+                                            fiscal_year: 2026, status: 'Outstanding', created_at: serverTimestamp(), updated_at: serverTimestamp(),
+                                            user_id: loggedInUser.value
                                         }, { merge: true });
                                     });
                                     await batch.commit();
                                 });
-                                await createUploadManifest(db, { upload_id: uploadId, source: 'TREEZ', site: activeSite.value, target_month: activeMonth.value, record_count: validEvents.length });
+                                await createUploadManifest(db, { 
+                                    upload_id: uploadId, source: 'TREEZ', site: activeSite.value, 
+                                    target_month: activeMonth.value, record_count: validEvents.length,
+                                    user_id: loggedInUser.value
+                                });
                             }
                         } catch (err) { alert(err.message); }
+                        finally { await releaseSystemLock(db, 'upload'); }
                     };
                     reader.readAsText(file);
                 };
 
                 const undoLastUpload = async (uploadId) => {
+                    if (!isSuperAdmin.value) return alert("Unauthorized: Only Admins can rollback uploads.");
+                    
                     if (confirm("Rollback this upload?")) {
-                        const count = await rollbackUpload(db, uploadId, loggedInUser.value);
-                        alert(`Deleted ${count} records.`);
+                        try {
+                            await acquireSystemLock(db, 'upload', loggedInUser.value);
+                            const count = await rollbackUpload(db, uploadId, loggedInUser.value);
+                            alert(`Deleted ${count} records.`);
+                        } catch (err) { alert(err.message); }
+                        finally { await releaseSystemLock(db, 'upload'); }
                     }
                 };

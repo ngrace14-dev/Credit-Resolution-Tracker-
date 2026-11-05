@@ -8,8 +8,45 @@ import {
     where, 
     writeBatch, 
     serverTimestamp,
-    addDoc
+    addDoc,
+    runTransaction,
+    deleteDoc
 } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js";
+
+/**
+ * Acquires a system-wide lock for critical operations (Upload, Rollback, Migration).
+ */
+export const acquireSystemLock = async (db, lockName, userId, ttlSeconds = 60) => {
+    const lockRef = doc(db, "system_locks", lockName);
+    
+    return await runTransaction(db, async (transaction) => {
+        const lockDoc = await transaction.get(lockRef);
+        const now = Date.now();
+
+        if (lockDoc.exists()) {
+            const data = lockDoc.data();
+            const expiry = (data.timestamp?.seconds * 1000 || 0) + (ttlSeconds * 1000);
+            if (now < expiry && data.userId !== userId) {
+                throw new Error(`CONCURRENT_OPERATION_IN_PROGRESS: ${data.userId} is currently performing this action.`);
+            }
+        }
+
+        transaction.set(lockRef, {
+            userId: userId,
+            timestamp: serverTimestamp(),
+            ttlSeconds: ttlSeconds
+        });
+        return true;
+    });
+};
+
+/**
+ * Releases a previously acquired system lock.
+ */
+export const releaseSystemLock = async (db, lockName) => {
+    const lockRef = doc(db, "system_locks", lockName);
+    await deleteDoc(lockRef);
+};
 
 /**
  * Creates an entry in the upload_manifests collection for audit and rollback.
