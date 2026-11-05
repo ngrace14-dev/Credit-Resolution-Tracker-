@@ -55,69 +55,119 @@ export const buildAnnualReportCSV = (creditsToArchive, formatCurrency) => {
     return csvContent;
 };
 
-export const buildBrandVarianceCSV = (masterWorkbookData, targetSite, selectedBrand, calendarMonths, promoCredits = [], helpers) => {
-    const { detectSiteFromName, detectMonthFromDate } = helpers;
+export const buildBrandVarianceCSV = (targetSite, selectedBrand, calendarMonths, ledgerEvents = []) => {
     const brands = {};
+    const stdTarget = selectedBrand ? String(selectedBrand).trim().toUpperCase() : null;
     
-    if (masterWorkbookData) {
-        Object.keys(masterWorkbookData).forEach(sheetName => {
-            const monthStr = sheetName.split(" ")[0];
-            const monthIdx = calendarMonths.indexOf(monthStr);
-            if (monthIdx !== -1 && sheetName.includes('2026')) {
-                const rows = masterWorkbookData[sheetName] || [];
-                rows.forEach(row => {
-                    const siteCol = targetSite === "Redding" ? "Redding" : "Red-Bluff";
-                    const rawSiteVal = row[siteCol];
-                    if (rawSiteVal && String(rawSiteVal).trim().toLowerCase() === 'x') {
-                        const brand = row["Brand"] || 'Unknown';
-                        if (brand === "Brand" || brand.toLowerCase().includes('total')) return;
-                        if (!brands[brand]) {
-                            brands[brand] = { name: brand, months: Array(12).fill(0), collections: Array(12).fill(0) };
-                        }
-                        const promoAmt = row["Promo Credits "] || row["Promo Credits"] || 0;
-                        brands[brand].months[monthIdx] += parseFloat(String(promoAmt).replace(/[^0-9.-]+/g, "")) || 0;
-                    }
-                });
-            }
-        });
-        
-        const sageRows = masterWorkbookData["GL Raw by Store"] || [];
-        sageRows.forEach(row => {
-            const site = detectSiteFromName(row["Store"] || row["Location"]);
-            if (site !== targetSite) return;
-            const dateStr = row["Posted dt."] || '';
-            const month = detectMonthFromDate(dateStr);
-            const monthIdx = calendarMonths.indexOf(month);
-            const brand = row["Mapped Brand"] || 'Unmapped';
-            if (monthIdx !== -1) {
-                if (!brands[brand]) {
-                    brands[brand] = { name: brand, months: Array(12).fill(0), collections: Array(12).fill(0) };
-                }
-                const amt = parseFloat(String(row["Credit"] || 0).replace(/[^0-9.-]+/g, "")) || 0;
-                brands[brand].collections[monthIdx] += amt;
-            }
-        });
-    }
+    ledgerEvents.forEach(e => {
+        if (e.site !== targetSite) return;
+        const brand = e.brand;
+        if (stdTarget && brand !== stdTarget) return;
 
-    // PROMOCREDITS INTEGRATION
-    promoCredits.forEach(c => {
-        if (c.site !== targetSite || c.invoice === 'WB-V9-SYNC') return;
-        const brand = c.vendor || 'Unknown';
-        const monthIdx = calendarMonths.indexOf(c.trackingMonth);
+        const monthIdx = calendarMonths.indexOf(e.isolation_month);
         if (monthIdx === -1) return;
 
         if (!brands[brand]) {
             brands[brand] = { name: brand, months: Array(12).fill(0), collections: Array(12).fill(0) };
         }
 
-        const amt = parseFloat(c.amount) || 0;
-        brands[brand].months[monthIdx] += amt;
-        if (c.status === 'Applied') {
-            brands[brand].collections[monthIdx] += amt;
+        if (e.type === 'GENERATED' || e.type === 'ADJUSTMENT') {
+            brands[brand].months[monthIdx] += e.amount;
+        } else if (e.type === 'RECOVERY') {
+            brands[brand].collections[monthIdx] += e.amount;
         }
     });
     
     const headers = ['Brand/Vendor', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec', 'YTD Total'];
+    let csvContent = headers.join(',') + '\n';
+    
+    const brandList = Object.values(brands).sort((a, b) => a.name.localeCompare(b.name));
+        
+    brandList.forEach(b => {
+        let ytdGen = 0;
+        let ytdColl = 0;
+        const genRow = [`"${csvEscape(b.name)}"`];
+        const collRow = ['Collected (GL)'];
+        const varRow = ['Balance Owed'];
+        for (let i = 0; i < 12; i++) {
+            const gen = b.months[i];
+            const coll = b.collections[i];
+            const diff = gen - coll;
+            genRow.push(gen.toFixed(2));
+            collRow.push(coll.toFixed(2));
+            varRow.push(diff.toFixed(2));
+            ytdGen += gen;
+            ytdColl += coll;
+        }
+        genRow.push(ytdGen.toFixed(2));
+        collRow.push(ytdColl.toFixed(2));
+        varRow.push((ytdGen - ytdColl).toFixed(2));
+        
+        csvContent += genRow.join(',') + '\n';
+        csvContent += collRow.join(',') + '\n';
+        csvContent += varRow.join(',') + '\n\n';
+    });
+    
+    return csvContent;
+};
+
+export const buildYTDVariancePDFData = (targetSite, calendarMonths, ledgerEvents = [], helpers) => {
+    const { formatCurrency } = helpers;
+    const tableHeaders = [
+        ['Brand/Vendor', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec', 'YTD Total']
+    ];
+    const tableData = [];
+    const brands = {};
+    
+    ledgerEvents.forEach(e => {
+        if (e.site !== targetSite) return;
+        const brand = e.brand;
+        const monthIdx = calendarMonths.indexOf(e.isolation_month);
+        if (monthIdx === -1) return;
+
+        if (!brands[brand]) {
+            brands[brand] = { name: brand, months: Array(12).fill(0), collections: Array(12).fill(0) };
+        }
+
+        if (e.type === 'GENERATED' || e.type === 'ADJUSTMENT') {
+            brands[brand].months[monthIdx] += e.amount;
+        } else if (e.type === 'RECOVERY') {
+            brands[brand].collections[monthIdx] += e.amount;
+        }
+    });
+    
+    Object.values(brands).sort((a, b) => a.name.localeCompare(b.name)).forEach(b => {
+        const row = [b.name];
+        let ytdTotal = 0;
+        for (let i = 0; i < 12; i++) {
+            row.push(formatCurrency(b.months[i]));
+            ytdTotal += b.months[i];
+        }
+        row.push(formatCurrency(ytdTotal));
+        tableData.push(row);
+        
+        const collRow = ['   ↳ Collected (GL)'];
+        let ytdColl = 0;
+        for (let i = 0; i < 12; i++) {
+            collRow.push(formatCurrency(b.collections[i]));
+            ytdColl += b.collections[i];
+        }
+        collRow.push(formatCurrency(ytdColl));
+        tableData.push(collRow);
+        
+        const varRow = ['   ↳ Balance Owed'];
+        for (let i = 0; i < 12; i++) {
+            const diff = b.months[i] - b.collections[i];
+            varRow.push(formatCurrency(diff));
+        }
+        varRow.push(formatCurrency(ytdTotal - ytdColl));
+        tableData.push(varRow);
+        
+        tableData.push(['', '', '', '', '', '', '', '', '', '', '', '', '', '']);
+    });
+    
+    return { tableHeaders, tableData };
+};
     let csvContent = headers.join(',') + '\n';
     
     const brandList = selectedBrand
@@ -152,73 +202,63 @@ export const buildBrandVarianceCSV = (masterWorkbookData, targetSite, selectedBr
     return csvContent;
 };
 
-export const buildYTDVariancePDFData = (masterWorkbookData, targetSite, calendarMonths, promoCredits = [], helpers) => {
-    const { detectSiteFromName, detectMonthFromDate, formatCurrency } = helpers;
+export const buildYTDVariancePDFData = (targetSite, calendarMonths, ledgerEvents = [], helpers) => {
+    const { formatCurrency } = helpers;
     const tableHeaders = [
         ['Brand/Vendor', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec', 'YTD Total']
     ];
     const tableData = [];
     const brands = {};
     
-    if (masterWorkbookData) {
-        Object.keys(masterWorkbookData).forEach(sheetName => {
-            const monthStr = sheetName.split(" ")[0];
-            const monthIdx = calendarMonths.indexOf(monthStr);
-            if (monthIdx !== -1 && sheetName.includes('2026')) {
-                const rows = masterWorkbookData[sheetName] || [];
-                rows.forEach(row => {
-                    const siteCol = targetSite === "Redding" ? "Redding" : "Red-Bluff";
-                    const rawSiteVal = row[siteCol];
-                    if (rawSiteVal && String(rawSiteVal).trim().toLowerCase() === 'x') {
-                        const brand = row["Brand"] || 'Unknown';
-                        if (brand === "Brand" || brand.toLowerCase().includes('total')) return;
-                        if (!brands[brand]) {
-                            brands[brand] = { name: brand, months: Array(12).fill(0), collections: Array(12).fill(0) };
-                        }
-                        const promoAmt = row["Promo Credits "] || row["Promo Credits"] || 0;
-                        brands[brand].months[monthIdx] += parseFloat(String(promoAmt).replace(/[^0-9.-]+/g, "")) || 0;
-                    }
-                });
-            }
-        });
-        
-        const sageRows = masterWorkbookData["GL Raw by Store"] || [];
-        sageRows.forEach(row => {
-            const site = detectSiteFromName(row["Store"] || row["Location"]);
-            if (site !== targetSite) return;
-            const dateStr = row["Posted dt."] || '';
-            const month = detectMonthFromDate(dateStr);
-            const monthIdx = calendarMonths.indexOf(month);
-            const brand = row["Mapped Brand"] || 'Unmapped';
-            if (monthIdx !== -1) {
-                if (!brands[brand]) {
-                    brands[brand] = { name: brand, months: Array(12).fill(0), collections: Array(12).fill(0) };
-                }
-                const amt = parseFloat(String(row["Credit"] || 0).replace(/[^0-9.-]+/g, "")) || 0;
-                brands[brand].collections[monthIdx] += amt;
-            }
-        });
-    }
-
-    // PROMOCREDITS INTEGRATION
-    promoCredits.forEach(c => {
-        if (c.site !== targetSite || c.invoice === 'WB-V9-SYNC') return;
-        const brand = c.vendor || 'Unknown';
-        const monthIdx = calendarMonths.indexOf(c.trackingMonth);
+    ledgerEvents.forEach(e => {
+        if (e.site !== targetSite) return;
+        const brand = e.brand;
+        const monthIdx = calendarMonths.indexOf(e.isolation_month);
         if (monthIdx === -1) return;
 
         if (!brands[brand]) {
             brands[brand] = { name: brand, months: Array(12).fill(0), collections: Array(12).fill(0) };
         }
 
-        const amt = parseFloat(c.amount) || 0;
-        brands[brand].months[monthIdx] += amt;
-        if (c.status === 'Applied') {
-            brands[brand].collections[monthIdx] += amt;
+        if (e.type === 'GENERATED' || e.type === 'ADJUSTMENT') {
+            brands[brand].months[monthIdx] += e.amount;
+        } else if (e.type === 'RECOVERY') {
+            brands[brand].collections[monthIdx] += e.amount;
         }
     });
     
     Object.values(brands).sort((a, b) => a.name.localeCompare(b.name)).forEach(b => {
+        const row = [b.name];
+        let ytdTotal = 0;
+        for (let i = 0; i < 12; i++) {
+            row.push(formatCurrency(b.months[i]));
+            ytdTotal += b.months[i];
+        }
+        row.push(formatCurrency(ytdTotal));
+        tableData.push(row);
+        
+        const collRow = ['   ↳ Collected (GL)'];
+        let ytdColl = 0;
+        for (let i = 0; i < 12; i++) {
+            collRow.push(formatCurrency(b.collections[i]));
+            ytdColl += b.collections[i];
+        }
+        collRow.push(formatCurrency(ytdColl));
+        tableData.push(collRow);
+        
+        const varRow = ['   ↳ Balance Owed'];
+        for (let i = 0; i < 12; i++) {
+            const diff = b.months[i] - b.collections[i];
+            varRow.push(formatCurrency(diff));
+        }
+        varRow.push(formatCurrency(ytdTotal - ytdColl));
+        tableData.push(varRow);
+        
+        tableData.push(['', '', '', '', '', '', '', '', '', '', '', '', '', '']);
+    });
+    
+    return { tableHeaders, tableData };
+};
         const row = [b.name];
         let ytdTotal = 0;
         for (let i = 0; i < 12; i++) {

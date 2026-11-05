@@ -77,8 +77,25 @@ createApp({
         const promoCreditsList = ref([]);
         const calendarMonths = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
         const activeMonth = ref('August');
-        const ledgerEventsList = ref([]);
+                const ledgerEventsList = ref([]);
         const USE_CANONICAL_LEDGER = ref(true);
+        const showHistoryModal = ref(false);
+        const activeBrandHistory = ref([]);
+        const selectedBrandName = ref('');
+
+        const openBrandHistory = (brandName) => {
+            selectedBrandName.value = brandName;
+            activeBrandHistory.value = ledgerEventsList.value.filter(e => 
+                e.brand === brandName && 
+                e.site === activeSite.value && 
+                (activeMonth.value === 'All' || e.isolation_month === activeMonth.value)
+            ).sort((a, b) => {
+                const dateA = a.created_at?.seconds || 0;
+                const dateB = b.created_at?.seconds || 0;
+                return dateB - dateA;
+            });
+            showHistoryModal.value = true;
+        };
                 const masterBrands = ref([]);
         const selectedBrands = ref([]);
 
@@ -345,85 +362,11 @@ createApp({
         const ledgerTotals = ref({ generated: 0, recovered: 0, outstanding: 0, variance: 0 });
 
                                 const refreshLedger = async () => {
-                                    if (USE_CANONICAL_LEDGER.value) {
-                                        return await refreshLedgerCanonical();
+                                    if (!USE_CANONICAL_LEDGER.value) {
+                                        console.warn("DEPRECATION WARNING: Legacy workbook shard scanning is still active.");
                                     }
-                                    if (!promoCredits.value) return; 
-
-                                    const ledger = {};
-            const site = activeSite.value;
-            const month = activeMonth.value;
-            
-            promoCredits.value.forEach(c => {
-                if (c.site !== site) return;
-                
-                const v = c.vendor || 'Unknown';
-
-                if (!ledger[v]) {
-                    ledger[v] = { 
-                        vendor: v, site: site, generated: 0, recovered: 0, outstanding: 0, 
-                        variance: 0, discoveryEvents: [], recoveryEvents: [],
-                        generatedCount: 0, recoveredCount: 0,
-                        aging: { '0-30': 0, '31-60': 0, '61-90': 0, '91+': 0 }
-                    };
-                }
-                
-                // 1. GLOBAL YTD CALCULATIONS (Card Totals Always cumulative)
-                ledger[v].generated += (parseFloat(c.amount) || 0);
-                ledger[v].generatedCount++;
-
-                // 2. FILTERED EVENT LISTS (Drill-down Drawer Only)
-                if (month === 'All' || c.trackingMonth === month) {
-                    ledger[v].discoveryEvents.push({
-                        id: c.id,
-                        type: c.creditType,
-                        date: c.dateRequested || c.dates,
-                        amount: c.amount
-                    });
-
-                    if (c.status === 'Applied') {
-                        const recoveredAmount = (parseFloat(c.amount) || 0); 
-                        if (recoveredAmount > 0) {
-                            ledger[v].recoveredCount++;
-                            ledger[v].recoveryEvents.push({
-                                id: 'rec-' + c.id,
-                                ref: c.invoice || 'CREDIT-MEMO',
-                                date: c.dateReceived || 'Confirmed',
-                                amount: recoveredAmount
-                            });
-                        }
-                    }
-                }
-            });
-
-            const totals = { generated: 0, recovered: 0, outstanding: 0, variance: 0 };
-            const siteKey = site === "Redding" ? "redding" : "redBluff";
-
-            Object.values(ledger).forEach(item => {
-                const brandMetrics = definitiveBrandMetrics.value[siteKey] ? definitiveBrandMetrics.value[siteKey][item.vendor] : null;
-    
-                if (brandMetrics) {
-                    // Recovered is ALWAYS YTD from Store Audit fragments
-                    item.recovered = brandMetrics.applied;
-                }
-
-                // Outstanding is now YTD - YTD
-                item.outstanding = item.generated - item.recovered;
-                item.variance = 0;
-    
-                if (item.outstanding > 0) {
-                    item.aging['0-30'] = item.outstanding;
-                }
-                
-                totals.generated += item.generated;
-                totals.recovered += item.recovered;
-                totals.outstanding += item.outstanding;
-                totals.variance += item.variance;
-            });
-
-            ledgerTotals.value = totals;
-            masterLedgerData.value = Object.values(ledger).sort((a, b) => b.outstanding - a.outstanding);
-        };
+                                    return await refreshLedgerCanonical();
+                                };
 
 
 
@@ -694,21 +637,16 @@ createApp({
 
 
                 const generateAuditStatementCSV = (brand) => {
-            return generateAuditStatementService({
-                brandVendor: brand.vendor,
-                targetSite: activeSite.value,
-                masterWorkbookData: masterWorkbook.value ? masterWorkbook.value.data : null,
-                promoCredits: promoCredits.value,
-                startMonthName: startMonth.value,
-                endMonthName: endMonth.value,
-                calendarMonths,
-                getStandardizedBrandName,
-                normalizeSiteName,
-                detectSiteFromName,
-                detectMonthFromDate,
-                csvEscape
-            });
-        };
+                    return generateAuditStatementService({
+                        brandVendor: brand.vendor,
+                        targetSite: activeSite.value,
+                        ledgerEvents: ledgerEventsList.value, // Pass canonical events
+                        startMonthName: startMonth.value,
+                        endMonthName: endMonth.value,
+                        calendarMonths,
+                        csvEscape
+                    });
+                };
 
                 const downloadMonthlyReport = (brand) => {
             const isFullMonth = !!brand.brandList; 
@@ -855,14 +793,13 @@ createApp({
             doc.text(`Generated on: ${new Date().toLocaleString()}`, 14, 26);
             doc.text(`Store Location: ${targetSite}`, 14, 31);
             
-                        const helpers = { detectSiteFromName, detectMonthFromDate, formatCurrency };
-            const { tableHeaders, tableData } = buildYTDVariancePDFData(
-                masterWorkbook.value ? masterWorkbook.value.data : null, 
-                targetSite, 
-                calendarMonths, 
-                promoCredits.value,
-                helpers
-            );
+                        const helpers = { formatCurrency };
+                        const { tableHeaders, tableData } = buildYTDVariancePDFData(
+                            activeSite.value, 
+                            calendarMonths, 
+                            ledgerEventsList.value,
+                            helpers
+                        );
             
             doc.autoTable({
                 head: tableHeaders,
@@ -889,17 +826,12 @@ createApp({
         };
 
                 const exportBrandCSVReports = (selectedBrand = null) => {
-            const targetSite = activeSite.value;
-            
-            const helpers = { detectSiteFromName, detectMonthFromDate };
-            const csvContent = buildBrandVarianceCSV(
-                masterWorkbook.value ? masterWorkbook.value.data : null, 
-                targetSite, 
-                selectedBrand, 
-                calendarMonths,
-                promoCredits.value,
-                helpers
-            );
+                    const csvContent = buildBrandVarianceCSV(
+                        activeSite.value, 
+                        selectedBrand, 
+                        calendarMonths,
+                        ledgerEventsList.value
+                    );
             
             const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
             const url = URL.createObjectURL(blob);
