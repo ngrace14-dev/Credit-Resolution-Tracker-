@@ -1365,49 +1365,9 @@ createApp({
         if (typeof unsubscribeSales === 'function') { unsubscribeSales(); unsubscribeSales = null; }
         if (typeof unsubscribeCredits === 'function') { unsubscribeCredits(); unsubscribeCredits = null; }
         });
-        // --- 8. TEMPLATE BINDINGS RETURN ---
-                return {
-        // State
-        isManagerUnlocked, loggedInUser, emailInput, passwordInput, authError,
-        activeSite, activeTab, isSuperAdmin, showAdminMenu, showWorkspaceMenu,
-        activeWorkspaceInfo, workspaceTabs, calendarMonths, activeMonth,
-        searchQueryInput, searchQuery, treezLedgerCount, treezLedgerLastUpload,
-        sage4545LedgerCount, sage4545LedgerLastUpload, isBatchProcessing,
-        batchProgress, batchTotal, batchType, batchError, masterLedgerData,
-        selectedLedgerVendor, ledgerTotals, totalPending, totalApplied,
-        totalTreesOwedYTD, totalTreesPending, unsyncedSalesCount,
-        treesSalesData, filteredTreesSalesData, displayTreesSalesData,
-        monthlyReportSummaries, emailReportMode, auditStartMonth: startMonth, auditEndMonth: endMonth,
-        masterWorkbook, isWorkbookLoaded, workbookSchema, activeWorkbookSheet, 
-        activeWorkbookHeaders, brandAuditData, auditRange, sageAuditData,
-        masterBrands, selectedBrands, allBrandsSelected, systemLogs,
-        showWorkbookSyncModal, workbookPasteData,
-        // Methods
-        handleLogin, forceLock, selectWorkspace, scrollMonths, scrollWorkbookTabs,
-        refreshLedger, refreshIcons, formatCurrency, setupFilteredListeners,
-        handleTreezLedgerUpload, handleSage4545Upload, handleTreesCsvUpload, 
-        handleSageCsvUpload, continueBatch, openWorkbookSyncModal,
-        syncDiscoveryToShards, rollbackShardsToWorkbook,
-        updateWorkbookFromSales: () => { 
-try {
-const eventsToUse = masterLedgerData.value || []; 
-const payload = generateWorkbookSyncPayload(
-eventsToUse, 
-calendarMonths, 
-['Redding', 'Red-Bluff']
-);
-const jsonString = JSON.stringify(payload, null, 2);
-if (navigator.clipboard) {
-navigator.clipboard.writeText(jsonString).catch(err => console.warn("Clipboard write failed", err));
-}
-workbookPasteData.value = jsonString;
-showWorkbookSyncModal.value = true;
-} catch (err) {
-console.error("Failed to generate sync payload:", err);
-alert("Error generating JSON payload. Check console.");
-}
-}, 
-                syncDiscoveryToShards: async () => {
+        
+        // --- DISCOVERY SHARDS FORWARD SYNC ---
+        const syncDiscoveryToShards = async () => {
             try {
                 const unsyncedItems = (filteredTreesSalesData.value || []).filter(s => s.status === 'Unsynced');
                 if (unsyncedItems.length === 0) {
@@ -1442,15 +1402,16 @@ alert("Error generating JSON payload. Check console.");
                 console.error("Failed to sync to shards:", err);
                 alert("Error syncing records. Check console for details.");
             }
-        },
-        rollbackShardsToWorkbook: async () => {
+        };
+
+        // --- REVERSE ROLLBACK: RESTORE SHARDS FROM WORKBOOK ---
+        const rollbackShardsToWorkbook = async () => {
             try {
                 const uploadId = prompt("Enter the Upload ID to rollback (check System Logs tab):");
                 if (!uploadId || !uploadId.trim()) return;
                 if (!confirm(`Are you sure you want to rollback all records matching Upload ID [${uploadId.trim()}]?`)) {
                     return;
                 }
-                // Query Firestore for documents matching this upload_id
                 const q = query(collection(db, "masterLedger"), where("upload_id", "==", uploadId.trim()));
                 const snapshot = await getDocs(q);
                 if (snapshot.empty) {
@@ -1460,7 +1421,6 @@ alert("Error generating JSON payload. Check console.");
                 const batch = writeBatch(db);
                 snapshot.forEach(docSnap => batch.delete(docSnap.ref));
                 await batch.commit();
-                // Reset local sales items status
                 if (treesSalesData.value) {
                     treesSalesData.value.forEach(s => {
                         if (s.status === 'Synced') s.status = 'Unsynced';
@@ -1477,7 +1437,50 @@ alert("Error generating JSON payload. Check console.");
                 console.error("Rollback failed:", err);
                 alert(`Rollback failed: ${err.message}`);
             }
-        },
+        };
+
+        // --- 8. TEMPLATE BINDINGS RETURN ---
+                return {
+        // State
+        isManagerUnlocked, loggedInUser, emailInput, passwordInput, authError,
+        activeSite, activeTab, isSuperAdmin, showAdminMenu, showWorkspaceMenu,
+        activeWorkspaceInfo, workspaceTabs, calendarMonths, activeMonth,
+        searchQueryInput, searchQuery, treezLedgerCount, treezLedgerLastUpload,
+        sage4545LedgerCount, sage4545LedgerLastUpload, isBatchProcessing,
+        batchProgress, batchTotal, batchType, batchError, masterLedgerData,
+        selectedLedgerVendor, ledgerTotals, totalPending, totalApplied,
+        totalTreesOwedYTD, totalTreesPending, unsyncedSalesCount,
+        treesSalesData, filteredTreesSalesData, displayTreesSalesData,
+        monthlyReportSummaries, emailReportMode, auditStartMonth: startMonth, auditEndMonth: endMonth,
+        masterWorkbook, isWorkbookLoaded, workbookSchema, activeWorkbookSheet, 
+        activeWorkbookHeaders, brandAuditData, auditRange, sageAuditData,
+        masterBrands, selectedBrands, allBrandsSelected, systemLogs,
+        showWorkbookSyncModal, workbookPasteData,
+        // Methods
+        handleLogin, forceLock, selectWorkspace, scrollMonths, scrollWorkbookTabs,
+        refreshLedger, refreshIcons, formatCurrency, setupFilteredListeners,
+        handleTreezLedgerUpload, handleSage4545Upload, handleTreesCsvUpload, 
+        handleSageCsvUpload, continueBatch, openWorkbookSyncModal,
+                syncDiscoveryToShards, rollbackShardsToWorkbook,
+        updateWorkbookFromSales: () => { 
+try {
+const eventsToUse = masterLedgerData.value || []; 
+const payload = generateWorkbookSyncPayload(
+eventsToUse, 
+calendarMonths, 
+['Redding', 'Red-Bluff']
+);
+const jsonString = JSON.stringify(payload, null, 2);
+if (navigator.clipboard) {
+navigator.clipboard.writeText(jsonString).catch(err => console.warn("Clipboard write failed", err));
+}
+workbookPasteData.value = jsonString;
+showWorkbookSyncModal.value = true;
+} catch (err) {
+console.error("Failed to generate sync payload:", err);
+alert("Error generating JSON payload. Check console.");
+}
+}, 
         pushToMainTracker: async () => {
 try {
 const unsyncedItems = (filteredTreesSalesData.value || []).filter(s => s.status === 'Unsynced');
