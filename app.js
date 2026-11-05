@@ -1457,59 +1457,88 @@ createApp({
                 }
                 // 1. Fetch all existing masterLedger shards
                 const ledgerSnap = await getDocs(collection(db, "masterLedger"));
-                // 2. Build baseline events from masterWorkbook.value.data
-                const workbookData = masterWorkbook.value.data;
-                const baselineEvents = [];
-                // Parse 2026 Monthly sheets
-                Object.keys(workbookData).forEach(sheetName => {
-                    if (sheetName.includes('2026')) {
-                        const month = sheetName.split(' ')[0];
-                        const rows = workbookData[sheetName] || [];
-                        rows.forEach(row => {
-                            const brand = row["Brand"] || row[0];
-                            if (!brand || brand === "Brand" || String(brand).toLowerCase().includes('total')) return;
-                            ['Redding', 'Red-Bluff'].forEach(site => {
-                                const amt = parseFloat(String(row[site] || 0).replace(/[^0-9.-]+/g, "")) || 0;
-                                if (amt > 0) {
-                                    baselineEvents.push({
-                                        date: new Date().toISOString().slice(0, 10),
-                                        brand: String(brand).trim(),
-                                        site: site,
-                                        isolation_month: month,
-                                        amount: amt,
-                                        type: 'GENERATED',
-                                        status: 'Applied',
-                                        source: 'WORKBOOK_BASELINE',
-                                        createdAt: serverTimestamp(),
-                                        syncedBy: loggedInUser.value || 'system'
-                                    });
-                                }
-                            });
-                        });
-                    }
-                });
-                // Parse "GL Raw by Store" sheet if present
-                if (workbookData['GL Raw by Store']) {
-                    workbookData['GL Raw by Store'].forEach(row => {
-                        const amt = parseFloat(String(row.Amount || 0).replace(/[^0-9.-]+/g, "")) || 0;
-                        if (amt > 0) {
-                            baselineEvents.push({
-                                date: row.Date || '',
-                                brand: row.Brand || 'UNKNOWN',
-                                site: row.Site || 'Redding',
-                                isolation_month: row.Month || '',
-                                amount: amt,
-                                type: 'RECOVERY',
-                                status: row.Status || 'Applied',
-                                invoice_ref: row.Invoice || '',
-                                upload_id: row.UploadId || '',
-                                source: 'WORKBOOK_BASELINE',
-                                createdAt: serverTimestamp(),
-                                syncedBy: loggedInUser.value || 'system'
-                            });
-                        }
-                    });
-                }
+                                // 2. Build baseline events from masterWorkbook.value.data
+const workbookData = masterWorkbook.value.data || {};
+const baselineEvents = [];
+const detectedSheets = Object.keys(workbookData);
+console.log("[Rollback] Master Workbook sheets detected:", detectedSheets);
+if (detectedSheets.length === 0) {
+alert("Master Workbook data is currently empty. Please load or upload your Master Workbook first.");
+return;
+}
+const validMonths = [
+'January', 'February', 'March', 'April', 'May', 'June',
+'July', 'August', 'September', 'October', 'November', 'December'
+];
+// Parse Monthly Sheets (matches 'August', 'August 2026', 'Aug 2026', etc.)
+detectedSheets.forEach(sheetName => {
+const matchedMonth = validMonths.find(m => sheetName.toLowerCase().includes(m.toLowerCase()));
+// Skip non-monthly sheets like summary or board recon
+if (!matchedMonth || sheetName.toLowerCase().includes('board') || sheetName.toLowerCase().includes('summary')) {
+return;
+}
+const rows = workbookData[sheetName] || [];
+console.log(`[Rollback] Parsing ${rows.length} rows from sheet: ${sheetName} (mapped to ${matchedMonth})`);
+rows.forEach(row => {
+const brand = row["Brand"] || row["brand"] || row[0];
+if (!brand || String(brand).toLowerCase().includes('total') || brand === "Brand") return;
+// Support both 'Red Bluff' and 'Red-Bluff'
+const reddingAmt = parseFloat(String(row["Redding"] || row["redding"] || 0).replace(/[^0-9.-]+/g, "")) || 0;
+const redBluffAmt = parseFloat(String(row["Red Bluff"] || row["Red-Bluff"] || row["red bluff"] || 0).replace(/[^0-9.-]+/g, "")) || 0;
+if (reddingAmt > 0) {
+baselineEvents.push({
+date: new Date().toISOString().slice(0, 10),
+brand: String(brand).trim(),
+site: 'Redding',
+isolation_month: matchedMonth,
+amount: reddingAmt,
+type: 'GENERATED',
+status: 'Applied',
+source: 'WORKBOOK_BASELINE',
+createdAt: serverTimestamp(),
+syncedBy: loggedInUser.value || 'system'
+});
+}
+if (redBluffAmt > 0) {
+baselineEvents.push({
+date: new Date().toISOString().slice(0, 10),
+brand: String(brand).trim(),
+site: 'Red Bluff',
+isolation_month: matchedMonth,
+amount: redBluffAmt,
+type: 'GENERATED',
+status: 'Applied',
+source: 'WORKBOOK_BASELINE',
+createdAt: serverTimestamp(),
+syncedBy: loggedInUser.value || 'system'
+});
+}
+});
+});
+// Parse GL Raw by Store sheet if present
+const glSheetName = detectedSheets.find(s => s.toLowerCase().includes('gl raw'));
+if (glSheetName && workbookData[glSheetName]) {
+workbookData[glSheetName].forEach(row => {
+const amt = parseFloat(String(row.Amount || row.amount || 0).replace(/[^0-9.-]+/g, "")) || 0;
+if (amt > 0) {
+baselineEvents.push({
+date: row.Date || '',
+brand: row.Brand || 'UNKNOWN',
+site: row.Site || 'Redding',
+isolation_month: row.Month || '',
+amount: amt,
+type: 'RECOVERY',
+status: row.Status || 'Applied',
+invoice_ref: row.Invoice || '',
+upload_id: row.UploadId || '',
+source: 'WORKBOOK_BASELINE',
+createdAt: serverTimestamp(),
+syncedBy: loggedInUser.value || 'system'
+});
+}
+});
+}
+console.log(`[Rollback] Extracted ${baselineEvents.length} baseline events ready to seed.`);
                 // 3. Batch delete existing shards in chunks of 400
                 const deleteDocs = ledgerSnap.docs;
                 for (let i = 0; i < deleteDocs.length; i += 400) {
