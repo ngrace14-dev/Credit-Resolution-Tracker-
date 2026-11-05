@@ -2,7 +2,7 @@
 
 // 1. FIREBASE IMPORTS
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-app.js";
-import { getFirestore, collection, addDoc, doc, updateDoc, deleteDoc, writeBatch, onSnapshot, setDoc, query, where, limit, serverTimestamp } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js";
+import { getFirestore, collection, addDoc, doc, updateDoc, deleteDoc, writeBatch, onSnapshot, setDoc, query, where, limit, serverTimestamp, getDocs } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js";
 import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js";
 import { getStorage, ref as sRef, uploadBytes, getBytes } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-storage.js";
 import { initializeAppCheck, ReCaptchaEnterpriseProvider } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-app-check.js";
@@ -16,7 +16,7 @@ import { buildVendorsAndBrandsCSV, buildAnnualReportCSV, buildBrandVarianceCSV, 
 import { buildDefinitiveBrandMetrics, buildMonthlyReportSummaries, buildBrandAuditData, buildSageAuditData, calculateMonthlyReportData } from './services/reportService.js';
 import { buildTrackerSyncPayloads, buildGridImportPayloads, buildBrandImportPayloads } from './services/importService.js';
 import { processTreezUpload, processSageUpload } from './services/uploadService.js';
-import { createUploadManifest, rollbackUpload, acquireSystemLock, releaseSystemLock } from './services/syncService.js';
+
 
 // 2. FIREBASE CONFIGURATION
 const firebaseConfig = {
@@ -1407,92 +1407,75 @@ console.error("Failed to generate sync payload:", err);
 alert("Error generating JSON payload. Check console.");
 }
 }, 
-        syncDiscoveryToShards: async () => {
+                syncDiscoveryToShards: async () => {
             try {
                 const unsyncedItems = (filteredTreesSalesData.value || []).filter(s => s.status === 'Unsynced');
                 if (unsyncedItems.length === 0) {
                     alert("No unsynced sales items found to sync.");
                     return;
                 }
-                if (!confirm(`Are you sure you want to push ${unsyncedItems.length} record(s) to the Master Ledger shards?`)) {
+                if (!confirm(`Push ${unsyncedItems.length} discovery record(s) to Master Ledger shards?`)) {
                     return;
                 }
-                
-                // Acquire lock to prevent concurrent sync operations
-                const lockAcquired = await acquireSystemLock(db, "discovery_sync", loggedInUser.value || 'system');
-                if (!lockAcquired) return;
-                
-                try {
-                    // Generate batch payloads using importService
-                    const payloads = buildTrackerSyncPayloads(unsyncedItems, activeSite.value);
-                    const batch = writeBatch(db);
-                    
-                    // Create an upload manifest for this sync event
-                    const uploadId = `discovery_sync_${Date.now()}`;
-                    await createUploadManifest(db, {
+                const batch = writeBatch(db);
+                const uploadId = `discovery_sync_${Date.now()}`;
+                const payloads = buildTrackerSyncPayloads(unsyncedItems, activeSite.value);
+                payloads.forEach(item => {
+                    const docRef = doc(collection(db, "masterLedger"));
+                    batch.set(docRef, {
+                        ...item,
                         upload_id: uploadId,
-                        type: 'DISCOVERY_SYNC',
-                        record_count: payloads.length,
-                        site: activeSite.value,
-                        user: loggedInUser.value || 'system'
+                        createdAt: serverTimestamp(),
+                        syncedBy: loggedInUser.value || 'system'
                     });
-
-                    // Commit payloads to Firestore
-                    payloads.forEach(item => {
-                        const docRef = doc(collection(db, "masterLedger"));
-                        batch.set(docRef, {
-                            ...item,
-                            upload_id: uploadId,
-                            createdAt: serverTimestamp(),
-                            syncedBy: loggedInUser.value || 'system'
-                        });
-                    });
-                    await batch.commit();
-
-                    // Optimistically mark local items as synced
-                    unsyncedItems.forEach(s => s.status = 'Synced');
-                    
-                    // Add system log entry
-                    await addDoc(collection(db, "systemLogs"), {
-                        timestamp: Date.now(),
-                        user: loggedInUser.value || 'system',
-                        actionType: 'SYNC',
-                        details: `Forward Synced ${payloads.length} discovery records to active shards`
-                    });
-                    
-                    alert(`Successfully pushed ${payloads.length} record(s) to the Master Ledger shards!`);
-                } finally {
-                    await releaseSystemLock(db, "discovery_sync");
-                }
+                });
+                await batch.commit();
+                unsyncedItems.forEach(s => s.status = 'Synced');
+                await addDoc(collection(db, "systemLogs"), {
+                    timestamp: Date.now(),
+                    user: loggedInUser.value || 'system',
+                    actionType: 'SYNC',
+                    details: `Forward Synced ${payloads.length} discovery records [Upload ID: ${uploadId}]`
+                });
+                alert(`Successfully synced ${payloads.length} record(s) into Master Ledger shards!`);
             } catch (err) {
                 console.error("Failed to sync to shards:", err);
-                alert("Error pushing records to Master Ledger. Check console for details.");
+                alert("Error syncing records. Check console for details.");
             }
         },
         rollbackShardsToWorkbook: async () => {
             try {
-                const uploadId = prompt("Enter the Upload ID of the sync operation to rollback:");
-                if (!uploadId) return;
-
-                if (!confirm(`Are you absolutely sure you want to rollback upload [${uploadId}]?\n\nThis will remove the synced records from the active shards.`)) {
+                const uploadId = prompt("Enter the Upload ID to rollback (check System Logs tab):");
+                if (!uploadId || !uploadId.trim()) return;
+                if (!confirm(`Are you sure you want to rollback all records matching Upload ID [${uploadId.trim()}]?`)) {
                     return;
                 }
-
-                // Acquire lock for rollback
-                const lockAcquired = await acquireSystemLock(db, "discovery_rollback", loggedInUser.value || 'system');
-                if (!lockAcquired) return;
-                
-                try {
-                    // Perform rollback
-                    const deletedCount = await rollbackUpload(db, uploadId, loggedInUser.value || 'system');
-                    alert(`Rollback successful. Removed ${deletedCount} records and reverted to Master Workbook baseline.`);
-                } catch (err) {
-                    alert(`Rollback failed: ${err.message}`);
-                } finally {
-                    await releaseSystemLock(db, "discovery_rollback");
+                // Query Firestore for documents matching this upload_id
+                const q = query(collection(db, "masterLedger"), where("upload_id", "==", uploadId.trim()));
+                const snapshot = await getDocs(q);
+                if (snapshot.empty) {
+                    alert(`No records found matching Upload ID: ${uploadId}`);
+                    return;
                 }
+                const batch = writeBatch(db);
+                snapshot.forEach(docSnap => batch.delete(docSnap.ref));
+                await batch.commit();
+                // Reset local sales items status
+                if (treesSalesData.value) {
+                    treesSalesData.value.forEach(s => {
+                        if (s.status === 'Synced') s.status = 'Unsynced';
+                    });
+                }
+                await addDoc(collection(db, "systemLogs"), {
+                    timestamp: Date.now(),
+                    user: loggedInUser.value || 'system',
+                    actionType: 'DELETE',
+                    details: `Rolled back ${snapshot.size} shard records for Upload ID: ${uploadId}`
+                });
+                alert(`Rollback complete. Successfully removed ${snapshot.size} record(s).`);
             } catch (err) {
                 console.error("Rollback failed:", err);
+                alert(`Rollback failed: ${err.message}`);
             }
         },
         pushToMainTracker: async () => {
