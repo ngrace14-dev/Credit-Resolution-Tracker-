@@ -201,7 +201,120 @@ createApp({
         };
 
 
-        // --- REPORT DATA EXTRACTIONS ---
+        const filteredCredits = computed(() => {
+            let base = promoCredits.value.filter(c => c.site === activeSite.value && !c.isVarianceOnly);
+            if (activeMonth.value !== 'All') {
+                base = base.filter(c => c.trackingMonth === activeMonth.value);
+            }
+            if (searchQuery.value) {
+                const q = searchQuery.value.toLowerCase();
+                base = base.filter(c => 
+                    (c.vendor && c.vendor.toLowerCase().includes(q)) ||
+                    (c.distributor && c.distributor.toLowerCase().includes(q)) ||
+                    (c.invoice && c.invoice.toLowerCase().includes(q))
+                );
+            }
+            return base.sort((a, b) => {
+                const vendorA = a.vendor || '';
+                const vendorB = b.vendor || '';
+                return vendorA.localeCompare(vendorB);
+            });
+        });
+
+        const totalPending = computed(() => filteredCredits.value.filter(c => c.status === 'Pending').reduce((sum, c) => sum + (parseFloat(c.amount) || 0), 0));
+        const totalApplied = computed(() => filteredCredits.value.filter(c => c.status === 'Applied').reduce((sum, c) => sum + (parseFloat(c.amount) || 0), 0));
+
+        const filteredTreesSalesData = computed(() => {
+            let base = treesSalesData.value; 
+            if (activeMonth.value !== 'All') base = base.filter(sale => sale.month === activeMonth.value);
+            if (searchQuery.value) {
+                const q = searchQuery.value.toLowerCase();
+                base = base.filter(sale => (sale.brand || '').toLowerCase().includes(q) || (sale.productName || '').toLowerCase().includes(q) || (sale.discountTitle || '').toLowerCase().includes(q));
+            }
+            return base.sort((a, b) => new Date(b.dateClosed) - new Date(a.dateClosed));
+        });
+
+        const displayTreesSalesData = computed(() => filteredTreesSalesData.value.slice(0, 100));
+
+        const totalTreesOwedYTD = computed(() => {
+            let total = 0;
+            const targetSite = activeSite.value;
+            const targetMonth = activeMonth.value;
+
+            if (masterWorkbook.value && masterWorkbook.value.data) {
+                const allSheets = Object.keys(masterWorkbook.value.data);
+                
+                allSheets.forEach(sheetName => {
+                    if (sheetName.includes('2026')) {
+                        const monthName = sheetName.split(' ')[0];
+                        if (targetMonth === 'All' || monthName === targetMonth) {
+                            const rows = masterWorkbook.value.data[sheetName] || [];
+                            
+                            rows.forEach(row => {
+                                const vendor = row["Brand"] || row[0];
+                                if (!vendor || vendor === "Brand" || vendor.toLowerCase().includes('total')) return;
+
+                                const siteKey = targetSite === "Red Bluff" ? "Red-Bluff" : "Redding";
+                                
+                                let rawAmt = 0;
+                                const rowKeys = Object.keys(row);
+                                const exactKey = rowKeys.find(k => k.trim().toLowerCase() === targetSite.toLowerCase() || k.trim().toLowerCase() === siteKey.toLowerCase());
+                                
+                                if (exactKey) {
+                                    const val = String(row[exactKey]).trim().toLowerCase();
+                                    if (val === 'x') {
+                                        const promoKey = rowKeys.find(k => k.toLowerCase().includes('promo credits'));
+                                        rawAmt = row[promoKey] || 0;
+                                    } else {
+                                        rawAmt = row[exactKey];
+                                    }
+                                } else if (targetSite === "Redding" && row["Redding"] !== undefined) {
+                                    rawAmt = row["Redding"];
+                                } else if (targetSite === "Red Bluff" && row["Red-Bluff"] !== undefined) {
+                                    rawAmt = row["Red-Bluff"];
+                                }
+
+                                const amt = parseFloat(String(rawAmt || 0).replace(/[^0-9.-]+/g,"")) || 0;
+                                if (amt > 0) total += amt;
+                            });
+                        }
+                    }
+                });
+            }
+            return total;
+        });
+
+        const totalTreesPending = computed(() => treesSalesData.value.filter(s => s.detectedSite === activeSite.value && s.status === 'Unsynced').reduce((sum, s) => sum + (parseFloat(s.owed) || 0), 0));
+        const unsyncedSalesCount = computed(() => filteredTreesSalesData.value.filter(s => s.status === 'Unsynced').length);
+
+        const systemLogs = ref([]);
+        watch(isSuperAdmin, (val) => {
+            if (val) {
+                onSnapshot(collection(db, "systemLogs"), (snapshot) => {
+                    const logs = [];
+                    snapshot.forEach(docSnap => { logs.push({ id: docSnap.id, ...docSnap.data() }); });
+                    logs.sort((a, b) => b.timestamp - a.timestamp);
+                    systemLogs.value = logs;
+                });
+            } else {
+                systemLogs.value = [];
+            }
+        }, { immediate: true });
+
+        const runRegeneration = async (brandList, targetMonth) => {
+            console.warn("Regeneration function stub. Wire to actual service method in phase 8.");
+        };
+
+        const regenerateBrandSummary = async (brandReport) => {
+            if (!confirm(`This will delete current aggregated summaries for ${brandReport.vendor} in ${brandReport.month} and re-calculate them from raw sales data. Continue?`)) return;
+            await runRegeneration([brandReport], brandReport.month);
+        };
+
+        const regenerateMonthReports = async (monthGroup) => {
+            if (!confirm(`This will re-calculate summaries for ALL brands in ${monthGroup.month}. This ensures all reports use the latest itemized data. Proceed?`)) return;
+            await runRegeneration(monthGroup.brandList, monthGroup.month);
+        };
+
 
         // 1. Extraction Rules Logic (Definitive Applied & Generated per Brand)
         const definitiveBrandMetrics = computed(() => {
