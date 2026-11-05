@@ -1501,12 +1501,21 @@ return;
 }
 const rows = workbookData[sheetName] || [];
 console.log(`[Rollback] Parsing ${rows.length} rows from sheet: ${sheetName} (mapped to ${matchedMonth})`);
+// Log exact keys of the first row to calibrate
+if (rows.length > 0) {
+console.log(`[Rollback] Sample row keys for ${sheetName}:`, Object.keys(rows[0]));
+}
 rows.forEach(row => {
 const brand = row["Brand"] || row["brand"] || row[0];
 if (!brand || String(brand).toLowerCase().includes('total') || brand === "Brand") return;
-// Support both 'Red Bluff' and 'Red-Bluff'
-const reddingAmt = parseFloat(String(row["Redding"] || row["redding"] || 0).replace(/[^0-9.-]+/g, "")) || 0;
-const redBluffAmt = parseFloat(String(row["Red Bluff"] || row["Red-Bluff"] || row["red bluff"] || 0).replace(/[^0-9.-]+/g, "")) || 0;
+
+// Fallback search: Iterate through all keys to find a match for Redding / Red Bluff
+// Some Excel exports might have spaces or weird characters in the keys
+let reddingKey = Object.keys(row).find(k => k.toLowerCase().includes('redding'));
+let redBluffKey = Object.keys(row).find(k => k.toLowerCase().includes('red bluff') || k.toLowerCase().includes('red-bluff') || k.toLowerCase().includes('redbluff'));
+
+const reddingAmt = parseFloat(String(reddingKey ? row[reddingKey] : (row["Redding"] || row["redding"] || 0)).replace(/[^0-9.-]+/g, "")) || 0;
+const redBluffAmt = parseFloat(String(redBluffKey ? row[redBluffKey] : (row["Red Bluff"] || row["Red-Bluff"] || row["red bluff"] || 0)).replace(/[^0-9.-]+/g, "")) || 0;
 if (reddingAmt > 0) {
 baselineEvents.push({
 date: new Date().toISOString().slice(0, 10),
