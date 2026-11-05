@@ -63,6 +63,7 @@ createApp({
 
         // --- Core State ---
         const isManagerUnlocked = ref(false);
+        const isSuperAdmin = ref(false);
         const loggedInUser = ref('');
         const emailInput = ref('');
         const passwordInput = ref('');
