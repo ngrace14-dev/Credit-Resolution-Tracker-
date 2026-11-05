@@ -1404,35 +1404,104 @@ createApp({
             }
         };
 
-        // --- REVERSE ROLLBACK: RESTORE SHARDS FROM WORKBOOK ---
+                // --- ZERO-PROMPT AUTOMATED WORKBOOK BASELINE ROLLBACK ---
         const rollbackShardsToWorkbook = async () => {
             try {
-                const uploadId = prompt("Enter the Upload ID to rollback (check System Logs tab):");
-                if (!uploadId || !uploadId.trim()) return;
-                if (!confirm(`Are you sure you want to rollback all records matching Upload ID [${uploadId.trim()}]?`)) {
+                if (!masterWorkbook.value || !masterWorkbook.value.data) {
+                    alert("Master Workbook data is not loaded yet. Please ensure the workbook is loaded before rolling back.");
                     return;
                 }
-                const q = query(collection(db, "masterLedger"), where("upload_id", "==", uploadId.trim()));
-                const snapshot = await getDocs(q);
-                if (snapshot.empty) {
-                    alert(`No records found matching Upload ID: ${uploadId}`);
+                if (!confirm("Rollback all shards to the Master Workbook baseline? This will clear recent intake syncs and reset all discovery rows to Unsynced.")) {
                     return;
                 }
-                const batch = writeBatch(db);
-                snapshot.forEach(docSnap => batch.delete(docSnap.ref));
-                await batch.commit();
-                if (treesSalesData.value) {
-                    treesSalesData.value.forEach(s => {
-                        if (s.status === 'Synced') s.status = 'Unsynced';
+                // 1. Fetch all existing masterLedger shards
+                const ledgerSnap = await getDocs(collection(db, "masterLedger"));
+                // 2. Build baseline events from masterWorkbook.value.data
+                const workbookData = masterWorkbook.value.data;
+                const baselineEvents = [];
+                // Parse 2026 Monthly sheets
+                Object.keys(workbookData).forEach(sheetName => {
+                    if (sheetName.includes('2026')) {
+                        const month = sheetName.split(' ')[0];
+                        const rows = workbookData[sheetName] || [];
+                        rows.forEach(row => {
+                            const brand = row["Brand"] || row[0];
+                            if (!brand || brand === "Brand" || String(brand).toLowerCase().includes('total')) return;
+                            ['Redding', 'Red-Bluff'].forEach(site => {
+                                const amt = parseFloat(String(row[site] || 0).replace(/[^0-9.-]+/g, "")) || 0;
+                                if (amt > 0) {
+                                    baselineEvents.push({
+                                        date: new Date().toISOString().slice(0, 10),
+                                        brand: String(brand).trim(),
+                                        site: site,
+                                        isolation_month: month,
+                                        amount: amt,
+                                        type: 'GENERATED',
+                                        status: 'Applied',
+                                        source: 'WORKBOOK_BASELINE',
+                                        createdAt: serverTimestamp(),
+                                        syncedBy: loggedInUser.value || 'system'
+                                    });
+                                }
+                            });
+                        });
+                    }
+                });
+                // Parse "GL Raw by Store" sheet if present
+                if (workbookData['GL Raw by Store']) {
+                    workbookData['GL Raw by Store'].forEach(row => {
+                        const amt = parseFloat(String(row.Amount || 0).replace(/[^0-9.-]+/g, "")) || 0;
+                        if (amt > 0) {
+                            baselineEvents.push({
+                                date: row.Date || '',
+                                brand: row.Brand || 'UNKNOWN',
+                                site: row.Site || 'Redding',
+                                isolation_month: row.Month || '',
+                                amount: amt,
+                                type: 'RECOVERY',
+                                status: row.Status || 'Applied',
+                                invoice_ref: row.Invoice || '',
+                                upload_id: row.UploadId || '',
+                                source: 'WORKBOOK_BASELINE',
+                                createdAt: serverTimestamp(),
+                                syncedBy: loggedInUser.value || 'system'
+                            });
+                        }
                     });
                 }
+                // 3. Batch delete existing shards in chunks of 400
+                const deleteDocs = ledgerSnap.docs;
+                for (let i = 0; i < deleteDocs.length; i += 400) {
+                    const batch = writeBatch(db);
+                    const chunk = deleteDocs.slice(i, i + 400);
+                    chunk.forEach(d => batch.delete(d.ref));
+                    await batch.commit();
+                }
+                // 4. Batch insert baseline records in chunks of 400
+                for (let i = 0; i < baselineEvents.length; i += 400) {
+                    const batch = writeBatch(db);
+                    const chunk = baselineEvents.slice(i, i + 400);
+                    chunk.forEach(event => {
+                        const docRef = doc(collection(db, "masterLedger"));
+                        batch.set(docRef, event);
+                    });
+                    await batch.commit();
+                }
+                // 5. Update local state
+                masterLedgerData.value = baselineEvents;
+                if (treesSalesData.value) {
+                    treesSalesData.value.forEach(s => {
+                        s.status = 'Unsynced';
+                    });
+                }
+                // 6. Log system action
                 await addDoc(collection(db, "systemLogs"), {
                     timestamp: Date.now(),
                     user: loggedInUser.value || 'system',
                     actionType: 'DELETE',
-                    details: `Rolled back ${snapshot.size} shard records for Upload ID: ${uploadId}`
+                    details: `Automated Rollback: Purged old shards and restored ${baselineEvents.length} baseline records from Master Workbook.`
                 });
-                alert(`Rollback complete. Successfully removed ${snapshot.size} record(s).`);
+                alert(`Rollback complete! Restored ${baselineEvents.length} baseline records from the Master Workbook.`);
             } catch (err) {
                 console.error("Rollback failed:", err);
                 alert(`Rollback failed: ${err.message}`);
