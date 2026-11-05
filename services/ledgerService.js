@@ -26,7 +26,7 @@ export const normalizeTreezLedger = (rows, headers, fileName, uploadTime, normal
         );
 
         const isExcluded = EXCLUDED_KEYWORDS.some(key => promoName.includes(key));
-        const isHoliday = HOLIDAY_PROGRAMS.some(prog => promoName.includes(promoName));
+        const isHoliday = HOLIDAY_PROGRAMS.some(prog => promoName.includes(prog));
 
         if (isExcluded) {
             if (promoName.includes('employee')) promoType = 'EMPLOYEE';
