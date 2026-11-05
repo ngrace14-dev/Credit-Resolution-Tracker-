@@ -91,6 +91,30 @@ export const queryEventsByBrand = async (db, brand, site) => {
 };
 
 /**
+ * Strict Month Containment Engine
+ */
+export const validateMonthContainment = (dateString, targetMonth, calendarMonths, fiscalYear = 2026) => {
+    if (!dateString) return { valid: false, reason: 'MISSING_DATE' };
+    
+    const d = new Date(dateString);
+    if (isNaN(d.getTime())) return { valid: false, reason: 'AMBIGUOUS_DATE' };
+
+    const parsedMonth = calendarMonths[d.getMonth()];
+    const parsedYear = d.getFullYear();
+
+    if (parsedMonth === targetMonth && parsedYear === fiscalYear) {
+        return { valid: true, isolation_month: targetMonth };
+    }
+
+    return { 
+        valid: false, 
+        reason: 'CROSS_MONTH_MISMATCH', 
+        detectedMonth: parsedMonth,
+        detectedYear: parsedYear
+    };
+};
+
+/**
  * Migration Service: Extracts and seeds workbook_v9_sheets and promoCredits into ledger_events.
  */
 export const runCanonicalMigration = async (db, masterWorkbookData, promoCreditsList, helpers) => {

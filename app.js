@@ -20,7 +20,8 @@ import {
     queryEventsByMonth, 
     queryEventsByBrand, 
     calculateCanonicalBalance, 
-    runCanonicalMigration 
+    runCanonicalMigration,
+    validateMonthContainment
 } from './services/ledgerEventService.js';
 
 // 2. FIREBASE CONFIGURATION
@@ -1785,7 +1786,7 @@ createApp({
             }
         };
 
-                                                                const handleTreezLedgerUpload = (e) => {
+                                                                                                                                const handleTreezLedgerUpload = (e) => {
                     const file = e.target.files[0];
                     if (!file) return;
 
@@ -1798,100 +1799,57 @@ createApp({
 
                             const headers = parseCSVRow(lines[0]).map(normalizeHeader);
                             const rows = lines.slice(1);
-
                             const uploadTime = new Date().toLocaleString();
+                            const uploadId = `TREEZ_${Date.now()}`;
+
                             const parsedData = normalizeTreezLedger(
                                 rows, headers, file.name, uploadTime, normalizeSiteName, getStandardizedBrandName, masterBrands.value
                             );
 
-                            if (parsedData.length === 0) {
-                                alert("No valid records found in Treez upload. Please check the column formatting.");
-                                return;
-                            }
+                            const validEvents = [];
+                            const quarantined = [];
 
-                            const importedCount = parsedData.length;
-                            treezLedgerCount.value = importedCount;
-                            treezLedgerLastUpload.value = uploadTime;
-                            treezLedgerSourceFile.value = file.name;
-                            persistLedgerMetadata();
-
-                            if (confirm(`Successfully parsed ${importedCount} records. Would you like to merge this data into the Master Workbook in optimized batches?`)) {
-                                const updatedData = JSON.parse(JSON.stringify(masterWorkbook.value.data));
-                                let skippedInBatch = 0;
-                                const errorRecordsBatch = [];
-
-                                startBatchProcessing('Treez', parsedData, async (chunk, startIndex) => {
-                                    const affectedSheetsInChunk = new Set();
-
-                                    chunk.forEach(item => {
-                                        if (!item.isRecoverable) return;
-                                        const month = detectMonthFromDate(item.promoDate);
-                                        if (month === 'Unknown') {
-                                            skippedInBatch++;
-                                            errorRecordsBatch.push({ brand: item.brand, date: item.promoDate, amount: item.creditGenerated, reason: "Unknown Month" });
-                                            return;
-                                        }
-
-                                        const sheetName = `${month} 2026`;
-                                        if (!updatedData[sheetName]) {
-                                            skippedInBatch++;
-                                            errorRecordsBatch.push({ brand: item.brand, date: item.promoDate, amount: item.creditGenerated, reason: `Sheet ${sheetName} Missing` });
-                                            return;
-                                        }
-
-                                        affectedSheetsInChunk.add(sheetName);
-                                        const sheetRows = updatedData[sheetName];
-                                        const cleanBrand = item.brand.trim().toLowerCase();
-
-                                        let brandRow = sheetRows.find(r => {
-                                            const rowBrand = (r["Brand"] || r[0] || '').toLowerCase().trim();
-                                            return rowBrand === cleanBrand;
-                                        });
-
-                                        if (!brandRow) {
-                                            brandRow = { "Brand": item.brand, "Redding": 0, "Red-Bluff": 0, "Promo Credits ": "", "Treez Total": 0 };
-                                            sheetRows.push(brandRow);
-                                        }
-
-                                        const siteKey = item.location.includes('bluff') ? 'Red-Bluff' : 'Redding';
-                                        const currentVal = cleanCurrency(brandRow[siteKey]);
-                                        brandRow[siteKey] = currentVal + item.creditGenerated;
-                                        const currentTotal = cleanCurrency(brandRow["Treez Total"]);
-                                        brandRow["Treez Total"] = currentTotal + item.creditGenerated;
+                            parsedData.forEach(item => {
+                                const containment = validateMonthContainment(item.promoDate, activeMonth.value, calendarMonths);
+                                if (containment.valid && item.isRecoverable) {
+                                    validEvents.push({
+                                        ...item,
+                                        isolation_month: activeMonth.value,
+                                        type: 'GENERATED',
+                                        source: 'TREEZ',
+                                        upload_id: uploadId
                                     });
+                                } else {
+                                    quarantined.push({ ...item, reason: containment.reason || 'NOT_RECOVERABLE' });
+                                }
+                            });
 
-                                    for (const sheetName of affectedSheetsInChunk) {
-                                        const docId = sheetToDocId(sheetName);
-                                        await setDoc(doc(db, "workbook_v9_sheets", docId), {
-                                            sheetName: sheetName,
-                                            rows: updatedData[sheetName],
-                                            updatedAt: Date.now()
-                                        });
-                                    }
-                                    
-                                    masterWorkbook.value.data = JSON.parse(JSON.stringify(updatedData));
-                                }, () => {
-                                    if (skippedInBatch > 0) {
-                                        const csvErrorContent = "Brand,Date,Amount,Reason\n" + errorRecordsBatch.map(r => `"${r.brand}","${r.date}","${r.amount}","${r.reason}"`).join('\n');
-                                        const errorBlob = new Blob(['\ufeff' + csvErrorContent], { type: 'text/csv;charset=utf-8;' });
-                                        const errorUrl = URL.createObjectURL(errorBlob);
-                                        const errorLink = document.createElement("a");
-                                        errorLink.setAttribute("href", errorUrl);
-                                        errorLink.setAttribute("download", `Treez_Ledger_Quarantine_${Date.now()}.csv`);
-                                        document.body.appendChild(errorLink);
-                                        errorLink.click();
-                                        document.body.removeChild(errorLink);
-                                        alert(`Treez Merge Complete with Warnings:\n- ${skippedInBatch} records quarantined due to Unknown Months/Sheets.`);
-                                    }
+                            if (confirm(`Parsed ${validEvents.length} valid events for ${activeMonth.value}. (${quarantined.length} quarantined). Proceed with Batch Commit?`)) {
+                                startBatchProcessing('Treez', validEvents, async (chunk) => {
+                                    const batch = writeBatch(db);
+                                    chunk.forEach(event => {
+                                        const payloadForHash = { brand: event.brand, site: event.location, month: event.isolation_month, amount: event.creditGenerated };
+                                        const hash = Math.abs(JSON.stringify(payloadForHash).split("").reduce((a,b)=>{a=((a<<5)-a)+b.charCodeAt(0);return a&a},0)).toString(16);
+                                        const docId = `${event.brand.toUpperCase()}_${event.location.replace(/\s/g, '-')}_${event.isolation_month}_GENERATED_${hash}`;
+                                        batch.set(doc(db, "ledger_events", docId), {
+                                            id: docId,
+                                            brand: event.brand.toUpperCase(),
+                                            site: event.location,
+                                            type: 'GENERATED',
+                                            amount: event.creditGenerated,
+                                            isolation_month: event.isolation_month,
+                                            fiscal_year: 2026,
+                                            source: 'TREEZ',
+                                            status: 'Outstanding',
+                                            upload_id: uploadId,
+                                            created_at: serverTimestamp(),
+                                            updated_at: serverTimestamp()
+                                        }, { merge: true });
+                                    });
+                                    await batch.commit();
                                 });
                             }
-                            
-                            logSystemAction("UPLOAD", `Treez ledger imported (${parsedData.length} records)`);
-                            e.target.value = '';
-                        } catch (error) {
-                            console.error("Treez Ledger Parse Error:", error);
-                            alert("Error parsing Treez Ledger CSV.");
-                        }
+                        } catch (err) { alert("Treez Upload Failed: " + err.message); }
                     };
                     reader.readAsText(file);
                 };
@@ -1906,43 +1864,57 @@ createApp({
                         try {
                             const text = evt.target.result;
                             const lines = parseCSVText(text);
-                            if (lines.length === 0) return alert("File is empty or invalid.");
+                            const headers = parseCSVRow(lines[0]).map(normalizeHeader);
+                            const rows = lines.slice(1);
+                            const uploadId = `SAGE_${Date.now()}`;
 
-                            let headerIdx = -1;
-                            let headers = [];
-                            for (let i = 0; i < Math.min(lines.length, 20); i++) {
-                                const tempHeaders = parseCSVRow(lines[i]).map(normalizeHeader);
-                                if (tempHeaders.includes('posted dt.') || tempHeaders.includes('credit') || tempHeaders.includes('memo/description')) {
-                                    headerIdx = i;
-                                    headers = tempHeaders;
-                                    break;
+                            const parsedData = normalizeSageLedger(rows, headers, file.name, new Date().toLocaleString(), normalizeSiteName, getStandardizedBrandName);
+
+                            const validEvents = [];
+                            const quarantined = [];
+
+                            parsedData.forEach(item => {
+                                const containment = validateMonthContainment(item.postingDate, activeMonth.value, calendarMonths);
+                                if (containment.valid) {
+                                    validEvents.push({
+                                        ...item,
+                                        isolation_month: activeMonth.value,
+                                        type: 'RECOVERY',
+                                        source: 'SAGE',
+                                        upload_id: uploadId
+                                    });
+                                } else {
+                                    quarantined.push({ ...item, reason: containment.reason });
                                 }
+                            });
+
+                            if (confirm(`Parsed ${validEvents.length} recoveries for ${activeMonth.value}. (${quarantined.length} quarantined). Proceed with Batch Commit?`)) {
+                                startBatchProcessing('Sage', validEvents, async (chunk) => {
+                                    const batch = writeBatch(db);
+                                    chunk.forEach(event => {
+                                        const payloadForHash = { brand: event.brand, site: event.location, month: event.isolation_month, amount: event.amount, ref: event.documentNumber };
+                                        const hash = Math.abs(JSON.stringify(payloadForHash).split("").reduce((a,b)=>{a=((a<<5)-a)+b.charCodeAt(0);return a&a},0)).toString(16);
+                                        const docId = `${event.brand.toUpperCase()}_${event.location.replace(/\s/g, '-')}_${event.isolation_month}_RECOVERY_${hash}`;
+                                        batch.set(doc(db, "ledger_events", docId), {
+                                            id: docId,
+                                            brand: event.brand.toUpperCase(),
+                                            site: event.location,
+                                            type: 'RECOVERY',
+                                            amount: event.amount,
+                                            isolation_month: event.isolation_month,
+                                            fiscal_year: 2026,
+                                            source: 'SAGE',
+                                            status: 'Applied',
+                                            invoice_ref: event.documentNumber,
+                                            upload_id: uploadId,
+                                            created_at: serverTimestamp(),
+                                            updated_at: serverTimestamp()
+                                        }, { merge: true });
+                                    });
+                                    await batch.commit();
+                                });
                             }
-                            if (headerIdx === -1) {
-                                headers = parseCSVRow(lines[0]).map(normalizeHeader);
-                                headerIdx = 0;
-                            }
-
-                            const rows = lines.slice(headerIdx + 1);
-                            const uploadTime = new Date().toLocaleString();
-                            const parsedData = normalizeSageLedger(
-                                rows, headers, file.name, uploadTime, normalizeSiteName, getStandardizedBrandName
-                            );
-
-                            if (parsedData.length === 0) {
-                                alert("No valid 4545/Promo Credit records found in Sage upload.");
-                                return;
-                            }
-
-                            const importedCount = parsedData.length;
-                            sage4545LedgerCount.value = importedCount;
-                            sage4545LedgerLastUpload.value = uploadTime;
-                            sage4545LedgerSourceFile.value = file.name;
-                            persistLedgerMetadata();
-
-                                                        if (confirm(`Successfully parsed ${importedCount} recovery records. Append these to the Master Workbook GL in optimized batches?`)) {
-                                // FIXED: Hoist updatedData clone for batch stability
-                                const updatedData = JSON.parse(JSON.stringify(masterWorkbook.value.data));
-                                
-                                startBatchProcessing('Sage', parsedData, async (chunk, startIndex) => {
-                                    const glSheet = updatedData["GL R
+                        } catch (err) { alert("Sage Upload Failed: " + err.message); }
+                    };
+                    reader.readAsText(file);
+                };
