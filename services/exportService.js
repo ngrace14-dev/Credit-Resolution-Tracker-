@@ -111,62 +111,39 @@ export const buildBrandVarianceCSV = (targetSite, selectedBrand, calendarMonths,
     return csvContent;
 };
 
-export const buildYTDVariancePDFData = (targetSite, calendarMonths, ledgerEvents = [], helpers) => {
-    const { formatCurrency } = helpers;
-    const tableHeaders = [
-        ['Brand/Vendor', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec', 'YTD Total']
-    ];
-    const tableData = [];
-    const brands = {};
-    
-    ledgerEvents.forEach(e => {
-        if (e.site !== targetSite) return;
-        const brand = e.brand;
-        const monthIdx = calendarMonths.indexOf(e.isolation_month);
-        if (monthIdx === -1) return;
+export const generateMasterWorkbookArtifact = (ledgerEvents, calendarMonths, sites) => {
+    const workbookData = {};
 
-        if (!brands[brand]) {
-            brands[brand] = { name: brand, months: Array(12).fill(0), collections: Array(12).fill(0) };
-        }
+    // 1. Monthly Sheets
+    calendarMonths.forEach(month => {
+        const sheetName = `${month} 2026`;
+        const rows = [];
+        const brandsInMonth = [...new Set(ledgerEvents.filter(e => e.isolation_month === month).map(e => e.brand))];
+        
+        brandsInMonth.forEach(brand => {
+            const brandEvents = ledgerEvents.filter(e => e.isolation_month === month && e.brand === brand);
+            const row = { "Brand": brand };
+            sites.forEach(site => {
+                const siteAmt = brandEvents.filter(e => e.site === site && (e.type === 'GENERATED' || e.type === 'ADJUSTMENT')).reduce((sum, e) => sum + e.amount, 0);
+                row[site] = siteAmt > 0 ? siteAmt : 0;
+            });
+            const total = sites.reduce((sum, site) => sum + (row[site] || 0), 0);
+            row["Treez Total"] = total;
+            if (total > 0) rows.push(row);
+        });
+        workbookData[sheetName] = rows;
+    });
 
-        if (e.type === 'GENERATED' || e.type === 'ADJUSTMENT') {
-            brands[brand].months[monthIdx] += e.amount;
-        } else if (e.type === 'RECOVERY') {
-            brands[brand].collections[monthIdx] += e.amount;
-        }
-    });
-    
-    Object.values(brands).sort((a, b) => a.name.localeCompare(b.name)).forEach(b => {
-        const row = [b.name];
-        let ytdTotal = 0;
-        for (let i = 0; i < 12; i++) {
-            row.push(formatCurrency(b.months[i]));
-            ytdTotal += b.months[i];
-        }
-        row.push(formatCurrency(ytdTotal));
-        tableData.push(row);
-        
-        const collRow = ['   ↳ Collected (GL)'];
-        let ytdColl = 0;
-        for (let i = 0; i < 12; i++) {
-            collRow.push(formatCurrency(b.collections[i]));
-            ytdColl += b.collections[i];
-        }
-        collRow.push(formatCurrency(ytdColl));
-        tableData.push(collRow);
-        
-        const varRow = ['   ↳ Balance Owed'];
-        for (let i = 0; i < 12; i++) {
-            const diff = b.months[i] - b.collections[i];
-            varRow.push(formatCurrency(diff));
-        }
-        varRow.push(formatCurrency(ytdTotal - ytdColl));
-        tableData.push(varRow);
-        
-        tableData.push(['', '', '', '', '', '', '', '', '', '', '', '', '', '']);
-    });
-    
-    return { tableHeaders, tableData };
+    // 2. GL Raw Sheet
+    workbookData["GL Raw by Store"] = ledgerEvents.filter(e => e.type === 'RECOVERY').map(e => ({
+        "Posted dt.": e.isolation_month,
+        "Store": e.site,
+        "Mapped Brand": e.brand,
+        "Credit": e.amount,
+        "Memo/Description": e.invoice_ref
+    }));
+
+    return workbookData;
 };
     let csvContent = headers.join(',') + '\n';
     
@@ -202,62 +179,39 @@ export const buildYTDVariancePDFData = (targetSite, calendarMonths, ledgerEvents
     return csvContent;
 };
 
-export const buildYTDVariancePDFData = (targetSite, calendarMonths, ledgerEvents = [], helpers) => {
-    const { formatCurrency } = helpers;
-    const tableHeaders = [
-        ['Brand/Vendor', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec', 'YTD Total']
-    ];
-    const tableData = [];
-    const brands = {};
-    
-    ledgerEvents.forEach(e => {
-        if (e.site !== targetSite) return;
-        const brand = e.brand;
-        const monthIdx = calendarMonths.indexOf(e.isolation_month);
-        if (monthIdx === -1) return;
+export const generateMasterWorkbookArtifact = (ledgerEvents, calendarMonths, sites) => {
+    const workbookData = {};
 
-        if (!brands[brand]) {
-            brands[brand] = { name: brand, months: Array(12).fill(0), collections: Array(12).fill(0) };
-        }
+    // 1. Monthly Sheets
+    calendarMonths.forEach(month => {
+        const sheetName = `${month} 2026`;
+        const rows = [];
+        const brandsInMonth = [...new Set(ledgerEvents.filter(e => e.isolation_month === month).map(e => e.brand))];
+        
+        brandsInMonth.forEach(brand => {
+            const brandEvents = ledgerEvents.filter(e => e.isolation_month === month && e.brand === brand);
+            const row = { "Brand": brand };
+            sites.forEach(site => {
+                const siteAmt = brandEvents.filter(e => e.site === site && (e.type === 'GENERATED' || e.type === 'ADJUSTMENT')).reduce((sum, e) => sum + e.amount, 0);
+                row[site] = siteAmt > 0 ? siteAmt : 0;
+            });
+            const total = sites.reduce((sum, site) => sum + (row[site] || 0), 0);
+            row["Treez Total"] = total;
+            if (total > 0) rows.push(row);
+        });
+        workbookData[sheetName] = rows;
+    });
 
-        if (e.type === 'GENERATED' || e.type === 'ADJUSTMENT') {
-            brands[brand].months[monthIdx] += e.amount;
-        } else if (e.type === 'RECOVERY') {
-            brands[brand].collections[monthIdx] += e.amount;
-        }
-    });
-    
-    Object.values(brands).sort((a, b) => a.name.localeCompare(b.name)).forEach(b => {
-        const row = [b.name];
-        let ytdTotal = 0;
-        for (let i = 0; i < 12; i++) {
-            row.push(formatCurrency(b.months[i]));
-            ytdTotal += b.months[i];
-        }
-        row.push(formatCurrency(ytdTotal));
-        tableData.push(row);
-        
-        const collRow = ['   ↳ Collected (GL)'];
-        let ytdColl = 0;
-        for (let i = 0; i < 12; i++) {
-            collRow.push(formatCurrency(b.collections[i]));
-            ytdColl += b.collections[i];
-        }
-        collRow.push(formatCurrency(ytdColl));
-        tableData.push(collRow);
-        
-        const varRow = ['   ↳ Balance Owed'];
-        for (let i = 0; i < 12; i++) {
-            const diff = b.months[i] - b.collections[i];
-            varRow.push(formatCurrency(diff));
-        }
-        varRow.push(formatCurrency(ytdTotal - ytdColl));
-        tableData.push(varRow);
-        
-        tableData.push(['', '', '', '', '', '', '', '', '', '', '', '', '', '']);
-    });
-    
-    return { tableHeaders, tableData };
+    // 2. GL Raw Sheet
+    workbookData["GL Raw by Store"] = ledgerEvents.filter(e => e.type === 'RECOVERY').map(e => ({
+        "Posted dt.": e.isolation_month,
+        "Store": e.site,
+        "Mapped Brand": e.brand,
+        "Credit": e.amount,
+        "Memo/Description": e.invoice_ref
+    }));
+
+    return workbookData;
 };
         const row = [b.name];
         let ytdTotal = 0;

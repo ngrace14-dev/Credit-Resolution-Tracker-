@@ -312,15 +312,13 @@ createApp({
             return allCredits;
         });
 
-        const monthlyReportSummaries = computed(() => {
+                const monthlyReportSummaries = computed(() => {
             return buildMonthlyReportSummaries({
-                masterWorkbookData: masterWorkbook.value?.data,
+                ledgerEvents: ledgerEventsList.value,
                 targetMonth: activeMonth.value,
                 targetSite: activeSite.value,
                 calendarMonths,
-                masterBrands: masterBrands.value,
-                promoCredits: promoCredits.value,
-                treesSalesData: treesSalesData.value
+                masterBrands: masterBrands.value
             });
         });
 
@@ -1267,16 +1265,27 @@ createApp({
                         }
                     }, (err) => console.error("Sheets Listener Error:", err));
 
-                    watch(activeSite, (newSite) => {
-                        const docId = `Board_Report_${newSite.replace(/\s/g, '_')}`;
-                        onSnapshot(doc(db, "promo tracker", docId), (docSnap) => {
-                            if (docSnap.exists()) {
-                                masterWorkbook.value.summary = docSnap.data();
-                            } else {
-                                masterWorkbook.value.summary = { total: 0, reportMonth: 'N/A' };
+                                        watch(activeSite, (newSite) => {
+                        const boardReconRef = doc(db, "promo tracker", `Board_Report_${newSite.replace(/\s/g, '_')}`);
+                        // Keep snapshot for legacy, but we will override boardReconStats computed next
+                    }, { immediate: true });
+
+                    const boardReconStats = computed(() => {
+                        const site = activeSite.value;
+                        const stats = { generated: 0, recovered: 0, outstanding: 0, count: 0 };
+                        ledgerEventsList.value.forEach(e => {
+                            if (e.site !== site) return;
+                            if (e.type === 'GENERATED' || e.type === 'ADJUSTMENT') {
+                                stats.generated += e.amount;
+                            } else if (e.type === 'RECOVERY') {
+                                stats.recovered += e.amount;
                             }
                         });
-                    }, { immediate: true });
+                        stats.outstanding = stats.generated - stats.recovered;
+                        return stats;
+                    });
+                    
+                    window.getBoardRecon = () => boardReconStats.value;
 
 
                                         setupFilteredListeners();

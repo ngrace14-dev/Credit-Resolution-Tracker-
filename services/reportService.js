@@ -32,108 +32,51 @@ export const buildDefinitiveBrandMetrics = (masterWorkbookData) => {
     return metrics;
 };
 
-export const buildMonthlyReportSummaries = (params) => {
-    const { masterWorkbookData, targetMonth, targetSite, calendarMonths, masterBrands, promoCredits, treesSalesData } = params;
+export const buildMonthlyReportSummaries = ({ ledgerEvents, targetMonth, targetSite, calendarMonths, masterBrands }) => {
     const groups = {};
 
     const ensureStructure = (m, v) => {
         if (!groups[m]) {
-            groups[m] = { month: m, total: 0, count: 0, credits: [], brands: {} };
+            groups[m] = { month: m, total: 0, count: 0, brands: {} };
         }
-        const vendorName = v || 'Unmapped Brand';
+        const vendorName = v || 'UNKNOWN';
         if (!groups[m].brands[vendorName]) {
-            const brandInfo = masterBrands.find(b => (b.vendor || '').toLowerCase() === vendorName.toLowerCase()) || {};
+            const brandInfo = masterBrands.find(b => String(b.vendor || '').toUpperCase() === vendorName.toUpperCase()) || {};
             groups[m].brands[vendorName] = {
                 vendor: vendorName, month: m, email: brandInfo.email || '', rep: brandInfo.rep || '',
-                credits: [], total: 0, workbookTotal: 0, posTotal: 0
+                credits: [], total: 0, generated: 0, recovered: 0
             };
         }
         return groups[m].brands[vendorName];
     };
 
-    if (masterWorkbookData) {
-        Object.keys(masterWorkbookData).forEach(sheetName => {
-            if (!sheetName.includes('2026')) return;
-            const mName = sheetName.split(' ')[0];
-            if (targetMonth !== 'All' && mName !== targetMonth) return;
+    ledgerEvents.forEach(e => {
+        if (e.site !== targetSite) return;
+        if (targetMonth !== 'All' && e.isolation_month !== targetMonth) return;
 
-            const rows = masterWorkbookData[sheetName] || [];
-            rows.forEach(row => {
-                                const vendor = row["Brand"] || row[0];
-                if (!vendor || vendor === "Brand" || vendor.toLowerCase().includes('total')) return;
+        const mName = e.isolation_month;
+        const brand = ensureStructure(mName, e.brand);
 
-                const siteKey = targetSite === "Redding" ? "Redding" : "Red-Bluff";
-                let rawAmt = 0;
-                const rowKeys = Object.keys(row);
-                
-                // Directly check the column matching the target site
-                const exactKey = rowKeys.find(k => k.trim().toLowerCase() === targetSite.toLowerCase() || k.trim().toLowerCase() === siteKey.toLowerCase());
-                
-                if (exactKey) {
-                    const val = String(row[exactKey]).trim().toLowerCase();
-                    // If the cell has an 'x' or 'X', it means we need to pull the amount from the Promo Credits column
-                    if (val === 'x') {
-                        const promoKey = rowKeys.find(k => k.toLowerCase().includes('promo credits'));
-                        rawAmt = row[promoKey] || 0;
-                    } else {
-                        // Otherwise the cell likely contains the amount directly
-                        rawAmt = row[exactKey];
-                    }
-                } else if (siteKey === "Redding" && row["Redding"] !== undefined) {
-                    rawAmt = row["Redding"];
-                } else if (siteKey === "Red-Bluff" && row["Red-Bluff"] !== undefined) {
-                    rawAmt = row["Red-Bluff"];
-                }
+        if (e.type === 'GENERATED' || e.type === 'ADJUSTMENT') {
+            brand.generated += e.amount;
+            brand.total += e.amount;
+            groups[mName].total += e.amount;
+        } else if (e.type === 'RECOVERY') {
+            brand.recovered += e.amount;
+        }
 
-                const amt = parseFloat(String(rawAmt || 0).replace(/[^0-9.-]+/g,"")) || 0;
-
-                if (amt > 0) {
-                    const brand = ensureStructure(mName, vendor);
-                    brand.workbookTotal += amt;
-                    brand.total += amt;
-                    groups[mName].total += amt;
-                    groups[mName].count += 1;
-                    
-                    const approvedKey = rowKeys.find(k => k.toLowerCase().includes('approved') || k.toLowerCase().includes('applied') || k.toLowerCase().includes('collected'));
-                    
-                    brand.credits.push({
-                        id: `sim-${mName}-${vendor}`, site: targetSite, trackingMonth: mName,
-                        vendor: vendor, amount: amt, creditType: row["Promo Credits"] || 'Aggregated POS Sales',
-                        dates: row["Date Requested"] || 'Workbook Sync',
-                        status: (parseFloat(String(row[approvedKey] || row["Credits Approved"] || 0).replace(/[^0-9.-]+/g,"")) > 0) ? 'Applied' : 'Pending'
-                    });
-                }
-            });
+        brand.credits.push({
+            id: e.id, site: e.site, trackingMonth: mName,
+            vendor: e.brand, amount: e.amount, creditType: e.type,
+            dates: e.isolation_month, status: e.status, invoice: e.invoice_ref
         });
-    }
-
-        promoCredits.forEach(c => {
-        if (!c || c.site !== targetSite) return;
-        if (targetMonth !== 'All' && c.trackingMonth !== targetMonth) return;
-        if (c.invoice === 'WB-V9-SYNC') return;
-
-        // Skip adding workbook/ledger credits from promoCredits 
-        // to avoid duplicating the masterWorkbookData processing above.
-        if (c.distributor === 'Workbook Sync' || (c.dates && c.dates === 'Workbook Sync') || c.creditType === 'Variance Record') return;
-
-        const brand = ensureStructure(c.trackingMonth, c.vendor);
-        brand.credits.push(c);
-        brand.total += (parseFloat(c.amount) || 0);
-        groups[c.trackingMonth].total += (parseFloat(c.amount) || 0);
-        groups[c.trackingMonth].count += 1;
-    });
-
-    treesSalesData.forEach(s => {
-        if (!s || s.detectedSite !== targetSite) return;
-        if (targetMonth !== 'All' && s.month !== targetMonth) return;
-        const brand = ensureStructure(s.month, s.brand);
-        brand.posTotal += (parseFloat(s.owed) || 0);
     });
 
     return Object.values(groups)
         .sort((a, b) => calendarMonths.indexOf(a.month) - calendarMonths.indexOf(b.month))
         .map(group => ({
             ...group,
+            count: Object.keys(group.brands).length,
             brandList: Object.values(group.brands).sort((a, b) => a.vendor.localeCompare(b.vendor))
         }));
 };
