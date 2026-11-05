@@ -1173,6 +1173,115 @@ createApp({
                     if (k !== '__rowNum__' && !k.startsWith('EMPTY')) keys.add(k);
                 });
             });
-            return Array.from(keys);
+                        return Array.from(keys);
         });
 
+        // --- 4. UPLOAD & BATCH HANDLERS (V1.0 Service-Linked) ---
+        const handleTreezLedgerUpload = (e) => processTreezUpload(e, { db, storage, auth, isBatchProcessing, batchProgress, batchTotal, batchType, batchError });
+        const handleSage4545Upload = (e) => processSageUpload(e, { db, storage, auth, isBatchProcessing, batchProgress, batchTotal, batchType, batchError });
+        const handleTreesCsvUpload = (e) => { /* Wire to service in next pass */ };
+        const handleSageCsvUpload = (e) => { /* Wire to service in next pass */ };
+        const continueBatch = () => { /* Logic to resume batch context if batchError exists */ };
+        // --- 5. MODAL & UI STATE ---
+        const showWorkbookSyncModal = ref(false);
+        const workbookPasteData = ref('');
+        const openWorkbookSyncModal = () => {
+        workbookPasteData.value = '';
+        showWorkbookSyncModal.value = true;
+        refreshIcons();
+        };
+        const refreshIcons = () => {
+        nextTick(() => { if (window.lucide) window.lucide.createIcons(); });
+        };
+        const scrollMonths = (direction) => {
+        const container = document.getElementById('monthScrollContainer');
+        if (container) {
+        const scrollAmount = direction === 'left' ? -200 : 200;
+        container.scrollBy({ left: scrollAmount, behavior: 'smooth' });
+        }
+        };
+        const scrollWorkbookTabs = (direction) => {
+        const container = document.getElementById('workbookTabContainer');
+        if (container) {
+        const scrollAmount = direction === 'left' ? -150 : 150;
+        container.scrollBy({ left: scrollAmount, behavior: 'smooth' });
+        }
+        };
+        // --- 6. AUTHENTICATION HANDLERS ---
+        const handleLogin = () => {
+        authError.value = '';
+        signInWithEmailAndPassword(auth, emailInput.value.trim(), passwordInput.value)
+        .then(() => { 
+        emailInput.value = ''; 
+        passwordInput.value = ''; 
+        refreshIcons(); 
+        })
+        .catch((error) => { authError.value = 'Invalid email or password.'; });
+        };
+        const forceLock = () => { 
+        signOut(auth).then(() => { 
+        isManagerUnlocked.value = false; 
+        loggedInUser.value = ''; 
+        }); 
+        };
+        // --- 7. LIFECYCLE HOOKS (Teardown & Initialization) ---
+        let unsubscribeAuth = null;
+        const { onUnmounted } = window.Vue;
+        onMounted(() => {
+        refreshIcons();
+        unsubscribeAuth = onAuthStateChanged(auth, (user) => {
+        if (user) {
+        const userEmail = user.email.toLowerCase();
+        const managerData = systemUsers[userEmail];
+        if (managerData && managerData.active) {
+        loggedInUser.value = managerData.name;
+        isManagerUnlocked.value = true;
+        isSuperAdmin.value = !!managerData.superAdmin;
+        setupFilteredListeners();
+        refreshLedger();
+        }
+        } else {
+        isManagerUnlocked.value = false;
+        loggedInUser.value = '';
+        }
+        });
+        });
+        onUnmounted(() => {
+        if (typeof unsubscribeAuth === 'function') { unsubscribeAuth(); unsubscribeAuth = null; }
+        if (typeof unsubscribeSales === 'function') { unsubscribeSales(); unsubscribeSales = null; }
+        if (typeof unsubscribeCredits === 'function') { unsubscribeCredits(); unsubscribeCredits = null; }
+        });
+        // --- 8. TEMPLATE BINDINGS RETURN ---
+        return {
+        // State
+        isManagerUnlocked, loggedInUser, emailInput, passwordInput, authError,
+        activeSite, activeTab, isSuperAdmin, showAdminMenu, showWorkspaceMenu,
+        activeWorkspaceInfo, workspaceTabs, calendarMonths, activeMonth,
+        searchQueryInput, searchQuery, treezLedgerCount, treezLedgerLastUpload,
+        sage4545LedgerCount, sage4545LedgerLastUpload, isBatchProcessing,
+        batchProgress, batchTotal, batchType, batchError, masterLedgerData,
+        selectedLedgerVendor, ledgerTotals, totalPending, totalApplied,
+        totalTreesOwedYTD, totalTreesPending, unsyncedSalesCount,
+        treesSalesData, filteredTreesSalesData, displayTreesSalesData,
+        monthlyReportSummaries, emailReportMode, auditStartMonth: startMonth, auditEndMonth: endMonth,
+        masterWorkbook, isWorkbookLoaded, workbookSchema, activeWorkbookSheet, 
+        activeWorkbookHeaders, brandAuditData, auditRange, sageAuditData,
+        masterBrands, selectedBrands, allBrandsSelected, systemLogs,
+        showWorkbookSyncModal, workbookPasteData,
+        // Methods
+        handleLogin, forceLock, selectWorkspace, scrollMonths, scrollWorkbookTabs,
+        refreshLedger, refreshIcons, formatCurrency, setupFilteredListeners,
+        handleTreezLedgerUpload, handleSage4545Upload, handleTreesCsvUpload, 
+        handleSageCsvUpload, continueBatch, openWorkbookSyncModal,
+        updateWorkbookFromSales: () => { alert('Updating Workbook...'); }, 
+        pushToMainTracker: () => { alert('Pushing to Tracker...'); },
+        openEmailDraft: draftEmail, markReportGroupAsSent,
+        downloadMonthlyReport, exportYTDVariancePDF, exportBrandCSVReports,
+        exportVendorsAndBrandsCSV, regenerateMonthReports, regenerateBrandSummary,
+        openLegacyVerification: (item) => { alert(`Verifying Legacy Data for ${item?.vendor || 'Vendor'}...`); },
+        deleteSelectedBrands, toggleAllBrands, updateBrandField, resetBrandImport: () => {},
+        openDimeHelper: (brand) => window.open('https://brand.dime.industries', '_blank'),
+        clearAllSalesData: () => { if(confirm('Clear all Discovery data?')) treesSalesData.value = []; }
+        };
+        }
+        }).mount('#app');
