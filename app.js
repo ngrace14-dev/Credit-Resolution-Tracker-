@@ -1403,39 +1403,7 @@ createApp({
 
         // --- 4. UPLOAD & BATCH HANDLERS (V1.0 Service-Linked) ---
                 const helpersObj = { getStandardizedBrandName, detectSiteFromName, detectMonthFromDate, normalizeSiteName, normalizeTreezLedger, normalizeSageLedger };
-                const handleTreezLedgerUpload = async (e) => {
-            const file = e.target.files[0];
-            if (!file) return;
-            const reader = new FileReader();
-            reader.onload = async (evt) => {
-                const text = evt.target.result;
-                try {
-                    const result = processTreezUpload(text, { db, storage, auth, isBatchProcessing, batchProgress, batchTotal, batchType, batchError, targetMonth: activeMonth.value, calendarMonths, masterBrands: masterBrands.value }, helpersObj);
-                    // Add your desired post-processing with result.validEvents here
-                    console.log("Processed Treez valid events:", result.validEvents.length);
-                } catch (err) {
-                    console.error("Treez Upload Error:", err);
-                }
-            };
-            reader.readAsText(file);
-        };
-        const handleSage4545Upload = async (e) => {
-            const file = e.target.files[0];
-            if (!file) return;
-            const reader = new FileReader();
-            reader.onload = async (evt) => {
-                const text = evt.target.result;
-                try {
-                    const result = processSageUpload(text, { db, storage, auth, isBatchProcessing, batchProgress, batchTotal, batchType, batchError, targetMonth: activeMonth.value, calendarMonths }, helpersObj);
-                    // Add your desired post-processing with result.validEvents here
-                    console.log("Processed Sage valid events:", result.validEvents.length);
-                } catch (err) {
-                    console.error("Sage Upload Error:", err);
-                }
-            };
-            reader.readAsText(file);
-        };
-                const handleTreesCsvUpload = async (e) => {
+                                const handleTreezLedgerUpload = async (e) => {
             const file = e.target.files[0];
             if (!file) return;
 
@@ -1594,7 +1562,7 @@ createApp({
             }
         };
 
-        const handleSageCsvUpload = async (e) => {
+        const handleSage4545Upload = async (e) => {
             const file = e.target.files[0];
             if (!file) return;
 
@@ -2007,8 +1975,7 @@ console.log(`[Rollback] Extracted ${baselineEvents.length} baseline events ready
         // Methods
         handleLogin, forceLock, selectWorkspace, scrollMonths, scrollWorkbookTabs,
         refreshLedger, refreshIcons, formatCurrency, setupFilteredListeners,
-        handleTreezLedgerUpload, handleSage4545Upload, handleTreesCsvUpload, 
-        handleSageCsvUpload, continueBatch, openWorkbookSyncModal,
+        handleTreezLedgerUpload, handleSage4545Upload, continueBatch, openWorkbookSyncModal,
                 syncDiscoveryToShards, rollbackShardsToWorkbook,
         updateWorkbookFromSales: () => { 
 try {
