@@ -1402,8 +1402,9 @@ createApp({
         });
 
         // --- 4. UPLOAD & BATCH HANDLERS (V1.0 Service-Linked) ---
-        const handleTreezLedgerUpload = (e) => processTreezUpload(e, { db, storage, auth, isBatchProcessing, batchProgress, batchTotal, batchType, batchError });
-        const handleSage4545Upload = (e) => processSageUpload(e, { db, storage, auth, isBatchProcessing, batchProgress, batchTotal, batchType, batchError });
+                const helpersObj = { getStandardizedBrandName, detectSiteFromName, detectMonthFromDate, normalizeSiteName, normalizeTreezLedger, normalizeSageLedger };
+        const handleTreezLedgerUpload = (e) => processTreezUpload(e, { db, storage, auth, isBatchProcessing, batchProgress, batchTotal, batchType, batchError, targetMonth: activeMonth.value, calendarMonths, masterBrands: masterBrands.value }, helpersObj);
+        const handleSage4545Upload = (e) => processSageUpload(e, { db, storage, auth, isBatchProcessing, batchProgress, batchTotal, batchType, batchError, targetMonth: activeMonth.value, calendarMonths }, helpersObj);
         const handleTreesCsvUpload = (e) => { /* Wire to service in next pass */ };
         const handleSageCsvUpload = (e) => { /* Wire to service in next pass */ };
         const continueBatch = () => { /* Logic to resume batch context if batchError exists */ };
