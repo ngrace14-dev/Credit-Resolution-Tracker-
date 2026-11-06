@@ -1654,15 +1654,15 @@ console.log(`[Rollback] Extracted ${baselineEvents.length} baseline events ready
                     });
                     await batch.commit();
                 }
-                                // 5. Update local state safely (trigger DOM reflow before alert)
-                masterLedgerData.value = baselineEvents;
-                if (treesSalesData.value) {
-                    treesSalesData.value.forEach(s => {
-                        s.status = 'Unsynced';
-                    });
-                }
+                                // 5. Trigger Vue to recalculate computed properties based on updated ledger listener
+                                // Do NOT directly assign masterLedgerData.value to raw baselineEvents, as masterLedgerData expects aggregated ledger format
+                                if (treesSalesData.value) {
+                                    treesSalesData.value.forEach(s => {
+                                        s.status = 'Unsynced';
+                                    });
+                                }
                 
-                await nextTick(); // Wait for Vue to patch the DOM
+                                await nextTick(); // Wait for Vue to patch the DOM
 
                 // 6. Log system action
                 await addDoc(collection(db, "systemLogs"), {
