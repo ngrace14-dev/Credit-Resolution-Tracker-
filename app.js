@@ -45,6 +45,7 @@ if (location.hostname === 'localhost' ||
 if (location.hostname === 'localhost' || location.hostname === '127.0.0.1' || location.hostname.includes('web.app')) {
 self.FIREBASE_APPCHECK_DEBUG_TOKEN = '87e17f0c-bae3-4f23-8245-cd99984e47e7';
 }
+/*
 try {
     initializeAppCheck(firebaseApp, {
         provider: new ReCaptchaEnterpriseProvider("6LeNEb8tAAAAAN454U2BgfO-ot6wN8T3VexIgIMq"),
@@ -53,6 +54,7 @@ try {
 } catch (error) {
     console.error("App Check Error:", error);
 }
+*/
 
 const db = getFirestore(firebaseApp);
 const auth = getAuth(firebaseApp); 
@@ -1515,11 +1517,22 @@ createApp({
                                 uploadedAt: Date.now()
                             };
 
-                                                        // Update the local reactive state immediately
+                                                                                                                // Update the local reactive state immediately
                             // But ONLY if the month and site match the current filters
                             if (parsedMonth === activeMonth.value || activeMonth.value === 'All') {
                                 if (detectedSite === activeSite.value) {
                                     treesSalesData.value.push(newSale);
+                                    masterLedgerData.value.push({
+                                        brand: newSale.brand,
+                                        Product_Brand: newSale.brand,
+                                        detectedSite: newSale.detectedSite,
+                                        Location: newSale.detectedSite,
+                                        month: activeMonth.value, // e.g. "October"
+                                        dateClosed: newSale.dateClosed,
+                                        discountTitle: newSale.discountTitle,
+                                        Vendor_Credit_Owed: Number(newSale.owed || 0),
+                                        source: 'TREEZ_POS'
+                                    });
                                 }
                             }
 
