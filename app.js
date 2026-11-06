@@ -42,7 +42,9 @@ if (location.hostname === 'localhost' ||
 
 
 // Enable AppCheck debug token for dev / github.io execution
-self.FIREBASE_APPCHECK_DEBUG_TOKEN = true;
+if (location.hostname === 'localhost' || location.hostname === '127.0.0.1' || location.hostname.includes('web.app')) {
+self.FIREBASE_APPCHECK_DEBUG_TOKEN = '87e17f0c-bae3-4f23-8245-cd99984e47e7';
+}
 try {
     initializeAppCheck(firebaseApp, {
         provider: new ReCaptchaEnterpriseProvider("6LeNEb8tAAAAAN454U2BgfO-ot6wN8T3VexIgIMq"),
@@ -1495,7 +1497,7 @@ createApp({
                             const discAmt = cleanCurrency(getVal(rowObj, 'Discounts', 'Discount Amount', 'Discount'));
                             const owedAmt = cleanCurrency(getVal(rowObj, 'Vendor Credit Owed', 'Credit Owed'));
 
-                            const newSale = {
+                                                        const newSale = {
                                 uploadId: uploadId, 
                                 month: parsedMonth, 
                                 brand: brandVal || 'Unknown Brand',
@@ -1512,6 +1514,14 @@ createApp({
                                 status: 'Unsynced',
                                 uploadedAt: Date.now()
                             };
+
+                                                        // Update the local reactive state immediately
+                            // But ONLY if the month and site match the current filters
+                            if (parsedMonth === activeMonth.value || activeMonth.value === 'All') {
+                                if (detectedSite === activeSite.value) {
+                                    treesSalesData.value.push(newSale);
+                                }
+                            }
 
                             const newDocRef = doc(collection(db, "treesSales"));
                             batch.set(newDocRef, newSale);
@@ -1546,19 +1556,29 @@ createApp({
                             document.body.appendChild(errorLink);
                             errorLink.click();
                             document.body.removeChild(errorLink);
-                        }
+                                                }
                         
                         e.target.value = ''; 
                     } catch (error) { 
-                        console.error(error);
-                        alert("Error parsing CSV or uploading to cloud."); 
+                        console.error("CSV Parse/Upload Error:", error);
+                        if (error.code && error.code.includes('app-check')) {
+                            alert("Upload blocked by App Check. Please ensure you are running on an approved domain or have debug mode configured properly.");
+                        } else if (error.code && error.code.includes('permission-denied')) {
+                            alert("Permission denied. Your session may have expired or you lack write access.");
+                        } else {
+                            alert(`Error parsing CSV or uploading to cloud: ${error.message || error}`); 
+                        }
                     }
                 };
                 reader.readAsText(file); 
 
             } catch (err) {
                 console.error("Storage Error:", err);
-                alert("CRITICAL: Failed to preserve CSV to Storage. Import aborted for data safety.");
+                if (err.code && err.code.includes('app-check')) {
+                    alert("CRITICAL: Storage upload blocked by App Check. Please ensure debug tokens are valid.");
+                } else {
+                    alert("CRITICAL: Failed to preserve CSV to Storage. Import aborted for data safety.");
+                }
             }
         };
 
@@ -1601,10 +1621,11 @@ createApp({
                             });
                         }
 
-                        if (!masterWorkbook.value) return alert("Master Workbook not loaded.");
+                                                if (!masterWorkbook.value) return alert("Master Workbook not loaded.");
                         
                         const updatedData = JSON.parse(JSON.stringify(masterWorkbook.value.data));
                         updatedData["GL Raw by Store"] = [...(updatedData["GL Raw by Store"] || []), ...importedSageData];
+                        masterWorkbook.value.data = updatedData;
 
                         const sheetDocId = "GL_Raw_by_Store";
                         await setDoc(doc(db, "workbook_v9_sheets", sheetDocId), {
@@ -1619,17 +1640,27 @@ createApp({
                         }, { merge: true });
 
                         logSystemAction("IMPORT", `Uploaded ${importedSageData.length} Sage GL entries to Master Workbook`);
-                        alert(`Success! Added ${importedSageData.length} entries from Sage to the 'GL Raw by Store' sheet.`);
+                                                alert(`Success! Added ${importedSageData.length} entries from Sage to the 'GL Raw by Store' sheet.`);
                         e.target.value = '';
                     } catch (err) {
-                        console.error(err);
-                        alert("Error processing Sage CSV.");
+                        console.error("Sage Parse/Upload Error:", err);
+                        if (err.code && err.code.includes('app-check')) {
+                            alert("Upload blocked by App Check. Please ensure you are running on an approved domain or have debug mode configured properly.");
+                        } else if (err.code && err.code.includes('permission-denied')) {
+                            alert("Permission denied. Your session may have expired or you lack write access.");
+                        } else {
+                            alert(`Error processing Sage CSV: ${err.message || err}`);
+                        }
                     }
                 };
                 reader.readAsText(file);
             } catch (err) {
-                console.error(err);
-                alert("Storage error during Sage upload.");
+                console.error("Storage Error:", err);
+                if (err.code && err.code.includes('app-check')) {
+                    alert("Storage upload blocked by App Check.");
+                } else {
+                    alert("Storage error during Sage upload.");
+                }
             }
         };
         const continueBatch = () => { /* Logic to resume batch context if batchError exists */ };
