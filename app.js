@@ -1235,25 +1235,38 @@ createApp({
         
         const form = ref(getEmptyForm());
         
-        let unsubscribeSales = null;
+                let unsubscribeSales = null;
+        let unsubscribeLedger = null;
         let unsubscribeCredits = null;
 
         const setupFilteredListeners = () => {
             if (unsubscribeSales) unsubscribeSales();
+            if (unsubscribeLedger) unsubscribeLedger();
             
             let salesQ = query(collection(db, "treesSales"), where("detectedSite", "==", activeSite.value));
+            let ledgerQ = query(collection(db, "masterLedger"), where("site", "==", activeSite.value));
 
-            if (activeMonth.value !== 'All') {
+                        if (activeMonth.value !== 'All') {
                 salesQ = query(salesQ, where("month", "==", activeMonth.value));
             }
 
             salesQ = query(salesQ, limit(4000));
+            ledgerQ = query(ledgerQ, limit(8000));
 
             unsubscribeSales = onSnapshot(salesQ, (snapshot) => {
                 const fetchedSales = [];
                 snapshot.forEach(docSnap => { fetchedSales.push({ id: docSnap.id, ...docSnap.data() }); });
                 treesSalesData.value = fetchedSales;
             }, (err) => console.error("Sales Pull Failed:", err));
+            
+            unsubscribeLedger = onSnapshot(ledgerQ, (snapshot) => {
+                const fetchedEvents = [];
+                snapshot.forEach(docSnap => { fetchedEvents.push({ id: docSnap.id, ...docSnap.data() }); });
+                ledgerEventsList.value = fetchedEvents;
+                if (activeTab.value === 'Ledger') {
+                    refreshLedger();
+                }
+            }, (err) => console.error("Ledger Pull Failed:", err));
         };
 
         watch([activeSite, activeMonth], () => {
@@ -1401,9 +1414,10 @@ createApp({
         }
         });
         });
-        onUnmounted(() => {
+                onUnmounted(() => {
         if (typeof unsubscribeAuth === 'function') { unsubscribeAuth(); unsubscribeAuth = null; }
         if (typeof unsubscribeSales === 'function') { unsubscribeSales(); unsubscribeSales = null; }
+        if (typeof unsubscribeLedger === 'function') { unsubscribeLedger(); unsubscribeLedger = null; }
         if (typeof unsubscribeCredits === 'function') { unsubscribeCredits(); unsubscribeCredits = null; }
         });
         
@@ -1558,15 +1572,23 @@ if (amt > 0) {
 const dateKey = Object.keys(row).find(k => k.toLowerCase().includes('date') || k.toLowerCase().includes('posted'));
 const brandKey = Object.keys(row).find(k => k.toLowerCase().includes('brand'));
 const siteKey = Object.keys(row).find(k => k.toLowerCase().includes('site') || k.toLowerCase().includes('store'));
-const monthKey = Object.keys(row).find(k => k.toLowerCase().includes('month'));
 const invoiceKey = Object.keys(row).find(k => k.toLowerCase().includes('invoice') || k.toLowerCase().includes('memo'));
 const statusKey = Object.keys(row).find(k => k.toLowerCase().includes('status'));
 
+const postedDateStr = dateKey ? (row[dateKey] || '') : '';
+let derivedMonth = '';
+if (postedDateStr) {
+    const d = new Date(postedDateStr);
+    if (!isNaN(d.getTime())) {
+        derivedMonth = d.toLocaleString('en-US', { month: 'long' });
+    }
+}
+
 baselineEvents.push({
-date: dateKey ? (row[dateKey] || '') : '',
+date: postedDateStr,
 brand: brandKey ? (row[brandKey] || 'UNKNOWN') : 'UNKNOWN',
 site: siteKey ? (row[siteKey] || 'Redding') : 'Redding',
-isolation_month: monthKey ? (row[monthKey] || '') : '',
+isolation_month: derivedMonth,
 amount: amt,
 type: 'RECOVERY',
 status: statusKey ? (row[statusKey] || 'Applied') : 'Applied',
