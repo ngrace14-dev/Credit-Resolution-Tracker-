@@ -1,5 +1,6 @@
 // csvService.js
 export const parseCSVText = (text) => {
+    if (typeof text !== 'string') return [];
     return text.split(/\r?\n/).filter(r => r.trim() !== '');
 };
 

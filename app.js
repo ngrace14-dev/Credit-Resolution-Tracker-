@@ -1403,8 +1403,38 @@ createApp({
 
         // --- 4. UPLOAD & BATCH HANDLERS (V1.0 Service-Linked) ---
                 const helpersObj = { getStandardizedBrandName, detectSiteFromName, detectMonthFromDate, normalizeSiteName, normalizeTreezLedger, normalizeSageLedger };
-        const handleTreezLedgerUpload = (e) => processTreezUpload(e, { db, storage, auth, isBatchProcessing, batchProgress, batchTotal, batchType, batchError, targetMonth: activeMonth.value, calendarMonths, masterBrands: masterBrands.value }, helpersObj);
-        const handleSage4545Upload = (e) => processSageUpload(e, { db, storage, auth, isBatchProcessing, batchProgress, batchTotal, batchType, batchError, targetMonth: activeMonth.value, calendarMonths }, helpersObj);
+                const handleTreezLedgerUpload = async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = async (evt) => {
+                const text = evt.target.result;
+                try {
+                    const result = processTreezUpload(text, { db, storage, auth, isBatchProcessing, batchProgress, batchTotal, batchType, batchError, targetMonth: activeMonth.value, calendarMonths, masterBrands: masterBrands.value }, helpersObj);
+                    // Add your desired post-processing with result.validEvents here
+                    console.log("Processed Treez valid events:", result.validEvents.length);
+                } catch (err) {
+                    console.error("Treez Upload Error:", err);
+                }
+            };
+            reader.readAsText(file);
+        };
+        const handleSage4545Upload = async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = async (evt) => {
+                const text = evt.target.result;
+                try {
+                    const result = processSageUpload(text, { db, storage, auth, isBatchProcessing, batchProgress, batchTotal, batchType, batchError, targetMonth: activeMonth.value, calendarMonths }, helpersObj);
+                    // Add your desired post-processing with result.validEvents here
+                    console.log("Processed Sage valid events:", result.validEvents.length);
+                } catch (err) {
+                    console.error("Sage Upload Error:", err);
+                }
+            };
+            reader.readAsText(file);
+        };
                 const handleTreesCsvUpload = async (e) => {
             const file = e.target.files[0];
             if (!file) return;
@@ -1464,7 +1494,7 @@ createApp({
                             return '';
                         };
 
-                        const batch = writeBatch(db);
+                                                let batch = writeBatch(db);
                         let count = 0;
                         let skippedCount = 0;
                         const errorRecords = [];
@@ -1519,9 +1549,12 @@ createApp({
                             batch.set(newDocRef, newSale);
                             count++;
 
-                            if (count % 400 === 0) {
-                                await batch.commit();
-                            }
+                                                        if (count % 400 === 0) {
+                                                            await batch.commit();
+                                                            batch = writeBatch(db); // Re-initialize the batch after committing
+                                                            // Yield to main thread to prevent UI freezing
+                                                            await new Promise(resolve => setTimeout(resolve, 0));
+                                                        }
                         }
 
                         await batch.commit();
