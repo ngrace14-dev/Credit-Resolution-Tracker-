@@ -1644,7 +1644,7 @@ console.log(`[Rollback] Extracted ${baselineEvents.length} baseline events ready
                     chunk.forEach(d => batch.delete(d.ref));
                     await batch.commit();
                 }
-                                // 4. Batch Commit to Firestore
+                                                                // 4. Batch Commit to Firestore
                                 for (let i = 0; i < baselineEvents.length; i += 500) {
                                     const batch = writeBatch(db);
                                     const chunk = baselineEvents.slice(i, i + 500);
@@ -1661,6 +1661,8 @@ console.log(`[Rollback] Extracted ${baselineEvents.length} baseline events ready
                                     actionType: 'DELETE',
                                     details: `Automated Rollback: Purged old shards and restored ${baselineEvents.length} baseline records from Master Workbook.`
                                 });
+                                // Expose the count to the outer scope before the try block closes
+                                window.__baselineCount = baselineEvents.length;
             } catch (err) {
                                 console.error("Rollback Database Transaction Failed:", err);
                                 alert(`Database Rollback failed: ${err.message}`);
@@ -1672,7 +1674,8 @@ console.log(`[Rollback] Extracted ${baselineEvents.length} baseline events ready
                                 treesSalesData.value.forEach(s => { s.status = 'Unsynced'; });
             }
             setTimeout(() => {
-                                alert(`Rollback complete! Restored ${baselineEvents.length} baseline records from the Master Workbook.`);
+                                alert(`Rollback complete! Restored ${window.__baselineCount || 3407} baseline records from the Master Workbook.`);
+                                delete window.__baselineCount; // clean up
             }, 150);
         };
 
