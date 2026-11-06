@@ -1555,10 +1555,14 @@ const amount = parseFloat(String(promoCreditKey ? row[promoCreditKey] : 0).repla
 
 if (isRedding && amount > 0) {
 baselineEvents.push({
+id: `baseline_${matchedMonth}_RD_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
 date: new Date().toISOString().slice(0, 10),
 brand: String(brand).trim(),
 site: 'Redding',
+store: 'Redding',
 isolation_month: matchedMonth,
+trackingMonth: matchedMonth,
+month: matchedMonth,
 amount: amount,
 type: 'GENERATED',
 status: 'Applied',
@@ -1569,10 +1573,14 @@ syncedBy: loggedInUser.value || 'system'
 }
 if (isRedBluff && amount > 0) {
 baselineEvents.push({
+id: `baseline_${matchedMonth}_RB_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
 date: new Date().toISOString().slice(0, 10),
 brand: String(brand).trim(),
 site: 'Red Bluff',
+store: 'Red Bluff',
 isolation_month: matchedMonth,
+trackingMonth: matchedMonth,
+month: matchedMonth,
 amount: amount,
 type: 'GENERATED',
 status: 'Applied',
@@ -1607,10 +1615,14 @@ if (postedDateStr) {
 }
 
 baselineEvents.push({
+id: `baseline_GL_${derivedMonth}_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
 date: postedDateStr,
 brand: brandKey ? (row[brandKey] || 'UNKNOWN') : 'UNKNOWN',
 site: siteKey ? (row[siteKey] || 'Redding') : 'Redding',
+store: siteKey ? (row[siteKey] || 'Redding') : 'Redding',
 isolation_month: derivedMonth,
+trackingMonth: derivedMonth,
+month: derivedMonth,
 amount: amt,
 type: 'RECOVERY',
 status: statusKey ? (row[statusKey] || 'Applied') : 'Applied',
@@ -1642,13 +1654,16 @@ console.log(`[Rollback] Extracted ${baselineEvents.length} baseline events ready
                     });
                     await batch.commit();
                 }
-                // 5. Update local state
+                                // 5. Update local state safely (trigger DOM reflow before alert)
                 masterLedgerData.value = baselineEvents;
                 if (treesSalesData.value) {
                     treesSalesData.value.forEach(s => {
                         s.status = 'Unsynced';
                     });
                 }
+                
+                await nextTick(); // Wait for Vue to patch the DOM
+
                 // 6. Log system action
                 await addDoc(collection(db, "systemLogs"), {
                     timestamp: Date.now(),
@@ -1656,7 +1671,10 @@ console.log(`[Rollback] Extracted ${baselineEvents.length} baseline events ready
                     actionType: 'DELETE',
                     details: `Automated Rollback: Purged old shards and restored ${baselineEvents.length} baseline records from Master Workbook.`
                 });
-                alert(`Rollback complete! Restored ${baselineEvents.length} baseline records from the Master Workbook.`);
+                
+                setTimeout(() => {
+                    alert(`Rollback complete! Restored ${baselineEvents.length} baseline records from the Master Workbook.`);
+                }, 100);
             } catch (err) {
                 console.error("Rollback failed:", err);
                 alert(`Rollback failed: ${err.message}`);
