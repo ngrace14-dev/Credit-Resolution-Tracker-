@@ -18,7 +18,7 @@ const standardizedTarget = String(brandVendor).trim().toUpperCase();
 const currentYear = "2026";
 const headers = [
 "Period", "Location", "Brand", "New_Credits_Generated", "Running_Total_Generated",
-"Credits_Applied", "Cumulative_Applied", "Remaining_Unapplied_Balance", "Status"
+"Credits_Applied", "Cumulative_Applied", "Remaining_Unapplied_Balance", "Status", "dates promo ran", "promo type"
 ];
 let csvLines = [headers.join(",")];
 let runningTotalGenerated = 0;
@@ -48,6 +48,18 @@ else if (Math.abs(remainingUnappliedBalance) <= 0.01) status = "Reconciled / Set
 else if (remainingUnappliedBalance < -0.01) status = "Credit Balance / Overpaid";
 else if (appliedCredits > 0) status = "Partial Payment";
 else status = "Outstanding";
+
+const uniqueDates = [...new Set(monthlyEvents.map(event => {
+const dateVal = event.dateClosed || event.date;
+if (!dateVal) return '';
+const d = new Date(dateVal);
+return isNaN(d.getTime()) ? '' : `${d.getMonth() + 1}/${d.getDate()}`;
+}).filter(Boolean))].sort().join(', ');
+
+const uniquePromos = [...new Set(monthlyEvents.map(event => 
+event.discountTitle || event.promoType || event.creditType || ''
+).filter(Boolean))].join(' | ');
+
 csvLines.push([
 csvEscape(`${month} ${currentYear}`),
 csvEscape(targetSite),
@@ -57,7 +69,9 @@ runningTotalGenerated.toFixed(2),
 appliedCredits.toFixed(2),
 cumulativeApplied.toFixed(2),
 remainingUnappliedBalance.toFixed(2),
-csvEscape(status)
+csvEscape(status),
+csvEscape(uniqueDates),
+csvEscape(uniquePromos)
 ].join(","));
 }
 });
@@ -78,7 +92,9 @@ runningTotalGenerated.toFixed(2),
 cumulativeApplied.toFixed(2),
 cumulativeApplied.toFixed(2),
 ytdBalance.toFixed(2),
-csvEscape(ytdStatus)
+csvEscape(ytdStatus),
+csvEscape(""),
+csvEscape("")
 ].join(","));
 return csvLines.join("\r\n");
 };
