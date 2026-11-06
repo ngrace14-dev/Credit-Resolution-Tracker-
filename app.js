@@ -1517,24 +1517,27 @@ createApp({
                                 uploadedAt: Date.now()
                             };
 
-                                                                                                                // Update the local reactive state immediately
-                            // But ONLY if the month and site match the current filters
-                            if (parsedMonth === activeMonth.value || activeMonth.value === 'All') {
-                                if (detectedSite === activeSite.value) {
-                                    treesSalesData.value.push(newSale);
-                                    masterLedgerData.value.push({
-                                        brand: newSale.brand,
-                                        Product_Brand: newSale.brand,
-                                        detectedSite: newSale.detectedSite,
-                                        Location: newSale.detectedSite,
-                                        month: activeMonth.value, // e.g. "October"
-                                        dateClosed: newSale.dateClosed,
-                                        discountTitle: newSale.discountTitle,
-                                        Vendor_Credit_Owed: Number(newSale.owed || 0),
-                                        source: 'TREEZ_POS'
-                                    });
-                                }
-                            }
+                                                                                                                                            // Update the local reactive state immediately
+                                                                                                                                            // Since CSVs can contain data for both locations, check against active filters before rendering
+                                                                                                                                            if (parsedMonth === activeMonth.value || activeMonth.value === 'All') {
+                                                                                                                                                if (detectedSite === activeSite.value || activeSite.value === 'All') {
+                                                                                                                                                    treesSalesData.value.push(newSale);
+                                                                                                                                                }
+                                                                                                                                            }
+                                                                                                                                            // Always push to masterLedger if applicable to active session or tracking mechanisms overall
+                                                                                                                                            // Note: For multi-site CSVs, always push to the ledger array to ensure full coverage on re-renders,
+                                                                                                                                            // but only render ones matching the current site if activeSite is set
+                                                                                                                                            masterLedgerData.value.push({
+                                                                                                                                                brand: newSale.brand,
+                                                                                                                                                Product_Brand: newSale.brand,
+                                                                                                                                                detectedSite: newSale.detectedSite,
+                                                                                                                                                Location: newSale.detectedSite,
+                                                                                                                                                month: parsedMonth, // e.g. "October" (using parsed so it works when 'All' is selected)
+                                                                                                                                                dateClosed: newSale.dateClosed,
+                                                                                                                                                discountTitle: newSale.discountTitle,
+                                                                                                                                                Vendor_Credit_Owed: Number(newSale.owed || 0),
+                                                                                                                                                source: 'TREEZ_POS'
+                                                                                                                                            });
 
                             const newDocRef = doc(collection(db, "treesSales"));
                             batch.set(newDocRef, newSale);
