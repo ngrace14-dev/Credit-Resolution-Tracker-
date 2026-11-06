@@ -514,69 +514,111 @@ createApp({
 
 
         // --- DASHBOARD & LEDGER ---
-        const selectedLedgerVendor = ref(null);
+                const selectedLedgerVendor = ref(null);
         const masterLedgerData = ref([]);
         const ledgerTotals = ref({ generated: 0, recovered: 0, outstanding: 0, variance: 0 });
 
-                                const refreshLedger = async () => {
-                                    if (!USE_CANONICAL_LEDGER.value) {
-                                        console.warn("DEPRECATION WARNING: Legacy workbook shard scanning is still active.");
-                                    }
-                                    return await refreshLedgerCanonical();
-                                };
+        const MONTH_ORDER = [
+            'January', 'February', 'March', 'April', 'May', 'June',
+            'July', 'August', 'September', 'October', 'November', 'December'
+        ];
 
-
-
-
-        watch([promoCredits, activeSite, activeMonth], () => {
-            if (activeTab.value === 'Ledger') refreshLedger();
-        });
-
-                const refreshLedgerCanonical = async () => {
-            const site = activeSite.value;
-            const month = activeMonth.value;
-            const ledger = {};
+        const refreshLedger = () => {
+            if (!ledgerEventsList.value || !ledgerEventsList.value.length) {
+                masterLedgerData.value = [];
+                return;
+            }
             
-            ledgerEventsList.value.forEach(event => {
-                if (event.site !== site) return;
+            const currentSite = activeSite.value;
+            const selectedMonth = activeMonth.value;
+            const targetMonthIdx = MONTH_ORDER.indexOf(selectedMonth);
+
+            // Filter events by Site and Month (Point-in-Time YTD)
+            const filteredEvents = ledgerEventsList.value.filter(ev => {
+                // 1. Site Filter
+                const evSite = ev.site || ev.store;
+                if (currentSite && evSite && evSite.toLowerCase() !== currentSite.toLowerCase()) {
+                    return false;
+                }
                 
-                const v = event.brand || 'Unknown';
-                if (!ledger[v]) {
-                    ledger[v] = { 
-                        vendor: v, site: site, generated: 0, recovered: 0, outstanding: 0, 
-                        variance: 0, discoveryEvents: [], recoveryEvents: [],
-                        generatedCount: 0, recoveredCount: 0,
+                // 2. Month Filter (Point-in-Time YTD accumulation)
+                if (!selectedMonth || selectedMonth === 'All' || selectedMonth === 'All Year') {
+                    return true;
+                }
+                
+                const evMonth = ev.isolation_month || ev.month || ev.trackingMonth;
+                const evMonthIdx = MONTH_ORDER.indexOf(evMonth);
+                
+                // Include all records from January up to the selected month
+                if (targetMonthIdx !== -1 && evMonthIdx !== -1) {
+                    return evMonthIdx <= targetMonthIdx;
+                }
+                
+                // Fallback exact match if month string formatting differs
+                return evMonth === selectedMonth;
+            });
+
+            // 3. Aggregate totals by Vendor / Brand
+            const vendorMap = {};
+            filteredEvents.forEach(ev => {
+                const vendor = ev.brand || ev.vendor || 'UNKNOWN';
+                if (!vendorMap[vendor]) {
+                    vendorMap[vendor] = {
+                        vendor: vendor,
+                        site: currentSite,
+                        generated: 0,
+                        recovered: 0,
+                        outstanding: 0,
+                        recoveryEvents: [],
+                        discoveryEvents: [],
+                        generatedCount: 0,
+                        recoveredCount: 0,
+                        status: 'ACTIVE',
                         aging: { '0-30': 0, '31-60': 0, '61-90': 0, '91+': 0 }
                     };
                 }
-
-                // Aggregates
-                if (event.type === 'GENERATED') {
-                    ledger[v].generated += event.amount;
-                    ledger[v].generatedCount++;
-                    if (month === 'All' || event.isolation_month === month) {
-                        ledger[v].discoveryEvents.push({ id: event.id, type: 'Generated', date: event.isolation_month, amount: event.amount });
-                    }
-                } else if (event.type === 'RECOVERY') {
-                    ledger[v].recovered += event.amount;
-                    ledger[v].recoveredCount++;
-                    if (month === 'All' || event.isolation_month === month) {
-                        ledger[v].recoveryEvents.push({ id: event.id, ref: event.invoice_ref, date: event.isolation_month, amount: event.amount });
-                    }
+                
+                const amount = Number(ev.amount) || 0;
+                if (ev.type === 'GENERATED') {
+                    vendorMap[vendor].generated += amount;
+                    vendorMap[vendor].generatedCount++;
+                    vendorMap[vendor].discoveryEvents.push({ id: ev.id, type: 'Generated', date: ev.isolation_month, amount: amount });
+                } else if (ev.type === 'RECOVERY') {
+                    vendorMap[vendor].recovered += amount;
+                    vendorMap[vendor].recoveredCount++;
+                    vendorMap[vendor].recoveryEvents.push({ id: ev.id, ref: ev.invoice_ref || ev.upload_id || '-', date: ev.date || ev.isolation_month || '-', amount: amount });
                 }
             });
 
+            // 4. Calculate Net Outstanding & Format
             const totals = { generated: 0, recovered: 0, outstanding: 0, variance: 0 };
-            Object.values(ledger).forEach(item => {
-                item.outstanding = item.generated - item.recovered;
-                totals.generated += item.generated;
-                totals.recovered += item.recovered;
-                totals.outstanding += item.outstanding;
+            const aggregated = Object.values(vendorMap).map(v => {
+                v.outstanding = Number((v.generated - v.recovered).toFixed(2));
+                totals.generated += v.generated;
+                totals.recovered += v.recovered;
+                totals.outstanding += v.outstanding;
+                
+                v.generated = Number(v.generated.toFixed(2));
+                v.recovered = Number(v.recovered.toFixed(2));
+                return v;
             });
 
             ledgerTotals.value = totals;
-            masterLedgerData.value = Object.values(ledger).sort((a, b) => b.outstanding - a.outstanding);
+            // Sort descending by outstanding liability
+            masterLedgerData.value = aggregated.sort((a, b) => b.outstanding - a.outstanding);
+
+            // Update summary card record counts if present
+            if (typeof treezLedgerCount !== 'undefined') {
+                treezLedgerCount.value = filteredEvents.filter(e => e.type === 'GENERATED').length;
+            }
+            if (typeof sage4545LedgerCount !== 'undefined') {
+                sage4545LedgerCount.value = filteredEvents.filter(e => e.type === 'RECOVERY').length;
+            }
         };
+
+                watch([promoCredits, activeSite, activeMonth], () => {
+            refreshLedger();
+        });
 
         const runMigration = async () => {
             if (!confirm("This will migrate all workbook and manual data into the new Canonical Ledger. Proceed?")) return;
