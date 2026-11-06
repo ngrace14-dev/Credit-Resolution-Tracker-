@@ -285,7 +285,7 @@
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    <tr v-for="item in masterLedgerData" :key="item.vendor + item.site" @click="selectedLedgerVendor = item" 
+                                    <tr v-for="(item, idx) in masterLedgerData" :key="item.vendor + '_' + item.site + '_' + idx" @click="selectedLedgerVendor = item" 
                                         :class="{'bg-emerald-50/50 ring-1 ring-inset ring-emerald-500': selectedLedgerVendor?.vendor === item.vendor}" 
                                         class="hover:bg-gray-50 cursor-pointer transition-all">
                                         <td class="font-bold text-gray-900">{{ item.vendor }}</td>
@@ -573,11 +573,11 @@
                                         <div class="text-sm mt-1">Upload a Treez POS CSV to generate claims.</div>
                                     </td>
                                 </tr>
-                                <tr v-for="sale in displayTreesSalesData" :key="sale.id" class="hover:bg-gray-50" :class="{'opacity-60 bg-gray-50': sale.status === 'Synced'}">
-                                    <td class="text-center">
-                                        <span v-if="sale.status === 'Synced'" class="text-xs font-bold text-emerald-600 bg-emerald-100 px-2 py-1 rounded border border-emerald-200">SYNCED</span>
-                                        <span v-else class="text-xs font-bold text-amber-600 bg-amber-100 px-2 py-1 rounded border border-amber-200">PENDING</span>
-                                    </td>
+                                <tr v-for="(sale, idx) in displayTreesSalesData" :key="sale.id || ('sale_' + (sale.trackingId || '') + '_' + idx)" class="hover:bg-gray-50" :class="{'opacity-60 bg-gray-50': sale.status === 'Synced'}">
+                                      <td class="text-center">
+                                          <span v-if="sale.status === 'Synced'" key="badge-synced" class="text-xs font-bold text-emerald-600 bg-emerald-100 px-2 py-1 rounded border border-emerald-200">SYNCED</span>
+                                          <span v-else key="badge-unsynced" class="text-xs font-bold text-amber-600 bg-amber-100 px-2 py-1 rounded border border-amber-200">PENDING</span>
+                                      </td>
                                     <td class="font-bold text-emerald-700 bg-emerald-50 border-r border-emerald-100">{{ sale.detectedSite }}</td>
                                     <td v-if="activeMonth === 'All'" class="font-bold text-gray-500">{{ sale.month }}</td>
                                     <td class="font-bold text-gray-900">{{ sale.brand }}</td>
@@ -631,7 +631,7 @@
                                 <tr v-if="masterLedgerData.length === 0">
                                     <td colspan="6" class="text-center py-10 text-gray-500 font-medium bg-gray-50">No recovery records found.</td>
                                 </tr>
-                                <tr v-for="recovery in masterLedgerData.filter(i => i.recovered > 0)" :key="'rec-'+recovery.vendor" class="hover:bg-gray-50">
+                                <tr v-for="(recovery, idx) in masterLedgerData.filter(i => i.recovered > 0)" :key="'rec-'+recovery.vendor+'-'+idx" class="hover:bg-gray-50">
                                     <td>{{ recovery.recoveryEvents[0]?.date || '-' }}</td>
                                     <td class="font-bold text-gray-900">{{ recovery.vendor }}</td>
                                     <td class="font-mono text-gray-600">{{ recovery.recoveryEvents[0]?.ref || '-' }}</td>
