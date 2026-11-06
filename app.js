@@ -1428,12 +1428,15 @@ createApp({
                 await uploadBytes(fileRef, file);
                 console.log("CSV preserved to storage:", storagePath);
 
-                const reader = new FileReader();
+                                const reader = new FileReader();
                 reader.onload = async (evt) => {
                     try {
                         const text = evt.target.result;
-                        const { headers: baseHeaders, rows } = parseCSVText(text);
-                        if (rows.length === 0) return alert("File is empty or invalid.");
+                        const lines = parseCSVText(text);
+                        if (lines.length === 0) return alert("File is empty or invalid.");
+
+                        const baseHeaders = parseCSVRow(lines[0]).map(normalizeHeader);
+                        const rows = lines.slice(1);
 
                         let headerIdx = -1;
                         let headers = [];
@@ -1570,11 +1573,14 @@ createApp({
             try {
                 await uploadBytes(fileRef, file);
                 
-                const reader = new FileReader();
+                                const reader = new FileReader();
                 reader.onload = async (evt) => {
                     try {
                         const text = evt.target.result;
-                        const { headers, rows } = parseCSVText(text);
+                        const lines = parseCSVText(text);
+                        const headers = parseCSVRow(lines[0]).map(normalizeHeader);
+                        const rows = lines.slice(1);
+                        
                         const importedSageData = [];
 
                         for (let i = 0; i < rows.length; i++) { 
