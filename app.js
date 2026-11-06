@@ -1273,7 +1273,22 @@ createApp({
             if (isManagerUnlocked.value) setupFilteredListeners();
         });
 
-        let unsubscribeBrands = null;
+                let unsubscribeBrands = null;
+
+        const setupBrandListener = () => {
+            if (unsubscribeBrands) unsubscribeBrands();
+            unsubscribeBrands = onSnapshot(collection(db, "brands"), (snapshot) => {
+                const fetchedBrands = [];
+                snapshot.forEach(docSnap => { 
+                    fetchedBrands.push({ id: docSnap.id, ...docSnap.data() }); 
+                });
+                masterBrands.value = fetchedBrands.sort((a, b) => {
+                    const nameA = a.vendor || a.brand || a.name || '';
+                    const nameB = b.vendor || b.brand || b.name || '';
+                    return nameA.localeCompare(nameB);
+                });
+            }, (err) => console.error("Brand Pull Failed:", err));
+        };
 
         const showWorkspaceMenu = ref(false);
         const showAdminMenu = ref(false);
@@ -1395,7 +1410,7 @@ createApp({
         // --- 7. LIFECYCLE HOOKS (Teardown & Initialization) ---
         let unsubscribeAuth = null;
         const { onUnmounted } = window.Vue;
-        onMounted(() => {
+                onMounted(() => {
         refreshIcons();
         unsubscribeAuth = onAuthStateChanged(auth, (user) => {
         if (user) {
@@ -1406,19 +1421,26 @@ createApp({
         isManagerUnlocked.value = true;
         isSuperAdmin.value = !!managerData.superAdmin;
         setupFilteredListeners();
+        setupBrandListener();
         refreshLedger();
         }
-        } else {
+                } else {
+        if (typeof unsubscribeBrands === 'function') { 
+            unsubscribeBrands(); 
+            unsubscribeBrands = null; 
+        }
+        masterBrands.value = [];
         isManagerUnlocked.value = false;
         loggedInUser.value = '';
         }
         });
         });
-                onUnmounted(() => {
+        onUnmounted(() => {
         if (typeof unsubscribeAuth === 'function') { unsubscribeAuth(); unsubscribeAuth = null; }
         if (typeof unsubscribeSales === 'function') { unsubscribeSales(); unsubscribeSales = null; }
         if (typeof unsubscribeLedger === 'function') { unsubscribeLedger(); unsubscribeLedger = null; }
         if (typeof unsubscribeCredits === 'function') { unsubscribeCredits(); unsubscribeCredits = null; }
+        if (typeof unsubscribeBrands === 'function') { unsubscribeBrands(); unsubscribeBrands = null; }
         });
         
         // --- DISCOVERY SHARDS FORWARD SYNC ---
