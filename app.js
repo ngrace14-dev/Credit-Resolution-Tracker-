@@ -1405,8 +1405,226 @@ createApp({
                 const helpersObj = { getStandardizedBrandName, detectSiteFromName, detectMonthFromDate, normalizeSiteName, normalizeTreezLedger, normalizeSageLedger };
         const handleTreezLedgerUpload = (e) => processTreezUpload(e, { db, storage, auth, isBatchProcessing, batchProgress, batchTotal, batchType, batchError, targetMonth: activeMonth.value, calendarMonths, masterBrands: masterBrands.value }, helpersObj);
         const handleSage4545Upload = (e) => processSageUpload(e, { db, storage, auth, isBatchProcessing, batchProgress, batchTotal, batchType, batchError, targetMonth: activeMonth.value, calendarMonths }, helpersObj);
-        const handleTreesCsvUpload = (e) => { /* Wire to service in next pass */ };
-        const handleSageCsvUpload = (e) => { /* Wire to service in next pass */ };
+                const handleTreesCsvUpload = async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const storagePath = `master_csvs/${activeSite.value}/${new Date().getFullYear()}/${activeMonth.value}/${Date.now()}_${file.name}`;
+            const fileRef = sRef(storage, storagePath);
+            
+            try {
+                const uploadManifest = {
+                    fileName: file.name,
+                    storagePath: storagePath,
+                    uploadedBy: loggedInUser.value,
+                    uploadedAt: Date.now(),
+                    site: activeSite.value,
+                    month: activeMonth.value,
+                    status: 'Preserved'
+                };
+                const manifestRef = await addDoc(collection(db, "source_uploads"), uploadManifest);
+                const uploadId = manifestRef.id;
+
+                await uploadBytes(fileRef, file);
+                console.log("CSV preserved to storage:", storagePath);
+
+                const reader = new FileReader();
+                reader.onload = async (evt) => {
+                    try {
+                        const text = evt.target.result;
+                        const { headers: baseHeaders, rows } = parseCSVText(text);
+                        if (rows.length === 0) return alert("File is empty or invalid.");
+
+                        let headerIdx = -1;
+                        let headers = [];
+                        
+                        const baseValidation = validateHeaders(baseHeaders, ['product brand', 'vendor credit owed']);
+                        if (baseValidation.valid) {
+                            headers = baseHeaders;
+                        } else {
+                            for (let i = 0; i < rows.length; i++) {
+                                const cols = parseCSVRow(rows[i]);
+                                const validation = validateHeaders(cols, ['product brand', 'vendor credit owed']);
+                                if (validation.valid) {
+                                    headerIdx = i;
+                                    headers = cols.map(normalizeHeader);
+                                    break;
+                                }
+                            }
+                        }
+
+                        const getVal = (rowObj, ...keys) => {
+                            for (const key of keys) {
+                                const foundKey = Object.keys(rowObj).find(k => k.toLowerCase().trim() === key.toLowerCase().trim());
+                                if (foundKey && rowObj[foundKey] !== undefined) return rowObj[foundKey];
+                            }
+                            return '';
+                        };
+
+                        const batch = writeBatch(db);
+                        let count = 0;
+                        let skippedCount = 0;
+                        const errorRecords = [];
+
+                        for (let i = headerIdx + 1; i < rows.length; i++) {
+                            if (!rows[i].trim()) continue;
+                            const cols = parseCSVRow(rows[i]);
+                            const rowObj = {};
+                            headers.forEach((h, idx) => { rowObj[h] = cols[idx] ? cleanString(cols[idx]) : ''; });
+
+                            const brandVal = getVal(rowObj, 'Product Brand', 'Brand');
+                            const trackingVal = getVal(rowObj, 'State Tracking Id', 'Tracking Id');
+
+                            if (!brandVal && !trackingVal) continue;
+
+                            const dateStr = getVal(rowObj, 'Date Closed', 'Date');
+                            const parsedMonth = detectMonthFromDate(dateStr);
+                            
+                            if (parsedMonth === 'Unknown') {
+                                skippedCount++;
+                                errorRecords.push({ brand: brandVal, date: dateStr, amount: cleanCurrency(getVal(rowObj, 'Vendor Credit Owed', 'Credit Owed')), reason: "Unknown Month" });
+                                continue;
+                            }
+
+                            const storeString = getVal(rowObj, 'Store Name', 'Location');
+                            const detectedSite = detectSiteFromName(storeString);
+
+                            const units = parseFloat(getVal(rowObj, 'Units Sold', 'Unit Sold', 'Qty', 'Quantity')) || 0;
+                            const unitPrice = cleanCurrency(getVal(rowObj, 'Cost Per Unit', 'Unit Price', 'Price'));
+                            const discAmt = cleanCurrency(getVal(rowObj, 'Discounts', 'Discount Amount', 'Discount'));
+                            const owedAmt = cleanCurrency(getVal(rowObj, 'Vendor Credit Owed', 'Credit Owed'));
+
+                            const newSale = {
+                                uploadId: uploadId, 
+                                month: parsedMonth, 
+                                brand: brandVal || 'Unknown Brand',
+                                discountTitle: getVal(rowObj, 'Discount Title', 'Discount Name') || '',
+                                dateClosed: dateStr,
+                                storeName: storeString,
+                                detectedSite: detectedSite,
+                                productName: getVal(rowObj, 'Product Name', 'Product') || '',
+                                owed: owedAmt,
+                                trackingId: trackingVal || '',
+                                unitsSold: units,
+                                unitPrice: unitPrice,
+                                discountAmount: discAmt,
+                                status: 'Unsynced',
+                                uploadedAt: Date.now()
+                            };
+
+                            const newDocRef = doc(collection(db, "treesSales"));
+                            batch.set(newDocRef, newSale);
+                            count++;
+
+                            if (count % 400 === 0) {
+                                await batch.commit();
+                            }
+                        }
+
+                        await batch.commit();
+                        await updateDoc(doc(db, "source_uploads", uploadId), { status: 'Parsed', rowCount: count, skippedCount: skippedCount });
+                
+                        logSystemAction("IMPORT", `Uploaded ${count} raw sales items from Trees CSV. Skipped ${skippedCount} items.`);
+                        
+                        let alertMsg = `Successfully uploaded ${count} sales items!\n- Preserved source CSV to cloud storage.`;
+                        if (skippedCount > 0) {
+                            alertMsg += `\n- WARNING: ${skippedCount} items skipped due to unknown months.`;
+                        }
+                        alert(alertMsg);
+
+                        if (errorRecords.length > 0) {
+                            const csvErrorContent = "Brand,Date,Amount,Reason\n" + errorRecords.map(r => `"${r.brand}","${r.date}","${r.amount}","${r.reason}"`).join('\n');
+                            const errorBlob = new Blob(['\ufeff' + csvErrorContent], { type: 'text/csv;charset=utf-8;' });
+                            const errorUrl = URL.createObjectURL(errorBlob);
+                            const errorLink = document.createElement("a");
+                            errorLink.setAttribute("href", errorUrl);
+                            errorLink.setAttribute("download", `Quarantine_Report_${activeMonth.value}_${Date.now()}.csv`);
+                            document.body.appendChild(errorLink);
+                            errorLink.click();
+                            document.body.removeChild(errorLink);
+                        }
+                        
+                        e.target.value = ''; 
+                    } catch (error) { 
+                        console.error(error);
+                        alert("Error parsing CSV or uploading to cloud."); 
+                    }
+                };
+                reader.readAsText(file); 
+
+            } catch (err) {
+                console.error("Storage Error:", err);
+                alert("CRITICAL: Failed to preserve CSV to Storage. Import aborted for data safety.");
+            }
+        };
+
+        const handleSageCsvUpload = async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            if (!confirm("This will upload your Sage Report and update the 'GL Raw by Store' sheet in the Master Workbook. Continue?")) return;
+
+            const storagePath = `sage_uploads/${activeSite.value}/${Date.now()}_${file.name}`;
+            const fileRef = sRef(storage, storagePath);
+            
+            try {
+                await uploadBytes(fileRef, file);
+                
+                const reader = new FileReader();
+                reader.onload = async (evt) => {
+                    try {
+                        const text = evt.target.result;
+                        const { headers, rows } = parseCSVText(text);
+                        const importedSageData = [];
+
+                        for (let i = 0; i < rows.length; i++) { 
+                            const cols = parseCSVRow(rows[i]);
+                            const rowObj = {};
+                            headers.forEach((h, idx) => { 
+                                rowObj[h] = cols[idx] ? cleanString(cols[idx]) : ''; 
+                            });
+                            
+                            importedSageData.push({
+                                "Posted dt.": rowObj["Posted dt."] || rowObj["Date"] || '',
+                                "Store": rowObj["Store"] || rowObj["Location"] || '',
+                                "Location": rowObj["Location"] || '',
+                                "Memo/Description": rowObj["Memo/Description"] || rowObj["Description"] || rowObj["Memo"] || '',
+                                "Credit": cleanCurrency(rowObj["Credit"] || rowObj["Amount"]),
+                                "Mapped Brand": "" 
+                            });
+                        }
+
+                        if (!masterWorkbook.value) return alert("Master Workbook not loaded.");
+                        
+                        const updatedData = JSON.parse(JSON.stringify(masterWorkbook.value.data));
+                        updatedData["GL Raw by Store"] = [...(updatedData["GL Raw by Store"] || []), ...importedSageData];
+
+                        const sheetDocId = "GL_Raw_by_Store";
+                        await setDoc(doc(db, "workbook_v9_sheets", sheetDocId), {
+                            sheetName: "GL Raw by Store",
+                            rows: updatedData["GL Raw by Store"],
+                            updatedAt: Date.now()
+                        });
+
+                        await setDoc(doc(db, "promo tracker", "Master_Workbook_V9_Board_Report"), {
+                            lastModified: Date.now(),
+                            modifiedBy: loggedInUser.value
+                        }, { merge: true });
+
+                        logSystemAction("IMPORT", `Uploaded ${importedSageData.length} Sage GL entries to Master Workbook`);
+                        alert(`Success! Added ${importedSageData.length} entries from Sage to the 'GL Raw by Store' sheet.`);
+                        e.target.value = '';
+                    } catch (err) {
+                        console.error(err);
+                        alert("Error processing Sage CSV.");
+                    }
+                };
+                reader.readAsText(file);
+            } catch (err) {
+                console.error(err);
+                alert("Storage error during Sage upload.");
+            }
+        };
         const continueBatch = () => { /* Logic to resume batch context if batchError exists */ };
         // --- 5. MODAL & UI STATE ---
         const showWorkbookSyncModal = ref(false);
