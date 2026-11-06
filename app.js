@@ -1551,8 +1551,14 @@ createApp({
                                                         }
                         }
 
-                        await batch.commit();
+                                                await batch.commit();
                         await updateDoc(doc(db, "source_uploads", uploadId), { status: 'Parsed', rowCount: count, skippedCount: skippedCount });
+                        console.log("Firestore batch commit successful!");
+                        
+                        // Force the app to re-fetch all ledger data so the UI updates instantly
+                        if (typeof setupFilteredListeners === 'function') {
+                            setupFilteredListeners();
+                        }
                 
                         logSystemAction("IMPORT", `Uploaded ${count} raw sales items from Trees CSV. Skipped ${skippedCount} items.`);
                         
