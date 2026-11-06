@@ -1373,8 +1373,10 @@ createApp({
         showWorkbookSyncModal.value = true;
         refreshIcons();
         };
-        const refreshIcons = () => {
-        nextTick(() => { if (window.lucide) window.lucide.createIcons(); });
+                const refreshIcons = () => {
+        // Disabled direct DOM replacement to prevent Vue Virtual DOM de-sync
+        // If Lucide is needed, use static SVGs or unmanaged containers
+        return;
         };
         const scrollMonths = (direction) => {
         const container = document.getElementById('monthScrollContainer');
