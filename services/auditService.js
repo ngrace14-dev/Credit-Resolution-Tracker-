@@ -24,7 +24,7 @@ let csvLines = [headers.join(",")];
 let runningTotalGenerated = 0;
 let cumulativeApplied = 0;
 const startIdx = calendarMonths.indexOf(startMonthName || 'January');
-const endIdx = calendarMonths.indexOf(endMonthName || 'September');
+const endIdx = calendarMonths.indexOf(endMonthName || 'December');
 calendarMonths.forEach((month, idx) => {
 const monthlyEvents = ledgerEvents.filter(e => 
 e.isolation_month === month && 

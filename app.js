@@ -209,8 +209,8 @@ createApp({
         
                 // Form & Audit state
         const emailReportMode = ref('standard');
-        const startMonth = ref('January');
-        const endMonth = ref('September');
+                const startMonth = ref('January');
+        const endMonth = ref('December');
 
         // --- GLOBAL HELPERS (Hoisted for pure service injection) ---
         const formatCurrency = (val) => {
