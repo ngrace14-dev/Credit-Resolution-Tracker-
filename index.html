@@ -628,7 +628,7 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                <tr v-if="masterLedgerData.length === 0">
+                                <tr v-if="!masterLedgerData || masterLedgerData.length === 0">
                                     <td colspan="6" class="text-center py-10 text-gray-500 font-medium bg-gray-50">No recovery records found.</td>
                                 </tr>
                                 <tr v-for="(recovery, idx) in masterLedgerData.filter(i => i.recovered > 0)" :key="'rec-'+recovery.vendor+'-'+idx" class="hover:bg-gray-50">

@@ -1644,41 +1644,36 @@ console.log(`[Rollback] Extracted ${baselineEvents.length} baseline events ready
                     chunk.forEach(d => batch.delete(d.ref));
                     await batch.commit();
                 }
-                // 4. Batch insert baseline records in chunks of 400
-                for (let i = 0; i < baselineEvents.length; i += 400) {
-                    const batch = writeBatch(db);
-                    const chunk = baselineEvents.slice(i, i + 400);
-                    chunk.forEach(event => {
-                        const docRef = doc(collection(db, "masterLedger"));
-                        batch.set(docRef, event);
-                    });
-                    await batch.commit();
-                }
-                                // 5. Trigger Vue to recalculate computed properties based on updated ledger listener
-                                // Do NOT directly assign masterLedgerData.value to raw baselineEvents, as masterLedgerData expects aggregated ledger format
-                                if (treesSalesData.value) {
-                                    treesSalesData.value.forEach(s => {
-                                        s.status = 'Unsynced';
+                                // 4. Batch Commit to Firestore
+                                for (let i = 0; i < baselineEvents.length; i += 500) {
+                                    const batch = writeBatch(db);
+                                    const chunk = baselineEvents.slice(i, i + 500);
+                                    chunk.forEach(ev => {
+                                        const docRef = doc(collection(db, "masterLedger"), ev.id);
+                                        batch.set(docRef, ev);
                                     });
+                                    await batch.commit();
                                 }
-                
-                                await nextTick(); // Wait for Vue to patch the DOM
 
-                // 6. Log system action
-                await addDoc(collection(db, "systemLogs"), {
-                    timestamp: Date.now(),
-                    user: loggedInUser.value || 'system',
-                    actionType: 'DELETE',
-                    details: `Automated Rollback: Purged old shards and restored ${baselineEvents.length} baseline records from Master Workbook.`
-                });
-                
-                setTimeout(() => {
-                    alert(`Rollback complete! Restored ${baselineEvents.length} baseline records from the Master Workbook.`);
-                }, 100);
+                                // 5. Log system audit action
+                                await addDoc(collection(db, "systemLogs"), {
+                                    timestamp: Date.now(),
+                                    actionType: 'DELETE',
+                                    details: `Automated Rollback: Purged old shards and restored ${baselineEvents.length} baseline records from Master Workbook.`
+                                });
             } catch (err) {
-                console.error("Rollback failed:", err);
-                alert(`Rollback failed: ${err.message}`);
+                                console.error("Rollback Database Transaction Failed:", err);
+                                alert(`Database Rollback failed: ${err.message}`);
+                                return;
             }
+
+            // 6. UI Updates (Executed outside the DB transaction)
+            if (treesSalesData.value && treesSalesData.value.length) {
+                                treesSalesData.value.forEach(s => { s.status = 'Unsynced'; });
+            }
+            setTimeout(() => {
+                                alert(`Rollback complete! Restored ${baselineEvents.length} baseline records from the Master Workbook.`);
+            }, 150);
         };
 
                 // --- 8. TEMPLATE BINDINGS RETURN ---
