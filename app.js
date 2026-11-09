@@ -927,223 +927,148 @@ createApp({
 
 
                                                                         const generateAuditStatementCSV = (brand) => {
-            // Pull from masterLedgerData first, falling back to treesSalesData
-            const rawRecords = (masterLedgerData?.value?.length ? masterLedgerData.value : treesSalesData?.value) || [];
-            const inMemoryEvents = rawRecords.map(sale => ({
-                ...sale,
-                type: 'GENERATED',
-                amount: Number(sale.owed ?? sale.creditOwed ?? sale.Vendor_Credit_Owed ?? sale['Vendor Credit Owed'] ?? 0),
-                brand: sale.brand || sale['Product Brand'] || sale.Brand || '',
-                vendor: sale.vendor || sale.brand || sale['Product Brand'] || '',
-                site: sale.detectedSite || sale.site || sale['Store Name'] || sale.Location || '',
-                isolation_month: sale.month || sale.isolation_month || '',
-                dateClosed: sale.dateClosed || sale['Date Closed'] || sale.date || '',
-                discountTitle: sale.discountTitle || sale['Discount Title'] || sale.promoType || ''
-            })).filter(sale => {
-                const promoTitle = sale.discountTitle;
-                const vendorName = sale.vendor;
-                return isPromoSelected(vendorName, promoTitle);
-            });
-            const targetBrandVendor = brand.vendor || brand.brand || (typeof brand === 'string' ? brand : '');
+                                                                            const targetBrandVendor = brand.vendor || brand.brand || (typeof brand === 'string' ? brand : '');
             
-            return generateAuditStatementService({
-                brandVendor: targetBrandVendor,
-                targetSite: activeSite.value,
-                ledgerEvents: [...ledgerEventsList.value, ...inMemoryEvents],
-                startMonthName: startMonth.value,
-                endMonthName: endMonth.value,
-                calendarMonths,
-                csvEscape
-            });
-        };
+                                                                            // 1. Gather all in-memory raw records
+                                                                            const rawRecords = (masterLedgerData?.value?.length ? masterLedgerData.value : treesSalesData?.value) || [];
+                                                                            const inMemoryEvents = rawRecords.map(sale => ({
+                                                                                ...sale,
+                                                                                type: 'GENERATED',
+                                                                                amount: Number(sale.owed ?? sale.creditOwed ?? sale.Vendor_Credit_Owed ?? sale['Vendor Credit Owed'] ?? 0),
+                                                                                brand: sale.brand || sale['Product Brand'] || sale.Brand || '',
+                                                                                vendor: sale.vendor || sale.brand || sale['Product Brand'] || '',
+                                                                                site: sale.detectedSite || sale.site || sale['Store Name'] || sale.Location || '',
+                                                                                isolation_month: sale.month || sale.isolation_month || '',
+                                                                                dateClosed: sale.dateClosed || sale['Date Closed'] || sale.date || '',
+                                                                                discountTitle: sale.discountTitle || sale['Discount Title'] || sale.promoType || ''
+                                                                            }));
 
-                const downloadMonthlyReport = (brand) => {
-                    const isFullMonth = !!brand.brandList; 
+                                                                            // 2. Retrieve user's toggled promo filters for this brand
+                                                                            const selectedPromos = brandPromoFilters.value[targetBrandVendor] || null;
             
-                    if (!isFullMonth) {
-                        const selected = brandPromoFilters.value[brand.vendor];
-                        if (selected && selected.length === 0) {
-                            alert("No promotional data selected for export. Please select at least one promo type.");
-                            return;
-                        }
-                        const csv = generateAuditStatementCSV(brand);
-                const blob = new Blob(
-                    ['\ufeff' + csv],
-                    {
-                        type: 'text/csv;charset=utf-8;'
-                    }
-                );
-                const url = URL.createObjectURL(blob);
-                const link = document.createElement("a");
-                link.setAttribute("href", url);
-                link.setAttribute("download", `${activeSite.value}_Statement_${brand.vendor}_${new Date().getFullYear()}.csv`);
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
-                logSystemAction("EXPORT", `Audit Statement exported for ${brand.vendor}`);
-                setTimeout(() => URL.revokeObjectURL(url), 150);
-                return;
-            }
+                                                                            // 3. Delegate directly to the 3-Tier service
+                                                                            return generateAuditStatementService({
+                                                                                brandVendor: targetBrandVendor,
+                                                                                targetSite: activeSite.value,
+                                                                                ledgerEvents: [...ledgerEventsList.value, ...inMemoryEvents],
+                                                                                selectedPromos: selectedPromos,
+                                                                                calendarMonths,
+                                                                                csvEscape
+                                                                            });
+                                                                        };
 
-                        const reportMonth = brand.month || activeMonth.value;
-            let csvContent = "Location,Date & Time,Brand,Product Name,Transaction ID,Quantity Sold,Unit Price,Total Before Tax,Discount Title,Discount Amount,Credit Owed,Entry Type\n";
-
-            let csvTotal = 0;
-            const cleanStr = cleanString;
+                        const downloadMonthlyReport = (brand) => {
+                            const isFullMonth = !!brand.brandList; 
     
-            const itemizedSales = [];
+                            if (!isFullMonth) {
+                                const vendorKey = brand.vendor || brand.brand;
+                                const selected = brandPromoFilters.value[vendorKey];
+                                if (selected && selected.length === 0) {
+                                    alert("No promotional data selected for export. Please select at least one promo type.");
+                                    return;
+                                }
+                                const csv = generateAuditStatementCSV(brand);
+                                const currentYear = new Date().getFullYear();
+                                const safeBrandName = (brand.vendor || brand.brand || 'Brand').replace(/\s/g, '_');
+                                const safeSite = (activeSite.value || 'Store').replace(/\s/g, '_');
+                                const blob = new Blob(
+                                    ['\ufeff' + csv],
+                                    {
+                                        type: 'text/csv;charset=utf-8;'
+                                    }
+                                );
+                                const url = URL.createObjectURL(blob);
+                                const link = document.createElement("a");
+                                link.setAttribute("href", url);
+                                link.setAttribute("download", `${safeSite}_Statement_${safeBrandName}_${currentYear}.csv`);
+                                document.body.appendChild(link);
+                                link.click();
+                                document.body.removeChild(link);
+                                logSystemAction("EXPORT", `Audit Statement exported for ${safeBrandName}`);
+                                setTimeout(() => URL.revokeObjectURL(url), 150);
+                                return;
+                            }
 
-                        treesSalesData.value.forEach(sale => {
-                const matchBrand = isFullMonth ? true : (cleanStr(sale.brand) === cleanStr(brand.vendor));
+                            // Full Month Raw Export Logic
+                            const reportMonth = brand.month || activeMonth.value;
+                            let csvContent = "Location,Date & Time,Brand,Product Name,Transaction ID,Quantity Sold,Unit Price,Total Before Tax,Discount Title,Discount Amount,Credit Owed,Entry Type\n";
+
+                            let csvTotal = 0;
+    
+                            treesSalesData.value.forEach(sale => {
+                                const promoTitle = sale.discountTitle || sale['Discount Title'] || sale.promoType;
+                                const vendorName = sale.brand || sale['Product Brand'] || sale.Brand || '';
+                    
+                                const safeLoc = `"${csvEscape(sale.detectedSite || sale.site || '')}"`;
+                                const safeDate = `"${csvEscape(sale.dateClosed || sale['Date Closed'] || sale.date || '')}"`;
+                                const safeBrand = `"${csvEscape(sale.brand || '')}"`;
+                                const safeProd = `"${csvEscape(sale.productName || '')}"`;
+                                const safeTrack = `"${csvEscape(sale.trackingId || '')}"`;
+                                const safeQty = `"${csvEscape(sale.unitsSold || '')}"`;
+                                const safePrice = `"${formatCurrency(sale.unitPrice || 0)}"`;
+                                const safePreTax = `"${formatCurrency((sale.unitsSold || 0) * (sale.unitPrice || 0))}"`;
+                                const safeTitle = `"${csvEscape(promoTitle || '')}"`;
+                                const safeAmt = `"${formatCurrency(sale.discountAmount || 0)}"`;
+                                const owedAmt = Number(sale.owed ?? sale.creditOwed ?? sale.Vendor_Credit_Owed ?? sale['Vendor Credit Owed'] ?? 0);
+                                const safeOwed = `"${formatCurrency(owedAmt)}"`;
                 
-                if (matchBrand && 
-                    cleanStr(sale.detectedSite) === cleanStr(activeSite.value) && 
-                    cleanStr(sale.month) === cleanStr(reportMonth)) {
-                    
-                    const promoTitle = sale.discountTitle || sale['Discount Title'] || sale.promoType;
-                    const vendorName = sale.brand || sale['Product Brand'] || sale.Brand || '';
-                    if (!isFullMonth && !isPromoSelected(vendorName, promoTitle)) return;
-                    // For Full Month CSV exports, we do not filter out unchecked promos to maintain absolute parity with raw data.
-                    // If you want Full Month to ALSO obey filters, remove '!isFullMonth &&' above.
-                    
-                    itemizedSales.push({
-                        loc: sale.detectedSite,
-                        date: sale.dateClosed,
-                        brand: sale.brand,
-                        prod: sale.productName,
-                        track: sale.trackingId,
-                        qty: sale.unitsSold,
-                        price: sale.unitPrice,
-                        preTax: (sale.unitsSold || 0) * (sale.unitPrice || 0),
-                        discTitle: sale.discountTitle,
-                        discAmt: sale.discountAmount,
-                        owed: sale.owed,
-                        type: "POS Itemized"
-                    });
-                }
-            });
+                                csvContent += `${safeLoc},${safeDate},${safeBrand},${safeProd},${safeTrack},${safeQty},${safePrice},${safePreTax},${safeTitle},${safeAmt},${safeOwed},"POS Itemized"\n`;
+                                csvTotal += owedAmt;
+                            });
 
-            itemizedSales.forEach(s => {
-                csvContent += `"${s.loc}","${s.date}","${s.brand}","${s.prod}","${s.track}","${s.qty}","${formatCurrency(s.price)}","${formatCurrency(s.preTax)}","${s.discTitle}","${formatCurrency(s.discAmt)}","${formatCurrency(s.owed)}","${s.type}"\n`;
-                csvTotal += parseFloat(s.owed) || 0;
-            });
+                            csvContent += `,,,,,,,,,, "TOTAL:", "${formatCurrency(csvTotal)}"\n`;
 
-            const dummyDates = new Set();
-            if (isFullMonth) {
-                brand.brandList.forEach(b => {
-                    if (b.credits) {
-                        const res = processManualCredits(b.credits, dummyDates, csvTotal, csvContent);
-                        csvTotal = res.total;
-                        csvContent = res.content;
-                    }
-                });
-            } else if (brand.credits) {
-                const res = processManualCredits(brand.credits, dummyDates, csvTotal, csvContent);
-                csvTotal = res.total;
-                csvContent = res.content;
-            }
+                            const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
+                            const url = URL.createObjectURL(blob);
+                            const link = document.createElement("a");
+                            link.setAttribute("href", url);
+                            const currentYear = new Date().getFullYear();
+                            link.setAttribute("download", `Full_Month_${reportMonth}_${activeSite.value.replace(/\s/g, '_')}_${currentYear}.csv`);
+                            document.body.appendChild(link);
+                            link.click();
+                            document.body.removeChild(link);
+                            setTimeout(() => URL.revokeObjectURL(url), 150);
 
-            csvContent += `,,,,,,,,,, "TOTAL:", "${formatCurrency(csvTotal)}"\n`;
-
-            const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
-            const url = URL.createObjectURL(blob);
-            const link = document.createElement("a");
-            link.setAttribute("href", url);
-            const currentYear = new Date().getFullYear();
-            const reportName = isFullMonth ? `${reportMonth}_All_Brands` : String(brand.vendor).replace(/[^a-zA-Z0-9]/g, '_');
-            link.setAttribute("download", `${activeSite.value.replace(/\s/g, '_')}_Report_${reportName}_${currentYear}.csv`);
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            setTimeout(() => URL.revokeObjectURL(url), 150);
-
-            logSystemAction("EXPORT", `Downloaded Detailed Report for ${reportName}`);
-        };
+                            logSystemAction("EXPORT", `Downloaded Detailed Report for Full Month ${reportMonth}`);
+                        };
 
                 const draftEmail = (brand) => {
-            if (!brand.email) {
-                alert(`No email mapped for ${brand.vendor}. Please add one in the Brand Directory first.`);
-                return;
-            }
+                    const vendorName = brand.vendor || brand.brand;
+                    if (!brand.email) {
+                        alert(`No email mapped for ${vendorName}. Please add one in the Brand Directory first.`);
+                        return;
+                    }
 
-            const storeName = activeSite.value === 'Redding' ? 'Sundial' : activeSite.value;
-            const currentYear = new Date().getFullYear();
-            const monthStr = brand.month || activeMonth.value;
-            const periodStr = `${monthStr} ${currentYear}`;
+                    const storeName = activeSite.value === 'Redding' ? 'Sundial' : activeSite.value;
+                    const currentYear = new Date().getFullYear();
+                    const monthStr = brand.month || activeMonth.value;
+                    const periodStr = `${monthStr} ${currentYear}`;
             
-            // Build dual-tier statement for email payload
-            const statementCSV = generateAuditStatementCSV(brand);
-            let combinedCSV = statementCSV + "\n\n";
+                    // Build the 3-tier statement CSV
+                    const statementCSV = generateAuditStatementCSV(brand);
 
-            // Tier 2: Itemized POS records
-            combinedCSV += "--- ITEMIZED POS DETAIL ---\n";
-            combinedCSV += "Location,Date & Time,Brand,Product Name,Transaction ID,Quantity Sold,Unit Price,Total Before Tax,Discount Title,Discount Amount,Credit Owed,Entry Type\n";
-            let csvTotal = 0;
-            const cleanStr = cleanString;
-            
-                        const rawRecords = (masterLedgerData?.value?.length ? masterLedgerData.value : treesSalesData?.value) || [];
-            let itemizedCount = 0;
-            
-            rawRecords.forEach(sale => {
-                const vendorName = sale.brand || sale['Product Brand'] || sale.Brand || '';
-                const promoTitle = sale.discountTitle || sale['Discount Title'] || sale.promoType;
-                
-                if (cleanStr(vendorName) === cleanStr(brand.vendor) && 
-                    cleanStr(sale.detectedSite || sale.site || sale['Store Name'] || sale.Location) === cleanStr(activeSite.value) && 
-                    isPromoSelected(vendorName, promoTitle)) {
-                    
-                    const safeLoc = `"${csvEscape(sale.detectedSite || sale.site || '')}"`;
-                    const safeDate = `"${csvEscape(sale.dateClosed || sale['Date Closed'] || sale.date || '')}"`;
-                    const safeBrand = `"${csvEscape(sale.brand || '')}"`;
-                    const safeProd = `"${csvEscape(sale.productName || '')}"`;
-                    const safeTrack = `"${csvEscape(sale.trackingId || '')}"`;
-                    const safeQty = `"${csvEscape(sale.unitsSold || '')}"`;
-                    const safePrice = `"${formatCurrency(sale.unitPrice || 0)}"`;
-                    const safePreTax = `"${formatCurrency((sale.unitsSold || 0) * (sale.unitPrice || 0))}"`;
-                    const safeTitle = `"${csvEscape(sale.discountTitle || '')}"`;
-                    const safeAmt = `"${formatCurrency(sale.discountAmount || 0)}"`;
-                    const owedAmt = Number(sale.owed ?? sale.creditOwed ?? sale.Vendor_Credit_Owed ?? sale['Vendor Credit Owed'] ?? 0);
-                    const safeOwed = `"${formatCurrency(owedAmt)}"`;
-                    
-                    combinedCSV += `${safeLoc},${safeDate},${safeBrand},${safeProd},${safeTrack},${safeQty},${safePrice},${safePreTax},${safeTitle},${safeAmt},${safeOwed},"POS Itemized"\n`;
-                    csvTotal += owedAmt;
-                    itemizedCount++;
-                }
-            });
-            
-            if (itemizedCount === 0) {
-                combinedCSV += `"No promotional activity matching selected filters",,,,,,,,,,,\n`;
-            }
-            
-            if (brand.credits) {
-                const res = processManualCredits(brand.credits, new Set(), csvTotal, combinedCSV);
-                csvTotal = res.total;
-                combinedCSV = res.content;
-            }
-            
-            combinedCSV += `,,,,,,,,,, "TOTAL:", "${formatCurrency(csvTotal)}"\n`;
+                    // Trigger statement download for the user to attach
+                    const blob = new Blob(['\ufeff' + statementCSV], { type: 'text/csv;charset=utf-8;' });
+                    const url = URL.createObjectURL(blob);
+                    const link = document.createElement("a");
+                    link.setAttribute("href", url);
+                    link.setAttribute("download", `${vendorName.replace(/\s/g, '_')}_Statement_${activeSite.value.replace(/\s/g, '_')}_${currentYear}.csv`);
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
 
-            const blob = new Blob(['\ufeff' + combinedCSV], { type: 'text/csv;charset=utf-8;' });
-            const url = URL.createObjectURL(blob);
-            const link = document.createElement("a");
-            link.setAttribute("href", url);
-            link.setAttribute("download", `${brand.vendor.replace(/\s/g, '_')}_Statement_${activeSite.value.replace(/\s/g, '_')}_${currentYear}.csv`);
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-
-            const subject = `Promo Credit Statement - ${storeName} - ${periodStr}`;
+                    const subject = `Promo Credit Statement - ${storeName} - ${periodStr}`;
             
-            let body = `Hello ${brand.vendor},\n\n`;
-            body += `Please find the attached cumulative promo credit statement for ${storeName} for the period ending ${periodStr}.\n\n`;
-            body += `This statement includes a month-by-month breakdown of credits generated vs. collections received and the remaining unapplied balance.\n\n`;
-            body += `Please let us know if you have any questions or when we can expect the remaining balance to be applied to our account.\n\n`;
-            body += `Best regards,\n\n${storeName} Accounting Team\n`;
+                    let body = `Hello ${vendorName},\n\n`;
+                    body += `Please find the attached cumulative promo credit statement for ${storeName} for the period ending ${periodStr}.\n\n`;
+                    body += `This statement includes a month-by-month reconciliation of credits generated vs. collections received, itemized promotional details, and active dates.\n\n`;
+                    body += `Please let us know if you have any questions or when we can expect the remaining balance to be applied to our account.\n\n`;
+                    body += `Best regards,\n\n${storeName} Accounting Team\n`;
 
-            window.location.href = buildMailtoUrl(brand.email, 'accounting@rredco.com', subject, body);
+                    window.location.href = buildMailtoUrl(brand.email, 'accounting@rredco.com', subject, body);
             
-            logSystemAction("EXPORT", `Generated Dual-Use Statement for ${brand.vendor}`);
-        };
+                    logSystemAction("EXPORT", `Generated 3-Tier Statement for ${vendorName}`);
+                };
 
 
         let chartMonthlyInstance = null;

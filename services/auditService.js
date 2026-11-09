@@ -5,117 +5,277 @@ if (typeof value === 'number') return new Date(Math.round((value - 25569) * 8640
 const d = new Date(value);
 return isNaN(d.getTime()) ? null : d;
 };
-export const generateAuditStatementCSV = ({
-brandVendor,
-targetSite,
-ledgerEvents = [],
-startMonthName,
-endMonthName,
-calendarMonths,
-csvEscape
-}) => {
-const standardizedTarget = String(brandVendor).trim().toUpperCase();
-const currentYear = "2026";
-const headers = [
-"Period", "Location", "Brand", "New_Credits_Generated", "Running_Total_Generated",
-"Credits_Applied", "Cumulative_Applied", "Remaining_Unapplied_Balance", "Status", "dates promo ran", "promo type"
-];
-let csvLines = [headers.join(",")];
-let runningTotalGenerated = 0;
-let cumulativeApplied = 0;
-const startIdx = calendarMonths.indexOf(startMonthName || 'January');
-const endIdx = calendarMonths.indexOf(endMonthName || 'December');
-calendarMonths.forEach((month, idx) => {
-const monthlyEvents = ledgerEvents.filter(e => {
-// Match Brand
-const eBrand = (e.brand || e['Product Brand'] || e.Brand || '').toUpperCase();
-const brandMatch = eBrand === standardizedTarget;
-// Match Site
-const eSite = (e.detectedSite || e.site || e['Store Name'] || e.Location || '').toUpperCase();
-const siteMatch = eSite.includes(targetSite.toUpperCase().split(' ')[0]); // e.g. "RED"
-// Match Month by parsing the raw Date Closed if isolation_month is missing
-const targetMonth = month.toUpperCase();
-let eventMonth = (e.isolation_month || e.month || '').toUpperCase();
-const rawDate = e.dateClosed || e['Date Closed'] || e.date;
-if (!eventMonth && rawDate) {
-const d = new Date(rawDate);
-if (!isNaN(d.getTime())) {
-eventMonth = d.toLocaleString('en-US', { month: 'long' }).toUpperCase();
+export function generateAuditStatementCSV({
+    brandVendor,
+    targetSite,
+    ledgerEvents = [],
+    selectedPromos = null, // Array of approved promo titles from brandPromoFilters; null = all
+    calendarMonths = [
+        'January', 'February', 'March', 'April', 'May', 'June',
+        'July', 'August', 'September', 'October', 'November', 'December'
+    ],
+    csvEscape = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`
+}) {
+    const csvRows = [];
+    const sitePrefix = (targetSite || '').toUpperCase().split(' ')[0]; // Matches "RED" or "REDDING"
+    const targetBrand = (brandVendor || '').toUpperCase();
+
+    // 1. Filter raw transactions to this Brand, Site, and Active Promo Selection
+    const activeRawEvents = ledgerEvents.filter(e => {
+        // Exclude general ledger baseline summary rows from granular item lists
+        if (e.source === 'WORKBOOK_BASELINE' || e.type === 'APPLIED') return false;
+
+        const b = (e.brand || e['Product Brand'] || e.vendor || '').toUpperCase();
+        const s = (e.site || e.detectedSite || e['Store Name'] || e.Location || '').toUpperCase();
+        const promo = e.discountTitle || e['Discount Title'] || e.promoType || 'Standard Promo';
+
+        const brandMatch = b === targetBrand;
+        const siteMatch = s.includes(sitePrefix);
+        const promoMatch = !selectedPromos || selectedPromos.includes(promo);
+
+        return brandMatch && siteMatch && promoMatch;
+    });
+
+    // ========================================================
+    // SECTION 1: MONTHLY YTD RECONCILIATION SUMMARY (9 COLUMNS)
+    // ========================================================
+    csvRows.push([
+        'Period',
+        'Location',
+        'Brand',
+        'New_Credits_Generated',
+        'Running_Total_Generated',
+        'Credits_Applied',
+        'Cumulative_Applied',
+        'Remaining_Unapplied_Balance',
+        'Status'
+    ].join(','));
+
+    let runningGen = 0;
+    let cumulativeApplied = 0;
+    let ytdGen = 0;
+    let ytdApplied = 0;
+
+    calendarMonths.forEach(mName => {
+        const mUpper = mName.toUpperCase();
+
+        // Calculate New Credits Generated for this month from active events
+        const monthEvents = activeRawEvents.filter(e => {
+            const m = (e.isolation_month || e.month || '').toUpperCase();
+            return m === mUpper;
+        });
+
+        let newGen = monthEvents.reduce((sum, e) => 
+            sum + Number(e.amount ?? e.owed ?? e.creditOwed ?? e.Vendor_Credit_Owed ?? 0), 0
+        );
+
+        // Fallback: If no granular Treez records exist for this month, check for a baseline workbook row
+        // (Only use baseline if user hasn't explicitly filtered out promotions)
+        if (monthEvents.length === 0 && (!selectedPromos || selectedPromos.length === 0)) {
+            const baselineRow = ledgerEvents.find(e => 
+                e.source === 'WORKBOOK_BASELINE' &&
+                (e.isolation_month || e.month || '').toUpperCase() === mUpper &&
+                (e.brand || e.vendor || '').toUpperCase() === targetBrand &&
+                (e.site || e.detectedSite || '').toUpperCase().includes(sitePrefix)
+            );
+            if (baselineRow) {
+                newGen = Number(baselineRow.amount ?? baselineRow.owed ?? 0);
+            }
+        }
+
+        // Match Credits Applied from SAGE GL 4545
+        const appliedEvents = ledgerEvents.filter(e => 
+            e.type === 'APPLIED' && 
+            (e.isolation_month || e.month || '').toUpperCase() === mUpper &&
+            (e.brand || e.vendor || '').toUpperCase() === targetBrand &&
+            (e.site || e.detectedSite || '').toUpperCase().includes(sitePrefix)
+        );
+        const newApplied = appliedEvents.reduce((sum, e) => sum + Number(e.amount || 0), 0);
+
+        runningGen += newGen;
+        cumulativeApplied += newApplied;
+        ytdGen += newGen;
+        ytdApplied += newApplied;
+
+        const remaining = runningGen - cumulativeApplied;
+        let status = 'No Activity';
+        if (remaining > 0 && newApplied > 0) status = 'Partial Payment';
+        else if (remaining > 0) status = 'Outstanding';
+        else if (remaining < 0) status = 'Credit Balance / Overpaid';
+        else if (runningGen > 0 && remaining === 0) status = 'Fully Settled';
+
+        csvRows.push([
+            csvEscape(`${mName} 2026`),
+            csvEscape(targetSite),
+            csvEscape(brandVendor),
+            newGen.toFixed(2),
+            runningGen.toFixed(2),
+            newApplied.toFixed(2),
+            cumulativeApplied.toFixed(2),
+            remaining.toFixed(2),
+            csvEscape(status)
+        ].join(','));
+    });
+
+    // Section 1: YTD Total Row
+    const ytdRemaining = ytdGen - ytdApplied;
+    let ytdStatus = ytdRemaining === 0 ? 'Fully Settled' : (ytdApplied > 0 ? 'Partial Payment' : 'Outstanding');
+    if (ytdGen === 0 && ytdApplied === 0) ytdStatus = 'No Activity';
+
+    csvRows.push([
+        csvEscape('YTD Total'),
+        csvEscape(targetSite),
+        csvEscape(brandVendor),
+        ytdGen.toFixed(2),
+        ytdGen.toFixed(2),
+        ytdApplied.toFixed(2),
+        ytdApplied.toFixed(2),
+        ytdRemaining.toFixed(2),
+        csvEscape(ytdStatus)
+    ].join(','));
+
+    // ========================================================
+    // SECTION 2: ITEMIZED ACTIVITY GROUPED BY PROMO TYPE
+    // ========================================================
+    csvRows.push(''); // Blank row separator
+    csvRows.push(csvEscape('--- SECTION 2: ITEMIZED ACTIVITY GROUPED BY PROMOTION ---'));
+
+    if (activeRawEvents.length === 0) {
+        csvRows.push(csvEscape('No promotional line-item activity cataloged matching current filters.'));
+    } else {
+        // Group transactions by Discount Title
+        const promoGroups = {};
+        activeRawEvents.forEach(e => {
+            const promo = e.discountTitle || e['Discount Title'] || e.promoType || 'Standard Discount';
+            if (!promoGroups[promo]) promoGroups[promo] = [];
+            promoGroups[promo].push(e);
+        });
+
+        // Output each promotion group with its own header, rows, and subtotal
+        Object.keys(promoGroups).sort().forEach(promoTitle => {
+            const groupItems = promoGroups[promoTitle];
+            
+            csvRows.push('');
+
+            csvRows.push([
+                csvEscape(`PROMOTION: ${promoTitle}`),
+                '', '', '', '', '', '', ''
+            ].join(','));
+
+            csvRows.push([
+                'Date Closed',
+                'Month',
+                'Store Location',
+                'Product Brand',
+                'Product Name',
+                'Units Sold',
+                'Discount %',
+                'Credit Amount Owed'
+            ].join(','));
+
+            let groupSubtotal = 0;
+            const sortedItems = [...groupItems].sort((a, b) => 
+                new Date(a.dateClosed || a.date || 0) - new Date(b.dateClosed || b.date || 0)
+            );
+
+            sortedItems.forEach(item => {
+                const rawDate = item.dateClosed || item['Date Closed'] || item.date || '';
+                const dateStr = rawDate.split(' ')[0] || 'N/A';
+                const monthStr = item.isolation_month || item.month || '';
+                const prodName = item.productName || item['Product Name'] || item.product || 'N/A';
+                const units = item.unitsSold || item['Units Sold'] || item.units || 1;
+                const discPct = item.discountPercent || item['Discount %'] || item.discPct || '';
+                const owed = Number(item.amount ?? item.owed ?? item.creditOwed ?? item.Vendor_Credit_Owed ?? 0);
+                groupSubtotal += owed;
+
+                csvRows.push([
+                    csvEscape(dateStr),
+                    csvEscape(monthStr),
+                    csvEscape(targetSite),
+                    csvEscape(brandVendor),
+                    csvEscape(prodName),
+                    units,
+                    csvEscape(discPct),
+                    owed.toFixed(2)
+                ].join(','));
+            });
+
+            // Group Subtotal Row
+            csvRows.push([
+                csvEscape(`Subtotal for ${promoTitle}`),
+                '', '', '', '', '', '',
+                groupSubtotal.toFixed(2)
+            ].join(','));
+        });
+    }
+
+    // ========================================================
+    // SECTION 3: MONTHLY PROMO RUN SCHEDULE & ACTIVE DAYS AUDIT
+    // ========================================================
+    csvRows.push(''); // Blank row separator
+    csvRows.push(csvEscape('--- SECTION 3: MONTHLY PROMOTIONAL SCHEDULE & ACTIVE DAYS ---'));
+    csvRows.push([
+        'Month',
+        'Discount Title / Promo Type',
+        'Days Promo Ran (Calendar Days)',
+        'Total Active Days',
+        'Total Promo Credit Generated'
+    ].join(','));
+
+    if (activeRawEvents.length === 0) {
+        csvRows.push(csvEscape('No promotional run dates cataloged.'));
+    } else {
+        // Map keyed by "MONTH:::PROMO_TITLE"
+        const scheduleMap = {};
+
+        activeRawEvents.forEach(e => {
+            const m = e.isolation_month || e.month || 'October';
+            const promo = e.discountTitle || e['Discount Title'] || e.promoType || 'Standard Discount';
+            const key = `${m}:::${promo}`;
+
+            if (!scheduleMap[key]) {
+                scheduleMap[key] = {
+                    month: m,
+                    promoTitle: promo,
+                    daysSet: new Set(),
+                    totalCredit: 0
+                };
+            }
+
+            const rawDate = e.dateClosed || e['Date Closed'] || e.date;
+            if (rawDate) {
+                const d = new Date(rawDate);
+                if (!isNaN(d.getTime())) {
+                    scheduleMap[key].daysSet.add(d.getDate().toString().padStart(2, '0'));
+                }
+            }
+
+            scheduleMap[key].totalCredit += Number(e.amount ?? e.owed ?? e.creditOwed ?? e.Vendor_Credit_Owed ?? 0);
+        });
+
+        // Sort schedule chronologically by calendar month, then alphabetically by promo name
+        const sortedKeys = Object.keys(scheduleMap).sort((a, b) => {
+            const [mA, pA] = a.split(':::');
+            const [mB, pB] = b.split(':::');
+            const diff = calendarMonths.indexOf(mA) - calendarMonths.indexOf(mB);
+            return diff !== 0 ? diff : pA.localeCompare(pB);
+        });
+
+        sortedKeys.forEach(k => {
+            const entry = scheduleMap[k];
+            const sortedDays = Array.from(entry.daysSet).sort((a, b) => parseInt(a) - parseInt(b));
+            const daysString = sortedDays.length > 0 ? sortedDays.join(', ') : 'N/A';
+
+            csvRows.push([
+                csvEscape(entry.month),
+                csvEscape(entry.promoTitle),
+                // `="01, 02"` tells Excel to treat this strictly as a text string instead of a date
+                `="${daysString}"`,
+                entry.daysSet.size,
+                entry.totalCredit.toFixed(2)
+            ].join(','));
+        });
+    }
+
+    return csvRows.join('\r\n');
 }
-}
-const monthMatch = eventMonth === targetMonth;
-return brandMatch && siteMatch && monthMatch;
-});
-const generatedCredits = monthlyEvents
-.filter(e => e.type === 'GENERATED' || e.type === 'ADJUSTMENT')
-.reduce((sum, e) => sum + (e.amount || 0), 0);
-const appliedCredits = monthlyEvents
-.filter(e => e.type === 'RECOVERY')
-.reduce((sum, e) => sum + (e.amount || 0), 0);
-// Maintain running totals across ALL months
-runningTotalGenerated += generatedCredits;
-cumulativeApplied += appliedCredits;
-const remainingUnappliedBalance = runningTotalGenerated - cumulativeApplied;
-if (idx >= startIdx && idx <= endIdx) {
-let status = "No Activity";
-if (generatedCredits === 0 && appliedCredits === 0) status = "No Activity";
-else if (Math.abs(remainingUnappliedBalance) <= 0.01) status = "Reconciled / Settled";
-else if (remainingUnappliedBalance < -0.01) status = "Credit Balance / Overpaid";
-else if (appliedCredits > 0) status = "Partial Payment";
-else status = "Outstanding";
-
-const uniqueDays = [...new Set(monthlyEvents.map(event => {
-const rawDate = event.dateClosed || event['Date Closed'] || event.date;
-if (!rawDate) return null;
-const d = new Date(rawDate);
-if (isNaN(d.getTime())) return null;
-
-// Only extract dates if the event actually matches the month we are processing
-const monthName = d.toLocaleString('en-US', { month: 'long' });
-if (monthName.toLowerCase() !== month.toLowerCase()) return null;
-
-return d.getDate().toString().padStart(2, '0');
-}).filter(Boolean))].sort((a, b) => parseInt(a) - parseInt(b)).join(', ');
-
-const uniquePromos = [...new Set(monthlyEvents.map(event => 
-event.discountTitle || event['Discount Title'] || event.promoType || event.Discount_Title || event.creditType || ''
-).filter(Boolean))].join(' | ');
-
-csvLines.push([
-csvEscape(`${month} ${currentYear}`),
-csvEscape(targetSite),
-csvEscape(brandVendor),
-generatedCredits.toFixed(2),
-runningTotalGenerated.toFixed(2),
-appliedCredits.toFixed(2),
-cumulativeApplied.toFixed(2),
-remainingUnappliedBalance.toFixed(2),
-csvEscape(status),
-csvEscape(uniqueDays),
-csvEscape(uniquePromos)
-].join(","));
-}
-});
-// YTD ROW
-const ytdBalance = runningTotalGenerated - cumulativeApplied;
-let ytdStatus = "No Activity";
-if (runningTotalGenerated === 0 && cumulativeApplied === 0) ytdStatus = "No Activity";
-else if (Math.abs(ytdBalance) <= 0.01) ytdStatus = "Reconciled / Settled";
-else if (ytdBalance < -0.01) ytdStatus = "Credit Balance / Overpaid";
-else if (cumulativeApplied > 0) ytdStatus = "Partial Payment";
-else ytdStatus = "Outstanding";
-csvLines.push([
-csvEscape("YTD Total"),
-csvEscape(targetSite),
-csvEscape(brandVendor),
-runningTotalGenerated.toFixed(2),
-runningTotalGenerated.toFixed(2),
-cumulativeApplied.toFixed(2),
-cumulativeApplied.toFixed(2),
-ytdBalance.toFixed(2),
-csvEscape(ytdStatus),
-csvEscape(""),
-csvEscape("")
-].join(","));
-return csvLines.join("\r\n");
-};
