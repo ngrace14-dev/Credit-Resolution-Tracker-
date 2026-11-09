@@ -21,12 +21,12 @@ export function generateAuditStatementCSV({
     const sitePrefix = (targetSite || '').toUpperCase().split(' ')[0]; // Matches "RED" or "REDDING"
     const targetBrand = (brandVendor || '').toUpperCase();
 
-    // 1. Filter raw transactions to this Brand, Site, and Active Promo Selection
+        // 1. Filter raw transactions to this Brand, Site, and Active Promo Selection
     const activeRawEvents = ledgerEvents.filter(e => {
         // Exclude general ledger baseline summary rows from granular item lists
         if (e.source === 'WORKBOOK_BASELINE' || e.type === 'APPLIED') return false;
 
-                const b = (e.brand || e['Product Brand'] || e.vendor || '').toUpperCase();
+        const b = (e.brand || e['Product Brand'] || e.vendor || '').toUpperCase();
         const s = (e.site || e.detectedSite || e['Store Name'] || e.Location || '').toUpperCase();
         const promo = e.discountTitle || e['Discount Title'] || e.promoType || 'Standard Promo';
 
@@ -36,9 +36,21 @@ export function generateAuditStatementCSV({
         
         const siteMatch = s.includes(sitePrefix) || s.includes((targetSite || '').toUpperCase());
         const promoMatch = !selectedPromos || selectedPromos.length === 0 || selectedPromos.includes(promo);
+        
+        const eventMonth = (e.isolation_month || e.month || '').toUpperCase();
+        const monthMatch = activeMonth ? eventMonth === activeMonth.toUpperCase() : true;
 
-        return brandMatch && siteMatch && promoMatch;
+        const isMatch = brandMatch && siteMatch && promoMatch && monthMatch;
+        return isMatch;
     });
+    
+    console.log("=== AUDIT SERVICE FILTER DEBUG ===");
+    console.log("Target Brand:", targetBrand);
+    console.log("Target Site Prefix:", sitePrefix);
+    console.log("Active Month required:", activeMonth);
+    console.log("Total incoming events to filter:", ledgerEvents.length);
+    console.log("Total events that survived all filters (activeRawEvents):", activeRawEvents.length);
+    console.log("=====================================");
 
     // ========================================================
     // SECTION 1: MONTHLY YTD RECONCILIATION SUMMARY (9 COLUMNS)

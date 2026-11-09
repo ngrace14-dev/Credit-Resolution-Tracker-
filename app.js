@@ -984,8 +984,8 @@ createApp({
                                                                             // 2. Retrieve user's toggled promo filters for this brand
                                                                             const selectedPromos = brandPromoFilters.value[targetBrandVendor] || null;
             
-                                                                            // 3. Delegate directly to the 3-Tier service
-                                                                            return generateAuditStatementService({
+                                                                                                                                                        // 3. Delegate directly to the 3-Tier service
+                                                                            const finalPayload = {
                                                                                 brandVendor: targetBrandVendor,
                                                                                 targetSite: activeSite.value,
                                                                                 activeMonth: activeMonth.value,
@@ -993,7 +993,20 @@ createApp({
                                                                                 selectedPromos: selectedPromos,
                                                                                 calendarMonths,
                                                                                 csvEscape
-                                                                            });
+                                                                            };
+                                                                            
+                                                                            // === DEBUG INJECTION ===
+                                                                            console.log("=== STATEMENT GENERATOR DEBUG ===");
+                                                                            console.log("Target Brand:", targetBrandVendor);
+                                                                            console.log("Target Site:", activeSite.value);
+                                                                            console.log("Active Month:", activeMonth.value);
+                                                                            console.log("Total Raw Records inside treesSalesData:", rawRecords.length);
+                                                                            console.log("Total mapped inMemoryEvents (Raw POS items):", inMemoryEvents.length);
+                                                                            console.log("Total ledgerEventsList (Summary Shards):", ledgerEventsList.value.length);
+                                                                            console.log("First mapped POS item (if exists):", inMemoryEvents[0]);
+                                                                            console.log("===================================");
+                                                                            
+                                                                            return generateAuditStatementService(finalPayload);
                                                                         };
 
                         const downloadMonthlyReport = (brand) => {
