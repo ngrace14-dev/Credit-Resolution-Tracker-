@@ -1687,12 +1687,16 @@ createApp({
                                 uploadedAt: Date.now()
                             };
 
-                            const deterministicId = `treez_${storeCode}_${trackingVal}_${dateStr}_${owedAmt}_${discountTitle}`.replace(/[^a-zA-Z0-9_]/g, '');
+                                                        const deterministicId = `treez_${storeCode}_${trackingVal}_${dateStr}_${owedAmt}_${discountTitle}`.replace(/[^a-zA-Z0-9_]/g, '');
                             const newDocRef = doc(collection(db, "treesSales"), deterministicId);
                             
                             // DO NOT push locally here, allow onSnapshot to hydrate seamlessly
                             
                             batch.set(newDocRef, newSale, { merge: true });
+                            
+                            // Push directly to memory array to prevent needing a full Firestore fetch
+                            treesSalesData.value.push({ id: deterministicId, ...newSale });
+                            
                             count++;
 
                                                         if (count % 400 === 0) {
