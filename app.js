@@ -294,17 +294,19 @@ createApp({
                 const getFilteredBrandTotal = (brand) => {
                     const rawRecords = treesSalesData.value || [];
                     const brandName = (brand.name || brand.vendor || '').toUpperCase();
-            const sitePrefix = (activeSite.value || '').toUpperCase().split(' ')[0];
-            const selected = brandPromoFilters.value[brand.name || brand.vendor];
+                    const cleanTarget = brandName.replace(/[^A-Z0-9]/g, '');
+                    const sitePrefix = (activeSite.value || '').toUpperCase().split(' ')[0];
+                    const selected = brandPromoFilters.value[brand.name || brand.vendor];
             
-            // Filter matching records
-            const brandRecords = rawRecords.filter(e => {
-                const b = (e.brand || e['Product Brand'] || e.vendor || '').toUpperCase();
-                const s = (e.site || e.detectedSite || e['Store Name'] || '').toUpperCase();
-                const promo = e.discountTitle || e['Discount Title'] || e.promoType || '';
+                    // Filter matching records
+                    const brandRecords = rawRecords.filter(e => {
+                        const b = (e.brand || e['Product Brand'] || e.vendor || '').toUpperCase();
+                        const cleanB = b.replace(/[^A-Z0-9]/g, '');
+                        const s = (e.site || e.detectedSite || e['Store Name'] || '').toUpperCase();
+                        const promo = e.discountTitle || e['Discount Title'] || e.promoType || '';
                 
-                const brandMatch = b === brandName;
-                const siteMatch = s.includes(sitePrefix);
+                        const brandMatch = cleanB === cleanTarget || cleanB.includes(cleanTarget) || cleanTarget.includes(cleanB);
+                        const siteMatch = s.includes(sitePrefix);
                 const promoMatch = !selected || selected.includes(promo);
                 
                 return brandMatch && siteMatch && promoMatch;
@@ -354,14 +356,17 @@ createApp({
                     // Use treesSalesData as the primary source of truth for populated promo titles
                     const rawRecords = treesSalesData.value || [];
                     if (!rawRecords.length) return [];
-            const targetBrand = String(brandName).toUpperCase();
+                        const targetBrand = String(brandName).toUpperCase();
+            const cleanTarget = targetBrand.replace(/[^A-Z0-9]/g, '');
             const sitePrefix = (activeSite.value || '').toUpperCase().split(' ')[0];
             const brandPromos = rawRecords
             .filter(e => {
                 const b = (e.brand || e['Product Brand'] || e.vendor || '').toUpperCase();
+                const cleanB = b.replace(/[^A-Z0-9]/g, '');
                 const s = (e.site || e.detectedSite || e['Store Name'] || e.Location || '').toUpperCase();
                 // Match the site string properly to avoid prefix cutoff bugs
-                return b === targetBrand && (s.includes(sitePrefix) || s.includes((activeSite.value || '').toUpperCase()));
+                const brandMatch = cleanB === cleanTarget || cleanB.includes(cleanTarget) || cleanTarget.includes(cleanB);
+                return brandMatch && (s.includes(sitePrefix) || s.includes((activeSite.value || '').toUpperCase()));
             })
             .map(e => e.discountTitle || e['Discount Title'] || e.promoType || e.Discount_Title)
             .filter(Boolean); // removes nulls/undefined/empty strings

@@ -26,11 +26,14 @@ export function generateAuditStatementCSV({
         // Exclude general ledger baseline summary rows from granular item lists
         if (e.source === 'WORKBOOK_BASELINE' || e.type === 'APPLIED') return false;
 
-        const b = (e.brand || e['Product Brand'] || e.vendor || '').toUpperCase();
+                const b = (e.brand || e['Product Brand'] || e.vendor || '').toUpperCase();
         const s = (e.site || e.detectedSite || e['Store Name'] || e.Location || '').toUpperCase();
         const promo = e.discountTitle || e['Discount Title'] || e.promoType || 'Standard Promo';
 
-                const brandMatch = b === targetBrand;
+        const cleanB = b.replace(/[^A-Z0-9]/g, '');
+        const cleanTarget = targetBrand.replace(/[^A-Z0-9]/g, '');
+        const brandMatch = cleanB === cleanTarget || cleanB.includes(cleanTarget) || cleanTarget.includes(cleanB);
+        
         const siteMatch = s.includes(sitePrefix) || s.includes((targetSite || '').toUpperCase());
         const promoMatch = !selectedPromos || selectedPromos.length === 0 || selectedPromos.includes(promo);
 
