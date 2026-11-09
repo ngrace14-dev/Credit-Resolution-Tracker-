@@ -236,11 +236,11 @@ createApp({
             return calendarMonths[d.getMonth()];
         };
 
-        const detectSiteFromName = (storeNameStr) => {
+                const detectSiteFromName = (storeNameStr) => {
             if (!storeNameStr) return activeSite.value; 
             const s = storeNameStr.toLowerCase();
-            if (s.includes('red bluff') || s.includes('redbluff')) return 'Red Bluff';
-            if (s.includes('redding') || s.includes('sundial')) return 'Redding';
+            if (s.includes('red bluff') || s.includes('redbluff') || s.includes('e12')) return 'Red Bluff';
+            if (s.includes('redding') || s.includes('sundial') || s.includes('e11')) return 'Redding';
             return activeSite.value; 
         };
 
@@ -1411,15 +1411,18 @@ createApp({
         let unsubscribeLedger = null;
         let unsubscribeCredits = null;
 
-        const setupFilteredListeners = () => {
+                const setupFilteredListeners = () => {
             if (unsubscribeSales) unsubscribeSales();
             if (unsubscribeLedger) unsubscribeLedger();
             
-            let salesQ = query(collection(db, "treesSales"), where("detectedSite", "==", activeSite.value));
+            let salesQ = query(collection(db, "treesSales"));
             let ledgerQ = query(collection(db, "masterLedger"), where("site", "==", activeSite.value));
 
-                        if (activeMonth.value !== 'All') {
-                salesQ = query(salesQ, where("month", "==", activeMonth.value));
+            // Constrain sales query to prevent browser crashes / read quota blowout on 20,000+ row datasets
+            if (activeMonth.value !== 'All') {
+                salesQ = query(salesQ, where("month", "==", activeMonth.value), where("detectedSite", "==", activeSite.value));
+            } else {
+                salesQ = query(salesQ, where("detectedSite", "==", activeSite.value));
             }
 
             salesQ = query(salesQ, limit(4000));
@@ -1604,7 +1607,7 @@ createApp({
                             return '';
                         };
 
-                                                let batch = writeBatch(db);
+                                                                                                let batch = writeBatch(db);
                         let count = 0;
                         let skippedCount = 0;
                         const errorRecords = [];
@@ -1631,17 +1634,21 @@ createApp({
 
                             const storeString = getVal(rowObj, 'Store Name', 'Location');
                             const detectedSite = detectSiteFromName(storeString);
+                            
+                            const storeCode = detectedSite === 'Redding' ? 'RD' : 'RB';
 
                             const units = parseFloat(getVal(rowObj, 'Units Sold', 'Unit Sold', 'Qty', 'Quantity')) || 0;
                             const unitPrice = cleanCurrency(getVal(rowObj, 'Cost Per Unit', 'Unit Price', 'Price'));
                             const discAmt = cleanCurrency(getVal(rowObj, 'Discounts', 'Discount Amount', 'Discount'));
                             const owedAmt = cleanCurrency(getVal(rowObj, 'Vendor Credit Owed', 'Credit Owed'));
+                            
+                            const discountTitle = getVal(rowObj, 'Discount Title', 'Discount Name') || '';
 
                                                         const newSale = {
                                 uploadId: uploadId, 
                                 month: parsedMonth, 
                                 brand: brandVal || 'Unknown Brand',
-                                discountTitle: getVal(rowObj, 'Discount Title', 'Discount Name') || '',
+                                discountTitle: discountTitle,
                                 dateClosed: dateStr,
                                 storeName: storeString,
                                 detectedSite: detectedSite,
@@ -1655,30 +1662,12 @@ createApp({
                                 uploadedAt: Date.now()
                             };
 
-                                                                                                                                            // Update the local reactive state immediately
-                                                                                                                                            // Since CSVs can contain data for both locations, check against active filters before rendering
-                                                                                                                                            if (parsedMonth === activeMonth.value || activeMonth.value === 'All') {
-                                                                                                                                                if (detectedSite === activeSite.value || activeSite.value === 'All') {
-                                                                                                                                                    treesSalesData.value.push(newSale);
-                                                                                                                                                }
-                                                                                                                                            }
-                                                                                                                                            // Always push to masterLedger if applicable to active session or tracking mechanisms overall
-                                                                                                                                            // Note: For multi-site CSVs, always push to the ledger array to ensure full coverage on re-renders,
-                                                                                                                                            // but only render ones matching the current site if activeSite is set
-                                                                                                                                            masterLedgerData.value.push({
-                                                                                                                                                brand: newSale.brand,
-                                                                                                                                                Product_Brand: newSale.brand,
-                                                                                                                                                detectedSite: newSale.detectedSite,
-                                                                                                                                                Location: newSale.detectedSite,
-                                                                                                                                                month: parsedMonth, // e.g. "October" (using parsed so it works when 'All' is selected)
-                                                                                                                                                dateClosed: newSale.dateClosed,
-                                                                                                                                                discountTitle: newSale.discountTitle,
-                                                                                                                                                Vendor_Credit_Owed: Number(newSale.owed || 0),
-                                                                                                                                                source: 'TREEZ_POS'
-                                                                                                                                            });
-
-                            const newDocRef = doc(collection(db, "treesSales"));
-                            batch.set(newDocRef, newSale);
+                            const deterministicId = `treez_${storeCode}_${trackingVal}_${dateStr}_${owedAmt}_${discountTitle}`.replace(/[^a-zA-Z0-9_]/g, '');
+                            const newDocRef = doc(collection(db, "treesSales"), deterministicId);
+                            
+                            // DO NOT push locally here, allow onSnapshot to hydrate seamlessly
+                            
+                            batch.set(newDocRef, newSale, { merge: true });
                             count++;
 
                                                         if (count % 400 === 0) {
@@ -1754,7 +1743,7 @@ createApp({
             try {
                 await uploadBytes(fileRef, file);
                 
-                                const reader = new FileReader();
+                                                                const reader = new FileReader();
                 reader.onload = async (evt) => {
                     try {
                         const text = evt.target.result;
@@ -1771,45 +1760,93 @@ createApp({
                         const headers = parseCSVRow(lines[0]).map(normalizeHeader);
                         const rows = lines.slice(1);
                         
-                        const importedSageData = [];
+                        const uploadId = `sage_${Date.now()}`;
+                        let count = 0;
+                        let batch = writeBatch(db);
 
                         for (let i = 0; i < rows.length; i++) { 
+                            if (!rows[i].trim()) continue;
                             const cols = parseCSVRow(rows[i]);
                             const rowObj = {};
                             headers.forEach((h, idx) => { 
                                 rowObj[h] = cols[idx] ? cleanString(cols[idx]) : ''; 
                             });
                             
-                            importedSageData.push({
-                                "Posted dt.": rowObj["Posted dt."] || rowObj["Date"] || '',
-                                "Store": rowObj["Store"] || rowObj["Location"] || '',
-                                "Location": rowObj["Location"] || '',
-                                "Memo/Description": rowObj["Memo/Description"] || rowObj["Description"] || rowObj["Memo"] || '',
-                                "Credit": cleanCurrency(rowObj["Credit"] || rowObj["Amount"]),
-                                "Mapped Brand": "" 
-                            });
+                                                        const storeRaw = rowObj["Store"] || rowObj["Location"] || '';
+                                                        const storeName = detectSiteFromName(storeRaw);
+                                                        const storeCode = storeName === 'Redding' ? 'RD' : 'RB';
+                                                        const dateStr = rowObj["Posted dt."] || rowObj["Date"] || '';
+                            const amount = cleanCurrency(rowObj["Credit"] || rowObj["Amount"] || 0);
+                            const docNumber = rowObj["Doc"] || rowObj["Doc#"] || '';
+                            const memo = rowObj["Memo/Description"] || rowObj["Description"] || rowObj["Memo"] || '';
+                            
+                            let mappedBrand = 'Unmapped Brand';
+                            const mappingRows = masterWorkbook.value?.data?.["Brand_Mapping"] || [];
+                            
+                            // Check the memo against the universal registry to find the true brand
+                            for (const mapRow of mappingRows) {
+                                const legacy = String(mapRow["Master Workbook Legacy Name"] || '').trim().toLowerCase();
+                                const csvName = String(mapRow["Standardized POS Name (CSV)"] || '').trim();
+                                if (legacy && memo.toLowerCase().includes(legacy)) {
+                                    mappedBrand = csvName || legacy; // Fallback to legacy if standardized missing
+                                    break;
+                                }
+                            }
+                            // If still unmapped, check if the memo contains any known brand from master directory
+                            if (mappedBrand === 'Unmapped Brand') {
+                                for (const knownBrand of masterBrands.value) {
+                                    const vendorName = String(knownBrand.vendor || '').trim().toLowerCase();
+                                    if (vendorName && memo.toLowerCase().includes(vendorName)) {
+                                        mappedBrand = knownBrand.vendor;
+                                        break;
+                                    }
+                                }
+                            }
+                            
+                            if (amount > 0 && storeRaw) {
+                                const newSageRecovery = {
+                                    upload_id: uploadId,
+                                    type: 'RECOVERY',
+                                    store: storeName,
+                                    site: storeName,
+                                    date: dateStr,
+                                    isolation_month: detectMonthFromDate(dateStr),
+                                    amount: amount,
+                                    invoice_ref: docNumber ? `${docNumber} - ${memo}` : memo,
+                                    memo: memo,
+                                    brand: mappedBrand, // Now correctly mapped before saving to Firestore
+                                    status: 'Applied',
+                                    createdAt: Date.now()
+                                };
+                                
+                                const deterministicId = `sage_${storeCode}_${docNumber}_${dateStr}_${amount}`.replace(/[^a-zA-Z0-9_]/g, '');
+                                const newDocRef = doc(collection(db, "masterLedger"), deterministicId);
+                                
+                                batch.set(newDocRef, newSageRecovery, { merge: true });
+                                count++;
+                                
+                                if (count % 400 === 0) {
+                                    await batch.commit();
+                                    batch = writeBatch(db);
+                                    await new Promise(resolve => setTimeout(resolve, 0));
+                                }
+                            }
                         }
 
-                                                if (!masterWorkbook.value) return alert("Master Workbook not loaded.");
+                        if (count > 0) {
+                            await batch.commit();
+                            console.log("Sage Shards successfully committed to masterLedger");
+                            
+                            if (typeof setupFilteredListeners === 'function') {
+                                setupFilteredListeners();
+                            }
+                            
+                            logSystemAction("IMPORT", `Uploaded ${count} Sage GL entries as Recovery Shards`);
+                            alert(`Success! Sharded ${count} entries from Sage into the Master Ledger.`);
+                        } else {
+                            alert("No valid recovery entries found in Sage file.");
+                        }
                         
-                        const updatedData = JSON.parse(JSON.stringify(masterWorkbook.value.data));
-                        updatedData["GL Raw by Store"] = [...(updatedData["GL Raw by Store"] || []), ...importedSageData];
-                        masterWorkbook.value.data = updatedData;
-
-                        const sheetDocId = "GL_Raw_by_Store";
-                        await setDoc(doc(db, "workbook_v9_sheets", sheetDocId), {
-                            sheetName: "GL Raw by Store",
-                            rows: updatedData["GL Raw by Store"],
-                            updatedAt: Date.now()
-                        });
-
-                        await setDoc(doc(db, "promo tracker", "Master_Workbook_V9_Board_Report"), {
-                            lastModified: Date.now(),
-                            modifiedBy: loggedInUser.value
-                        }, { merge: true });
-
-                        logSystemAction("IMPORT", `Uploaded ${importedSageData.length} Sage GL entries to Master Workbook`);
-                                                alert(`Success! Added ${importedSageData.length} entries from Sage to the 'GL Raw by Store' sheet.`);
                         e.target.value = '';
                     } catch (err) {
                         console.error("Sage Parse/Upload Error:", err);
