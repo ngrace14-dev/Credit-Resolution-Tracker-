@@ -1435,23 +1435,30 @@ createApp({
             if (unsubscribeSales) unsubscribeSales();
             if (unsubscribeLedger) unsubscribeLedger();
             
-            let salesQ = query(collection(db, "treesSales"));
+                        let salesQ = query(collection(db, "treesSales"));
             let ledgerQ = query(collection(db, "masterLedger"), where("site", "==", activeSite.value));
 
             // Constrain sales query to prevent browser crashes / read quota blowout on 20,000+ row datasets
             if (activeMonth.value !== 'All') {
-                salesQ = query(salesQ, where("month", "==", activeMonth.value), where("detectedSite", "==", activeSite.value));
+                salesQ = query(salesQ, where("month", "==", activeMonth.value), limit(15000));
             } else {
-                salesQ = query(salesQ, where("detectedSite", "==", activeSite.value));
+                salesQ = query(salesQ, limit(15000));
             }
 
-            salesQ = query(salesQ, limit(4000));
             ledgerQ = query(ledgerQ, limit(8000));
 
             unsubscribeSales = onSnapshot(salesQ, (snapshot) => {
-                const fetchedSales = [];
-                snapshot.forEach(docSnap => { fetchedSales.push({ id: docSnap.id, ...docSnap.data() }); });
-                treesSalesData.value = fetchedSales;
+                const loaded = [];
+                snapshot.forEach(doc => {
+                    const data = doc.data();
+                    const s = (data.detectedSite || data['Store Name'] || data.Location || '').toUpperCase();
+                    const activeS = (activeSite.value || '').toUpperCase().split(' ')[0];
+                    // Only keep records matching the active site
+                    if (activeSite.value === 'All' || s.includes(activeS)) {
+                        loaded.push({ id: doc.id, ...data });
+                    }
+                });
+                treesSalesData.value = loaded;
             }, (err) => console.error("Sales Pull Failed:", err));
             
             unsubscribeLedger = onSnapshot(ledgerQ, (snapshot) => {
