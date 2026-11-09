@@ -291,9 +291,9 @@ createApp({
                 // Stores an array of selected promo titles for each brand: { [brandName]: string[] }
         const brandPromoFilters = ref({});
         
-        const getFilteredBrandTotal = (brand) => {
-            const rawRecords = (masterLedgerData?.value?.length ? masterLedgerData.value : treesSalesData?.value) || [];
-            const brandName = (brand.name || brand.vendor || '').toUpperCase();
+                const getFilteredBrandTotal = (brand) => {
+                    const rawRecords = treesSalesData.value || [];
+                    const brandName = (brand.name || brand.vendor || '').toUpperCase();
             const sitePrefix = (activeSite.value || '').toUpperCase().split(' ')[0];
             const selected = brandPromoFilters.value[brand.name || brand.vendor];
             
@@ -323,8 +323,8 @@ createApp({
             }, 0);
         };
         
-                const brandPromoCatalog = computed(() => {
-            const rawRecords = (masterLedgerData?.value?.length ? masterLedgerData.value : treesSalesData?.value) || [];
+                                const brandPromoCatalog = computed(() => {
+            const rawRecords = treesSalesData.value || [];
             const sitePrefix = (activeSite.value || '').toUpperCase().split(' ')[0];
             const catalog = {};
             
@@ -348,19 +348,20 @@ createApp({
             return result;
         });
 
-        // Helper: Get all unique promo titles detected in raw Treez data for a brand
-                const getAvailablePromosForBrand = (brandName) => {
-            if (!brandName) return [];
-            // Check both potential storage locations
-            const rawRecords = (masterLedgerData?.value?.length ? masterLedgerData.value : treesSalesData?.value) || [];
-            if (!rawRecords.length) return [];
+                // Helper: Get all unique promo titles detected in raw Treez data for a brand
+                        const getAvailablePromosForBrand = (brandName) => {
+                    if (!brandName) return [];
+                    // Use treesSalesData as the primary source of truth for populated promo titles
+                    const rawRecords = treesSalesData.value || [];
+                    if (!rawRecords.length) return [];
             const targetBrand = String(brandName).toUpperCase();
             const sitePrefix = (activeSite.value || '').toUpperCase().split(' ')[0];
             const brandPromos = rawRecords
             .filter(e => {
                 const b = (e.brand || e['Product Brand'] || e.vendor || '').toUpperCase();
                 const s = (e.site || e.detectedSite || e['Store Name'] || e.Location || '').toUpperCase();
-                return b === targetBrand && s.includes(sitePrefix);
+                // Match the site string properly to avoid prefix cutoff bugs
+                return b === targetBrand && (s.includes(sitePrefix) || s.includes((activeSite.value || '').toUpperCase()));
             })
             .map(e => e.discountTitle || e['Discount Title'] || e.promoType || e.Discount_Title)
             .filter(Boolean); // removes nulls/undefined/empty strings
