@@ -926,22 +926,41 @@ createApp({
         };
 
 
-                                                                        const generateAuditStatementCSV = (brand) => {
+                                                                                                                                                const generateAuditStatementCSV = (brand) => {
                                                                             const targetBrandVendor = brand.vendor || brand.brand || (typeof brand === 'string' ? brand : '');
             
                                                                             // 1. Gather all in-memory raw records
                                                                             const rawRecords = (masterLedgerData?.value?.length ? masterLedgerData.value : treesSalesData?.value) || [];
-                                                                            const inMemoryEvents = rawRecords.map(sale => ({
-                                                                                ...sale,
-                                                                                type: 'GENERATED',
-                                                                                amount: Number(sale.owed ?? sale.creditOwed ?? sale.Vendor_Credit_Owed ?? sale['Vendor Credit Owed'] ?? 0),
-                                                                                brand: sale.brand || sale['Product Brand'] || sale.Brand || '',
-                                                                                vendor: sale.vendor || sale.brand || sale['Product Brand'] || '',
-                                                                                site: sale.detectedSite || sale.site || sale['Store Name'] || sale.Location || '',
-                                                                                isolation_month: sale.month || sale.isolation_month || '',
-                                                                                dateClosed: sale.dateClosed || sale['Date Closed'] || sale.date || '',
-                                                                                discountTitle: sale.discountTitle || sale['Discount Title'] || sale.promoType || ''
-                                                                            }));
+                                                                            const inMemoryEvents = rawRecords.map(sale => {
+                                                                                const owedAmt = Number(
+                                                                                    sale.owed ?? 
+                                                                                    sale.creditOwed ?? 
+                                                                                    sale.Vendor_Credit_Owed ?? 
+                                                                                    sale['Vendor Credit Owed'] ?? 
+                                                                                    sale.discountAmount ?? 
+                                                                                    sale['Discount Amount'] ?? 
+                                                                                    0
+                                                                                );
+                                                                                const rawDate = sale.dateClosed || sale['Date Closed'] || sale.date || sale.Received_Date || '';
+                                                                                const promo = sale.discountTitle || sale['Discount Title'] || sale.promoType || sale.Discount_Title || 'Standard Promo';
+                                                                                const brandName = sale.brand || sale['Product Brand'] || sale.Brand || '';
+                                                                                const siteName = sale.detectedSite || sale.site || sale['Store Name'] || sale.Location || '';
+                                                                                return {
+                                                                                    ...sale,
+                                                                                    type: 'GENERATED',
+                                                                                    amount: owedAmt,
+                                                                                    brand: brandName,
+                                                                                    vendor: brandName, // Ensure vendor is explicitly set for downstream matching
+                                                                                    site: siteName,
+                                                                                    detectedSite: siteName,
+                                                                                    isolation_month: sale.month || sale.isolation_month || '',
+                                                                                    dateClosed: rawDate,
+                                                                                    discountTitle: promo,
+                                                                                    productName: sale.productName || sale['Product Name'] || sale.Product_Name || 'N/A',
+                                                                                    unitsSold: sale.unitsSold || sale['Units Sold'] || sale.Units_Sold || 1,
+                                                                                    discountPercent: sale.discountPercent || sale['Discount %'] || sale['Discount Percent'] || ''
+                                                                                };
+                                                                            });
 
                                                                             // 2. Retrieve user's toggled promo filters for this brand
                                                                             const selectedPromos = brandPromoFilters.value[targetBrandVendor] || null;
