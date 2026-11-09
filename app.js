@@ -101,7 +101,7 @@ createApp({
                 const masterBrands = ref([]);
         const selectedBrands = ref([]);
 
-        // BATCH PROCESSING STATE
+                // BATCH PROCESSING STATE
         const isBatchProcessing = ref(false);
         const isExporting = ref(false);
         const batchProgress = ref(0);
@@ -109,6 +109,41 @@ createApp({
                 const batchType = ref('');
         const batchError = ref(null);
         let batchContext = null; // Store data for continuation
+
+        // --- SALES DATA FETCHERS ---
+        const fetchSalesData = async () => {
+            isExporting.value = true;
+            try {
+                let q = query(collection(db, "treesSales"));
+                if (activeMonth.value !== 'All') {
+                    q = query(q, where("month", "==", activeMonth.value));
+                }
+                
+                const snap = await getDocs(q);
+                const loaded = [];
+                
+                const isBluff = (str) => str.includes('BLUFF') || str.includes('RB') || str.includes('E12');
+                const isRedding = (str) => (str.includes('REDDING') || str.includes('RD') || str.includes('E11')) && !str.includes('BLUFF');
+                const targetIsBluff = (activeSite.value || '').toUpperCase().includes('BLUFF');
+
+                snap.forEach(docSnap => {
+                    const data = docSnap.data();
+                    const s = (data.detectedSite || data['Store Name'] || data.Location || '').toUpperCase();
+                    const siteMatch = activeSite.value === 'All' || (targetIsBluff ? isBluff(s) : isRedding(s));
+                    
+                    if (siteMatch) {
+                        loaded.push({ id: docSnap.id, ...data });
+                    }
+                });
+
+                treesSalesData.value = loaded;
+                console.log(`[SalesSync] Hydrated ${loaded.length} records for ${activeSite.value} (${activeMonth.value})`);
+            } catch (err) {
+                console.error("Sales Fetch Failed:", err);
+            } finally {
+                isExporting.value = false;
+            }
+        };
 
         // --- MODAL REFS & HANDLERS ---
         const showEmailDraftModal = ref(false);
@@ -960,28 +995,15 @@ createApp({
         };
 
 
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                const generateAuditStatementCSV = async (brand) => {
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                const generateAuditStatementCSV = async (brand) => {
                                                                             const targetBrandVendor = brand.vendor || brand.brand || (typeof brand === 'string' ? brand : '');
             
-                                                                            // 1. Gather all in-memory raw records
-                                                                            let rawRecords = treesSalesData.value || [];
-                                                                            if (rawRecords.length <= 150) {
-                                                                                isExporting.value = true;
-                                                                                try {
-                                                                                    let q = query(collection(db, "treesSales"));
-                                                                                    if (activeMonth.value !== 'All') {
-                                                                                        q = query(q, where("month", "==", activeMonth.value));
-                                                                                    }
-                                                                                    const snap = await getDocs(q);
-                                                                                    const fullDataset = [];
-                                                                                    snap.forEach(docSnap => fullDataset.push({ id: docSnap.id, ...docSnap.data() }));
-                                                                                    rawRecords = fullDataset;
-                                                                                } catch (error) {
-                                                                                    console.error("Full fetch failed:", error);
-                                                                                } finally {
-                                                                                    isExporting.value = false;
-                                                                                }
+                                                                            // 1. Ensure data is loaded
+                                                                            if (treesSalesData.value.length === 0) {
+                                                                                await fetchSalesData();
                                                                             }
+                                                                            
+                                                                            const rawRecords = treesSalesData.value || [];
                                                                             const inMemoryEvents = rawRecords.map(sale => {
                                                                                 const owedAmt = Number(
                                                                                     sale.owed ?? 
@@ -1079,30 +1101,16 @@ createApp({
                                 return;
                             }
 
-                            // Full Month Raw Export Logic
+                                                        // Full Month Raw Export Logic
                             const reportMonth = brand.month || activeMonth.value;
                             let csvContent = "Location,Date & Time,Brand,Product Name,Transaction ID,Quantity Sold,Unit Price,Total Before Tax,Discount Title,Discount Amount,Credit Owed,Entry Type\n";
 
                             let csvTotal = 0;
     
-                            let rawRecords = treesSalesData.value || [];
-                            if (rawRecords.length <= 150) {
-                                isExporting.value = true;
-                                try {
-                                    let q = query(collection(db, "treesSales"));
-                                    if (activeMonth.value !== 'All') {
-                                        q = query(q, where("month", "==", activeMonth.value));
-                                    }
-                                    const snap = await getDocs(q);
-                                    const fullDataset = [];
-                                    snap.forEach(docSnap => fullDataset.push({ id: docSnap.id, ...docSnap.data() }));
-                                    rawRecords = fullDataset;
-                                } catch (error) {
-                                    console.error("Full fetch failed:", error);
-                                } finally {
-                                    isExporting.value = false;
-                                }
+                            if (treesSalesData.value.length === 0) {
+                                await fetchSalesData();
                             }
+                            const rawRecords = treesSalesData.value || [];
 
                             rawRecords.forEach(sale => {
                                 const promoTitle = sale.discountTitle || sale['Discount Title'] || sale.promoType;
@@ -1493,49 +1501,21 @@ createApp({
         let unsubscribeLedger = null;
         let unsubscribeCredits = null;
 
-                const setupFilteredListeners = () => {
-            if (unsubscribeSales) unsubscribeSales();
+                                        const setupFilteredListeners = () => {
+            if (unsubscribeSales) { unsubscribeSales(); unsubscribeSales = null; }
             if (unsubscribeLedger) unsubscribeLedger();
             
-                        let salesQ = query(collection(db, "treesSales"));
-            let ledgerQ = query(collection(db, "masterLedger"), where("site", "==", activeSite.value));
+            let ledgerQ = query(collection(db, "masterLedger"), where("site", "==", activeSite.value), limit(8000));
 
-                        // Constrain sales query to prevent browser crashes / read quota blowout on 20,000+ row datasets
-                        if (activeMonth.value !== 'All') {
-                salesQ = query(salesQ, where("month", "==", activeMonth.value));
-            }
-            
-            salesQ = query(salesQ, limit(150));
-
-            ledgerQ = query(ledgerQ, limit(8000));
-
-            unsubscribeSales = onSnapshot(salesQ, (snapshot) => {
-                const loaded = [];
-                snapshot.forEach(doc => {
-                                        const data = doc.data();
-                    const s = (data.detectedSite || data['Store Name'] || data.Location || '').toUpperCase();
-                    
-                    const isBluff = (str) => str.includes('BLUFF') || str.includes('RB') || str.includes('E12');
-                    const isRedding = (str) => (str.includes('REDDING') || str.includes('RD') || str.includes('E11')) && !str.includes('BLUFF');
-                    const targetIsBluff = (activeSite.value || '').toUpperCase().includes('BLUFF');
-                    const siteMatch = activeSite.value === 'All' || (targetIsBluff ? isBluff(s) : isRedding(s));
-                    
-                    // Only keep records matching the active site
-                    if (siteMatch) {
-                        loaded.push({ id: doc.id, ...data });
-                    }
-                });
-                treesSalesData.value = loaded;
-            }, (err) => console.error("Sales Pull Failed:", err));
-            
             unsubscribeLedger = onSnapshot(ledgerQ, (snapshot) => {
                 const fetchedEvents = [];
                 snapshot.forEach(docSnap => { fetchedEvents.push({ id: docSnap.id, ...docSnap.data() }); });
                 ledgerEventsList.value = fetchedEvents;
-                if (activeTab.value === 'Ledger') {
-                    refreshLedger();
-                }
+                if (activeTab.value === 'Ledger') refreshLedger();
             }, (err) => console.error("Ledger Pull Failed:", err));
+
+            // Stable fetch for Sales Data instead of real-time listener
+            fetchSalesData();
         };
 
         watch([activeSite, activeMonth], () => {
