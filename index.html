@@ -732,7 +732,15 @@
                                     <div class="text-right">
                                         <div class="text-lg font-extrabold text-gray-900">{{ formatCurrency(brand.total) }}</div>
                                         <div class="text-[10px] text-gray-400 font-bold uppercase tracking-wider">{{ brand.credits.length }} Credits</div>
-                                    </div>
+                                                                </div>
+                                </div>
+                                <div class="mb-3 flex flex-wrap gap-1">
+                                    <button v-for="promo in getAvailablePromosForBrand(brand.vendor)" :key="promo"
+                                            @click="toggleBrandPromo(brand.vendor, promo)"
+                                            :class="isPromoSelected(brand.vendor, promo) ? 'bg-emerald-100 text-emerald-700 border-emerald-200' : 'bg-gray-100 text-gray-500 border-gray-200'"
+                                            class="text-[9px] px-2 py-0.5 rounded-full font-bold border transition-colors cursor-pointer hover:opacity-80">
+                                        {{ promo }}
+                                    </button>
                                 </div>
 
                                 <div class="mb-4 text-xs text-gray-600 space-y-1 max-h-32 overflow-y-auto pr-1">

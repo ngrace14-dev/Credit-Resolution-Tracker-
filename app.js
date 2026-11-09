@@ -278,7 +278,7 @@ createApp({
         const totalPending = computed(() => filteredCredits.value.filter(c => c.status === 'Pending').reduce((sum, c) => sum + (parseFloat(c.amount) || 0), 0));
         const totalApplied = computed(() => filteredCredits.value.filter(c => c.status === 'Applied').reduce((sum, c) => sum + (parseFloat(c.amount) || 0), 0));
 
-        const filteredTreesSalesData = computed(() => {
+                const filteredTreesSalesData = computed(() => {
             let base = treesSalesData.value; 
             if (activeMonth.value !== 'All') base = base.filter(sale => sale.month === activeMonth.value);
             if (searchQuery.value) {
@@ -287,6 +287,43 @@ createApp({
             }
             return base.sort((a, b) => new Date(b.dateClosed) - new Date(a.dateClosed));
         });
+
+        // Stores an array of selected promo titles for each brand: { [brandName]: string[] }
+        const brandPromoFilters = ref({});
+        
+        // Helper: Get all unique promo titles detected in raw Treez data for a brand
+        const getAvailablePromosForBrand = (brandName) => {
+            const rawRecords = (masterLedgerData?.value?.length ? masterLedgerData.value : treesSalesData?.value) || [];
+            const brandPromos = rawRecords
+                .filter(e => {
+                    const b = (e.brand || e['Product Brand'] || '').toUpperCase();
+                    const s = (e.detectedSite || e['Store Name'] || '').toUpperCase();
+                    return b === brandName.toUpperCase() && s.includes(activeSite.value.toUpperCase().split(' ')[0]);
+                })
+                .map(e => e.discountTitle || e['Discount Title'] || e.promoType)
+                .filter(Boolean);
+            return [...new Set(brandPromos)].sort();
+        };
+
+        // Toggle promo inclusion
+        const toggleBrandPromo = (brandName, promoTitle) => {
+            if (!brandPromoFilters.value[brandName]) {
+                // Default to all selected if first interaction
+                brandPromoFilters.value[brandName] = [...getAvailablePromosForBrand(brandName)];
+            }
+            const list = brandPromoFilters.value[brandName];
+            const idx = list.indexOf(promoTitle);
+            if (idx > -1) {
+                list.splice(idx, 1); // Deselect
+            } else {
+                list.push(promoTitle); // Select
+            }
+        };
+
+        const isPromoSelected = (brandName, promoTitle) => {
+            if (!brandPromoFilters.value[brandName]) return true; // Default all selected
+            return brandPromoFilters.value[brandName].includes(promoTitle);
+        };
 
         const displayTreesSalesData = computed(() => filteredTreesSalesData.value.slice(0, 100));
 
@@ -839,32 +876,36 @@ createApp({
         };
 
 
-                                const generateAuditStatementCSV = (brand) => {
-                    // Pull from masterLedgerData first, falling back to treesSalesData
-                    const rawRecords = (masterLedgerData?.value?.length ? masterLedgerData.value : treesSalesData?.value) || [];
-                    const inMemoryEvents = rawRecords.map(sale => ({
-                        ...sale,
-                        type: 'GENERATED',
-                        amount: Number(sale.owed ?? sale.creditOwed ?? sale.Vendor_Credit_Owed ?? sale['Vendor Credit Owed'] ?? 0),
-                        brand: sale.brand || sale['Product Brand'] || sale.Brand || '',
-                        vendor: sale.vendor || sale.brand || sale['Product Brand'] || '',
-                        site: sale.detectedSite || sale.site || sale['Store Name'] || sale.Location || '',
-                        isolation_month: sale.month || sale.isolation_month || '',
-                        dateClosed: sale.dateClosed || sale['Date Closed'] || sale.date || '',
-                        discountTitle: sale.discountTitle || sale['Discount Title'] || sale.promoType || ''
-                    }));
-                    const targetBrandVendor = brand.vendor || brand.brand || (typeof brand === 'string' ? brand : '');
-                    
-                    return generateAuditStatementService({
-                        brandVendor: targetBrandVendor,
-                        targetSite: activeSite.value,
-                        ledgerEvents: [...ledgerEventsList.value, ...inMemoryEvents],
-                        startMonthName: startMonth.value,
-                        endMonthName: endMonth.value,
-                        calendarMonths,
-                        csvEscape
-                    });
-                };
+                                                                        const generateAuditStatementCSV = (brand) => {
+            // Pull from masterLedgerData first, falling back to treesSalesData
+            const rawRecords = (masterLedgerData?.value?.length ? masterLedgerData.value : treesSalesData?.value) || [];
+            const inMemoryEvents = rawRecords.map(sale => ({
+                ...sale,
+                type: 'GENERATED',
+                amount: Number(sale.owed ?? sale.creditOwed ?? sale.Vendor_Credit_Owed ?? sale['Vendor Credit Owed'] ?? 0),
+                brand: sale.brand || sale['Product Brand'] || sale.Brand || '',
+                vendor: sale.vendor || sale.brand || sale['Product Brand'] || '',
+                site: sale.detectedSite || sale.site || sale['Store Name'] || sale.Location || '',
+                isolation_month: sale.month || sale.isolation_month || '',
+                dateClosed: sale.dateClosed || sale['Date Closed'] || sale.date || '',
+                discountTitle: sale.discountTitle || sale['Discount Title'] || sale.promoType || ''
+            })).filter(sale => {
+                const promoTitle = sale.discountTitle;
+                const vendorName = sale.vendor;
+                return isPromoSelected(vendorName, promoTitle);
+            });
+            const targetBrandVendor = brand.vendor || brand.brand || (typeof brand === 'string' ? brand : '');
+            
+            return generateAuditStatementService({
+                brandVendor: targetBrandVendor,
+                targetSite: activeSite.value,
+                ledgerEvents: [...ledgerEventsList.value, ...inMemoryEvents],
+                startMonthName: startMonth.value,
+                endMonthName: endMonth.value,
+                calendarMonths,
+                csvEscape
+            });
+        };
 
                 const downloadMonthlyReport = (brand) => {
             const isFullMonth = !!brand.brandList; 
@@ -889,7 +930,7 @@ createApp({
                 return;
             }
 
-            const reportMonth = brand.month || activeMonth.value;
+                        const reportMonth = brand.month || activeMonth.value;
             let csvContent = "Location,Date & Time,Brand,Product Name,Transaction ID,Quantity Sold,Unit Price,Total Before Tax,Discount Title,Discount Amount,Credit Owed,Entry Type\n";
 
             let csvTotal = 0;
@@ -903,6 +944,11 @@ createApp({
                 if (matchBrand && 
                     cleanStr(sale.detectedSite) === cleanStr(activeSite.value) && 
                     cleanStr(sale.month) === cleanStr(reportMonth)) {
+                    
+                    const promoTitle = sale.discountTitle || sale['Discount Title'] || sale.promoType;
+                    const vendorName = sale.brand || sale['Product Brand'] || sale.Brand || '';
+                    if (!isPromoSelected(vendorName, promoTitle)) return;
+                    
                     itemizedSales.push({
                         loc: sale.detectedSite,
                         date: sale.dateClosed,
@@ -957,7 +1003,7 @@ createApp({
             logSystemAction("EXPORT", `Downloaded Detailed Report for ${reportName}`);
         };
 
-        const draftEmail = (brand) => {
+                const draftEmail = (brand) => {
             if (!brand.email) {
                 alert(`No email mapped for ${brand.vendor}. Please add one in the Brand Directory first.`);
                 return;
@@ -968,8 +1014,52 @@ createApp({
             const monthStr = brand.month || activeMonth.value;
             const periodStr = `${monthStr} ${currentYear}`;
             
-            const csvContent = generateAuditStatementCSV(brand);
-            const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
+            // Build dual-tier statement for email payload
+            const statementCSV = generateAuditStatementCSV(brand);
+            let combinedCSV = statementCSV + "\n\n";
+
+            // Tier 2: Itemized POS records
+            combinedCSV += "--- ITEMIZED POS DETAIL ---\n";
+            combinedCSV += "Location,Date & Time,Brand,Product Name,Transaction ID,Quantity Sold,Unit Price,Total Before Tax,Discount Title,Discount Amount,Credit Owed,Entry Type\n";
+            let csvTotal = 0;
+            const cleanStr = cleanString;
+            
+            const rawRecords = (masterLedgerData?.value?.length ? masterLedgerData.value : treesSalesData?.value) || [];
+            rawRecords.forEach(sale => {
+                const vendorName = sale.brand || sale['Product Brand'] || sale.Brand || '';
+                const promoTitle = sale.discountTitle || sale['Discount Title'] || sale.promoType;
+                
+                if (cleanStr(vendorName) === cleanStr(brand.vendor) && 
+                    cleanStr(sale.detectedSite || sale.site || sale['Store Name'] || sale.Location) === cleanStr(activeSite.value) && 
+                    isPromoSelected(vendorName, promoTitle)) {
+                    
+                    const safeLoc = `"${csvEscape(sale.detectedSite || sale.site || '')}"`;
+                    const safeDate = `"${csvEscape(sale.dateClosed || sale['Date Closed'] || sale.date || '')}"`;
+                    const safeBrand = `"${csvEscape(sale.brand || '')}"`;
+                    const safeProd = `"${csvEscape(sale.productName || '')}"`;
+                    const safeTrack = `"${csvEscape(sale.trackingId || '')}"`;
+                    const safeQty = `"${csvEscape(sale.unitsSold || '')}"`;
+                    const safePrice = `"${formatCurrency(sale.unitPrice || 0)}"`;
+                    const safePreTax = `"${formatCurrency((sale.unitsSold || 0) * (sale.unitPrice || 0))}"`;
+                    const safeTitle = `"${csvEscape(sale.discountTitle || '')}"`;
+                    const safeAmt = `"${formatCurrency(sale.discountAmount || 0)}"`;
+                    const owedAmt = Number(sale.owed ?? sale.creditOwed ?? sale.Vendor_Credit_Owed ?? sale['Vendor Credit Owed'] ?? 0);
+                    const safeOwed = `"${formatCurrency(owedAmt)}"`;
+                    
+                    combinedCSV += `${safeLoc},${safeDate},${safeBrand},${safeProd},${safeTrack},${safeQty},${safePrice},${safePreTax},${safeTitle},${safeAmt},${safeOwed},"POS Itemized"\n`;
+                    csvTotal += owedAmt;
+                }
+            });
+            
+            if (brand.credits) {
+                const res = processManualCredits(brand.credits, new Set(), csvTotal, combinedCSV);
+                csvTotal = res.total;
+                combinedCSV = res.content;
+            }
+            
+            combinedCSV += `,,,,,,,,,, "TOTAL:", "${formatCurrency(csvTotal)}"\n`;
+
+            const blob = new Blob(['\ufeff' + combinedCSV], { type: 'text/csv;charset=utf-8;' });
             const url = URL.createObjectURL(blob);
             const link = document.createElement("a");
             link.setAttribute("href", url);
@@ -1043,13 +1133,13 @@ createApp({
             logSystemAction("EXPORT", `Generated YTD Variance PDF for ${targetSite}`);
         };
 
-                const exportBrandCSVReports = (selectedBrand = null) => {
-                    const csvContent = buildBrandVarianceCSV(
-                        activeSite.value, 
-                        selectedBrand, 
-                        calendarMonths,
-                        ledgerEventsList.value
-                    );
+                        const exportBrandCSVReports = (selectedBrand = null) => {
+            const csvContent = buildBrandVarianceCSV(
+                activeSite.value, 
+                selectedBrand, 
+                calendarMonths,
+                ledgerEventsList.value
+            );
             
             const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
             const url = URL.createObjectURL(blob);
@@ -2019,7 +2109,7 @@ console.log(`[Rollback] Extracted ${baselineEvents.length} baseline events ready
 
                 // --- 8. TEMPLATE BINDINGS RETURN ---
                 return {
-        // State
+                // State
         isManagerUnlocked, loggedInUser, emailInput, passwordInput, authError,
         activeSite, activeTab, isSuperAdmin, showAdminMenu, showWorkspaceMenu,
         activeWorkspaceInfo, workspaceTabs, calendarMonths, activeMonth,
@@ -2034,6 +2124,7 @@ console.log(`[Rollback] Extracted ${baselineEvents.length} baseline events ready
         activeWorkbookHeaders, brandAuditData, auditRange, sageAuditData,
         masterBrands, selectedBrands, allBrandsSelected, systemLogs,
         showWorkbookSyncModal, workbookPasteData,
+        brandPromoFilters, getAvailablePromosForBrand, toggleBrandPromo, isPromoSelected,
         // Modal State & Handlers
         showEmailDraftModal, showBrandImportModal, selectedBrandForEmail,
         emailDraftSubject, emailDraftBody, brandPastedGrid, brandPasteData,
@@ -2041,10 +2132,10 @@ console.log(`[Rollback] Extracted ${baselineEvents.length} baseline events ready
         copyEmailToClipboard, sendEmailDraft, processBrandRawPaste,
         resetBrandImport, processBrandImport,
         // Methods
-        handleLogin, forceLock, selectWorkspace, scrollMonths, scrollWorkbookTabs,
+                handleLogin, forceLock, selectWorkspace, scrollMonths, scrollWorkbookTabs,
         refreshLedger, refreshIcons, formatCurrency, setupFilteredListeners,
         handleTreezLedgerUpload, handleSage4545Upload, continueBatch, openWorkbookSyncModal,
-                syncDiscoveryToShards, rollbackShardsToWorkbook,
+        syncDiscoveryToShards, rollbackShardsToWorkbook,
         updateWorkbookFromSales: () => { 
 try {
 const eventsToUse = masterLedgerData.value || []; 
@@ -2095,9 +2186,9 @@ console.error("Failed to push to tracker:", err);
 alert("Error pushing records to Main Tracker. Check console for details.");
 }
 },
-        openEmailDraft: draftEmail, markReportGroupAsSent,
+                openEmailDraft: draftEmail, markReportGroupAsSent,
         downloadMonthlyReport, exportYTDVariancePDF, exportBrandCSVReports,
-                exportVendorsAndBrandsCSV, regenerateMonthReports, regenerateBrandSummary,
+        exportVendorsAndBrandsCSV, regenerateMonthReports, regenerateBrandSummary,
         openLegacyVerification: (item) => { alert(`Verifying Legacy Data for ${item?.vendor || 'Vendor'}...`); },
         deleteSelectedBrands, toggleAllBrands, updateBrandField,
         openDimeHelper: (brand) => window.open('https://brand.dime.industries', '_blank'),
