@@ -1438,11 +1438,9 @@ createApp({
                         let salesQ = query(collection(db, "treesSales"));
             let ledgerQ = query(collection(db, "masterLedger"), where("site", "==", activeSite.value));
 
-            // Constrain sales query to prevent browser crashes / read quota blowout on 20,000+ row datasets
+                        // Constrain sales query to prevent browser crashes / read quota blowout on 20,000+ row datasets
             if (activeMonth.value !== 'All') {
-                salesQ = query(salesQ, where("month", "==", activeMonth.value), limit(15000));
-            } else {
-                salesQ = query(salesQ, limit(15000));
+                salesQ = query(salesQ, where("month", "==", activeMonth.value));
             }
 
             ledgerQ = query(ledgerQ, limit(8000));
