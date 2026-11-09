@@ -310,9 +310,11 @@ createApp({
                 return brandMatch && siteMatch && promoMatch;
             });
             
-            // If no raw POS records exist, fall back to brand.total only if no filters have been deselected
-            if (brandRecords.length === 0 && (!selected || selected.length === 0)) {
-                return Number(brand.total || 0);
+                        // If no raw POS records exist, fall back to brand.total only if no filters have been deselected
+            // Edge Case: If selected exists but is empty (user unchecked all), we MUST return 0, not fallback
+            if (brandRecords.length === 0) {
+                if (!selected || selected.length > 0) return Number(brand.total || 0);
+                return 0; // User explicitly deselected all promos
             }
             
             return brandRecords.reduce((sum, e) => {
