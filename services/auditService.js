@@ -8,6 +8,7 @@ return isNaN(d.getTime()) ? null : d;
 export function generateAuditStatementCSV({
     brandVendor,
     targetSite,
+    activeMonth,
     ledgerEvents = [],
     selectedPromos = null, // Array of approved promo titles from brandPromoFilters; null = all
     calendarMonths = [
@@ -51,13 +52,30 @@ export function generateAuditStatementCSV({
         'Status'
     ].join(','));
 
-    let runningGen = 0;
+        let runningGen = 0;
     let cumulativeApplied = 0;
     let ytdGen = 0;
     let ytdApplied = 0;
 
-    calendarMonths.forEach(mName => {
+    const activeMonthIdx = calendarMonths.indexOf(activeMonth);
+
+    calendarMonths.forEach((mName, idx) => {
         const mUpper = mName.toUpperCase();
+
+        if (activeMonthIdx !== -1 && idx > activeMonthIdx) {
+            csvRows.push([
+                csvEscape(`${mName} 2026`),
+                csvEscape(targetSite),
+                csvEscape(brandVendor),
+                "-",
+                "-",
+                "-",
+                "-",
+                "-",
+                csvEscape("Pending")
+            ].join(','));
+            return;
+        }
 
         // Calculate New Credits Generated for this month from active events
         const monthEvents = activeRawEvents.filter(e => {

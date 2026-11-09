@@ -939,11 +939,11 @@ createApp({
         };
 
 
-                                                                                                                                                const generateAuditStatementCSV = (brand) => {
+                                                                                                                                                                                                                                                                                                const generateAuditStatementCSV = (brand) => {
                                                                             const targetBrandVendor = brand.vendor || brand.brand || (typeof brand === 'string' ? brand : '');
             
                                                                             // 1. Gather all in-memory raw records
-                                                                            const rawRecords = (masterLedgerData?.value?.length ? masterLedgerData.value : treesSalesData?.value) || [];
+                                                                            const rawRecords = treesSalesData.value || [];
                                                                             const inMemoryEvents = rawRecords.map(sale => {
                                                                                 const owedAmt = Number(
                                                                                     sale.owed ?? 
@@ -982,6 +982,7 @@ createApp({
                                                                             return generateAuditStatementService({
                                                                                 brandVendor: targetBrandVendor,
                                                                                 targetSite: activeSite.value,
+                                                                                activeMonth: activeMonth.value,
                                                                                 ledgerEvents: [...ledgerEventsList.value, ...inMemoryEvents],
                                                                                 selectedPromos: selectedPromos,
                                                                                 calendarMonths,
