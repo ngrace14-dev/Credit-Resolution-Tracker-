@@ -839,11 +839,26 @@ createApp({
         };
 
 
-                const generateAuditStatementCSV = (brand) => {
+                                const generateAuditStatementCSV = (brand) => {
+                    // Pull from masterLedgerData first, falling back to treesSalesData
+                    const rawRecords = (masterLedgerData?.value?.length ? masterLedgerData.value : treesSalesData?.value) || [];
+                    const inMemoryEvents = rawRecords.map(sale => ({
+                        ...sale,
+                        type: 'GENERATED',
+                        amount: Number(sale.owed ?? sale.creditOwed ?? sale.Vendor_Credit_Owed ?? sale['Vendor Credit Owed'] ?? 0),
+                        brand: sale.brand || sale['Product Brand'] || sale.Brand || '',
+                        vendor: sale.vendor || sale.brand || sale['Product Brand'] || '',
+                        site: sale.detectedSite || sale.site || sale['Store Name'] || sale.Location || '',
+                        isolation_month: sale.month || sale.isolation_month || '',
+                        dateClosed: sale.dateClosed || sale['Date Closed'] || sale.date || '',
+                        discountTitle: sale.discountTitle || sale['Discount Title'] || sale.promoType || ''
+                    }));
+                    const targetBrandVendor = brand.vendor || brand.brand || (typeof brand === 'string' ? brand : '');
+                    
                     return generateAuditStatementService({
-                        brandVendor: brand.vendor,
+                        brandVendor: targetBrandVendor,
                         targetSite: activeSite.value,
-                        ledgerEvents: ledgerEventsList.value, // Pass canonical events
+                        ledgerEvents: [...ledgerEventsList.value, ...inMemoryEvents],
                         startMonthName: startMonth.value,
                         endMonthName: endMonth.value,
                         calendarMonths,
@@ -1779,14 +1794,14 @@ createApp({
                 }
                 const batch = writeBatch(db);
                 const uploadId = `discovery_sync_${Date.now()}`;
-                const payloads = buildTrackerSyncPayloads(unsyncedItems, activeSite.value);
+                                const payloads = buildTrackerSyncPayloads(unsyncedItems, activeSite.value);
                 payloads.forEach(item => {
-                    const docRef = doc(collection(db, "masterLedger"));
+                    const docRef = doc(collection(db, "promoGenerated"));
                     batch.set(docRef, {
                         ...item,
                         upload_id: uploadId,
                         createdAt: serverTimestamp(),
-                        syncedBy: loggedInUser.value || 'system'
+                        syncedBy: loggedInUser?.value || 'system'
                     });
                 });
                 await batch.commit();
@@ -2064,11 +2079,11 @@ const payloads = buildTrackerSyncPayloads(unsyncedItems, activeSite.value);
 // Commit payloads to Firestore "ledger" or "masterTracker" collection
 const batch = writeBatch(db);
 payloads.forEach(item => {
-const docRef = doc(collection(db, "masterLedger"));
+const docRef = doc(collection(db, "promoGenerated"));
 batch.set(docRef, {
 ...item,
 createdAt: serverTimestamp(),
-syncedBy: loggedInUser.value || 'system'
+syncedBy: loggedInUser?.value || 'system'
 });
 });
 await batch.commit();
