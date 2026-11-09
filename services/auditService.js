@@ -192,13 +192,16 @@ export function generateAuditStatementCSV({
             ].join(','));
 
             let groupSubtotal = 0;
-            const sortedItems = [...groupItems].sort((a, b) => 
-                new Date(a.dateClosed || a.date || 0) - new Date(b.dateClosed || b.date || 0)
-            );
+                        const sortedItems = [...groupItems].sort((a, b) => {
+                const dateA = parseExcelDate(a.dateClosed || a.date);
+                const dateB = parseExcelDate(b.dateClosed || b.date);
+                return (dateA || new Date(0)) - (dateB || new Date(0));
+            });
 
             sortedItems.forEach(item => {
                 const rawDate = item.dateClosed || item['Date Closed'] || item.date || '';
-                const dateStr = rawDate.split(' ')[0] || 'N/A';
+                const parsedD = parseExcelDate(rawDate);
+                const dateStr = parsedD ? parsedD.toISOString().split('T')[0] : 'N/A';
                 const monthStr = item.isolation_month || item.month || '';
                 const prodName = item.productName || item['Product Name'] || item.product || 'N/A';
                 const units = item.unitsSold || item['Units Sold'] || item.units || 1;
@@ -260,10 +263,10 @@ export function generateAuditStatementCSV({
                 };
             }
 
-            const rawDate = e.dateClosed || e['Date Closed'] || e.date;
+                        const rawDate = e.dateClosed || e['Date Closed'] || e.date;
             if (rawDate) {
-                const d = new Date(rawDate);
-                if (!isNaN(d.getTime())) {
+                const d = parseExcelDate(rawDate);
+                if (d) {
                     scheduleMap[key].daysSet.add(d.getDate().toString().padStart(2, '0'));
                 }
             }

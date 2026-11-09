@@ -1622,9 +1622,9 @@ createApp({
                             const brandVal = getVal(rowObj, 'Product Brand', 'Brand');
                             const trackingVal = getVal(rowObj, 'State Tracking Id', 'Tracking Id');
 
-                            if (!brandVal && !trackingVal) continue;
+                                                        if (!brandVal && !trackingVal) continue;
 
-                            const dateStr = getVal(rowObj, 'Date Closed', 'Date');
+                            const dateStr = getVal(rowObj, 'Date Closed', 'Date', 'Created At');
                             const parsedMonth = detectMonthFromDate(dateStr);
                             
                             if (parsedMonth === 'Unknown') {
@@ -1640,10 +1640,10 @@ createApp({
 
                             const units = parseFloat(getVal(rowObj, 'Units Sold', 'Unit Sold', 'Qty', 'Quantity')) || 0;
                             const unitPrice = cleanCurrency(getVal(rowObj, 'Cost Per Unit', 'Unit Price', 'Price'));
-                            const discAmt = cleanCurrency(getVal(rowObj, 'Discounts', 'Discount Amount', 'Discount'));
+                                                        const discAmt = cleanCurrency(getVal(rowObj, 'Discounts', 'Discount Amount', 'Discount'));
                             const owedAmt = cleanCurrency(getVal(rowObj, 'Vendor Credit Owed', 'Credit Owed'));
                             
-                            const discountTitle = getVal(rowObj, 'Discount Title', 'Discount Name') || '';
+                            const discountTitle = getVal(rowObj, 'Discount Title', 'Discount Name', 'Promotion Name', 'Promo Name') || '';
 
                                                         const newSale = {
                                 uploadId: uploadId, 
