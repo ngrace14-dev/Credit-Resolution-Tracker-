@@ -288,21 +288,68 @@ createApp({
             return base.sort((a, b) => new Date(b.dateClosed) - new Date(a.dateClosed));
         });
 
-        // Stores an array of selected promo titles for each brand: { [brandName]: string[] }
+                // Stores an array of selected promo titles for each brand: { [brandName]: string[] }
         const brandPromoFilters = ref({});
         
+        const getFilteredBrandTotal = (brand) => {
+            const rawRecords = (masterLedgerData?.value?.length ? masterLedgerData.value : treesSalesData?.value) || [];
+            const brandName = (brand.name || brand.vendor || '').toUpperCase();
+            const sitePrefix = (activeSite.value || '').toUpperCase().split(' ')[0];
+            const selected = brandPromoFilters.value[brand.name || brand.vendor];
+            
+            // Filter matching records
+            const brandRecords = rawRecords.filter(e => {
+                const b = (e.brand || e['Product Brand'] || e.vendor || '').toUpperCase();
+                const s = (e.site || e.detectedSite || e['Store Name'] || '').toUpperCase();
+                const promo = e.discountTitle || e['Discount Title'] || e.promoType || '';
+                
+                const brandMatch = b === brandName;
+                const siteMatch = s.includes(sitePrefix);
+                const promoMatch = !selected || selected.includes(promo);
+                
+                return brandMatch && siteMatch && promoMatch;
+            });
+            
+            // If no raw POS records exist, fall back to brand.total only if no filters have been deselected
+            if (brandRecords.length === 0 && (!selected || selected.length === 0)) {
+                return Number(brand.total || 0);
+            }
+            
+            return brandRecords.reduce((sum, e) => {
+                const val = Number(e.amount ?? e.owed ?? e.creditOwed ?? e.Vendor_Credit_Owed ?? 0);
+                return sum + val;
+            }, 0);
+        };
+        
+                const brandPromoCatalog = computed(() => {
+            const rawRecords = (masterLedgerData?.value?.length ? masterLedgerData.value : treesSalesData?.value) || [];
+            const sitePrefix = (activeSite.value || '').toUpperCase().split(' ')[0];
+            const catalog = {};
+            
+            rawRecords.forEach(e => {
+                const b = e.brand || e['Product Brand'] || e.vendor;
+                const s = (e.site || e.detectedSite || e['Store Name'] || '').toUpperCase();
+                const promo = e.discountTitle || e['Discount Title'] || e.promoType;
+                
+                if (b && promo && s.includes(sitePrefix)) {
+                    const bUpper = b.toUpperCase();
+                    if (!catalog[bUpper]) catalog[bUpper] = new Set();
+                    catalog[bUpper].add(promo);
+                }
+            });
+            
+            // Convert Sets to sorted Arrays
+            const result = {};
+            Object.keys(catalog).forEach(b => {
+                result[b] = Array.from(catalog[b]).sort();
+            });
+            return result;
+        });
+
         // Helper: Get all unique promo titles detected in raw Treez data for a brand
         const getAvailablePromosForBrand = (brandName) => {
-            const rawRecords = (masterLedgerData?.value?.length ? masterLedgerData.value : treesSalesData?.value) || [];
-            const brandPromos = rawRecords
-                .filter(e => {
-                    const b = (e.brand || e['Product Brand'] || '').toUpperCase();
-                    const s = (e.detectedSite || e['Store Name'] || '').toUpperCase();
-                    return b === brandName.toUpperCase() && s.includes(activeSite.value.toUpperCase().split(' ')[0]);
-                })
-                .map(e => e.discountTitle || e['Discount Title'] || e.promoType)
-                .filter(Boolean);
-            return [...new Set(brandPromos)].sort();
+            if (!brandName) return [];
+            return brandPromoCatalog.value[brandName.toUpperCase()] || [];
         };
 
         // Toggle promo inclusion
@@ -1024,7 +1071,9 @@ createApp({
             let csvTotal = 0;
             const cleanStr = cleanString;
             
-            const rawRecords = (masterLedgerData?.value?.length ? masterLedgerData.value : treesSalesData?.value) || [];
+                        const rawRecords = (masterLedgerData?.value?.length ? masterLedgerData.value : treesSalesData?.value) || [];
+            let itemizedCount = 0;
+            
             rawRecords.forEach(sale => {
                 const vendorName = sale.brand || sale['Product Brand'] || sale.Brand || '';
                 const promoTitle = sale.discountTitle || sale['Discount Title'] || sale.promoType;
@@ -1048,8 +1097,13 @@ createApp({
                     
                     combinedCSV += `${safeLoc},${safeDate},${safeBrand},${safeProd},${safeTrack},${safeQty},${safePrice},${safePreTax},${safeTitle},${safeAmt},${safeOwed},"POS Itemized"\n`;
                     csvTotal += owedAmt;
+                    itemizedCount++;
                 }
             });
+            
+            if (itemizedCount === 0) {
+                combinedCSV += `"No promotional activity matching selected filters",,,,,,,,,,,\n`;
+            }
             
             if (brand.credits) {
                 const res = processManualCredits(brand.credits, new Set(), csvTotal, combinedCSV);
@@ -2124,7 +2178,7 @@ console.log(`[Rollback] Extracted ${baselineEvents.length} baseline events ready
         activeWorkbookHeaders, brandAuditData, auditRange, sageAuditData,
         masterBrands, selectedBrands, allBrandsSelected, systemLogs,
         showWorkbookSyncModal, workbookPasteData,
-        brandPromoFilters, getAvailablePromosForBrand, toggleBrandPromo, isPromoSelected,
+        brandPromoFilters, getFilteredBrandTotal, getAvailablePromosForBrand, toggleBrandPromo, isPromoSelected,
         // Modal State & Handlers
         showEmailDraftModal, showBrandImportModal, selectedBrandForEmail,
         emailDraftSubject, emailDraftBody, brandPastedGrid, brandPasteData,

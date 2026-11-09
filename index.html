@@ -729,8 +729,8 @@
                                             {{ brand.email || '⚠️ No email mapped in Brand Directory' }}
                                         </p>
                                     </div>
-                                    <div class="text-right">
-                                        <div class="text-lg font-extrabold text-gray-900">{{ formatCurrency(brand.total) }}</div>
+                                                                        <div class="text-right">
+                                        <div class="text-lg font-extrabold text-gray-900">{{ formatCurrency(getFilteredBrandTotal(brand)) }}</div>
                                         <div class="text-[10px] text-gray-400 font-bold uppercase tracking-wider">{{ brand.credits.length }} Credits</div>
                                                                 </div>
                                 </div>
