@@ -958,10 +958,15 @@ createApp({
         };
 
                 const downloadMonthlyReport = (brand) => {
-            const isFullMonth = !!brand.brandList; 
+                    const isFullMonth = !!brand.brandList; 
             
-            if (!isFullMonth) {
-                const csv = generateAuditStatementCSV(brand);
+                    if (!isFullMonth) {
+                        const selected = brandPromoFilters.value[brand.vendor];
+                        if (selected && selected.length === 0) {
+                            alert("No promotional data selected for export. Please select at least one promo type.");
+                            return;
+                        }
+                        const csv = generateAuditStatementCSV(brand);
                 const blob = new Blob(
                     ['\ufeff' + csv],
                     {
@@ -988,7 +993,7 @@ createApp({
     
             const itemizedSales = [];
 
-            treesSalesData.value.forEach(sale => {
+                        treesSalesData.value.forEach(sale => {
                 const matchBrand = isFullMonth ? true : (cleanStr(sale.brand) === cleanStr(brand.vendor));
                 
                 if (matchBrand && 
@@ -997,7 +1002,9 @@ createApp({
                     
                     const promoTitle = sale.discountTitle || sale['Discount Title'] || sale.promoType;
                     const vendorName = sale.brand || sale['Product Brand'] || sale.Brand || '';
-                    if (!isPromoSelected(vendorName, promoTitle)) return;
+                    if (!isFullMonth && !isPromoSelected(vendorName, promoTitle)) return;
+                    // For Full Month CSV exports, we do not filter out unchecked promos to maintain absolute parity with raw data.
+                    // If you want Full Month to ALSO obey filters, remove '!isFullMonth &&' above.
                     
                     itemizedSales.push({
                         loc: sale.detectedSite,
