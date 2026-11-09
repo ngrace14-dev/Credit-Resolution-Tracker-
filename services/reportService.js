@@ -32,7 +32,7 @@ export const buildDefinitiveBrandMetrics = (masterWorkbookData) => {
     return metrics;
 };
 
-export const buildMonthlyReportSummaries = ({ ledgerEvents, targetMonth, targetSite, calendarMonths, masterBrands }) => {
+export const buildMonthlyReportSummaries = ({ ledgerEvents, targetMonth, targetSite, calendarMonths, masterBrands, isPromoSelected }) => {
     const groups = {};
 
     const ensureStructure = (m, v) => {
@@ -53,6 +53,15 @@ export const buildMonthlyReportSummaries = ({ ledgerEvents, targetMonth, targetS
     ledgerEvents.forEach(e => {
         if (e.site !== targetSite) return;
         if (targetMonth !== 'All' && e.isolation_month !== targetMonth) return;
+        
+        // Respect dynamic promo filters
+        if (e.type === 'GENERATED' && typeof isPromoSelected === 'function') {
+            const vendorName = e.brand || e.vendor || '';
+            const promoTitle = e.discountTitle || e.promoType || '';
+            if (promoTitle && !isPromoSelected(vendorName, promoTitle)) {
+                return; // Skip this event because user deselected this promo
+            }
+        }
 
         const mName = e.isolation_month;
         const brand = ensureStructure(mName, e.brand);

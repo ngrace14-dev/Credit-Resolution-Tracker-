@@ -562,14 +562,15 @@ createApp({
         });
 
                 const monthlyReportSummaries = computed(() => {
-            return buildMonthlyReportSummaries({
-                ledgerEvents: ledgerEventsList.value,
-                targetMonth: activeMonth.value,
-                targetSite: activeSite.value,
-                calendarMonths,
-                masterBrands: masterBrands.value
-            });
-        });
+                    return buildMonthlyReportSummaries({
+                        ledgerEvents: ledgerEventsList.value,
+                        targetMonth: activeMonth.value,
+                        targetSite: activeSite.value,
+                        calendarMonths,
+                        masterBrands: masterBrands.value,
+                        isPromoSelected // Injected so report summaries react to promo toggles
+                    });
+                });
 
         const brandAuditData = computed(() => {
             return buildBrandAuditData({
