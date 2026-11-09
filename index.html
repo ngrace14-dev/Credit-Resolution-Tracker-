@@ -753,8 +753,8 @@
                                     </div>
                                 </div>
                                 
-                                <!-- Interactive Promo Catalog Filter -->
-                                <div v-if="getAvailablePromosForBrand(brand.name || brand.vendor).length > 0" class="mt-4 mb-4 pt-3 border-t border-gray-100">
+                                                                <!-- Interactive Promo Catalog Filter -->
+                                <div v-if="brand && getAvailablePromosForBrand(brand.name || brand.vendor).length > 0" class="mt-4 mb-4 pt-3 border-t border-gray-100">
                                     <div class="flex items-center justify-between mb-2">
                                         <span class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Detected Promotions (Audit Filter):</span>
                                         <span class="text-[10px] text-gray-400">Click to toggle export inclusion</span>

@@ -349,9 +349,22 @@ createApp({
         });
 
         // Helper: Get all unique promo titles detected in raw Treez data for a brand
-        const getAvailablePromosForBrand = (brandName) => {
+                const getAvailablePromosForBrand = (brandName) => {
             if (!brandName) return [];
-            return brandPromoCatalog.value[brandName.toUpperCase()] || [];
+            // Check both potential storage locations
+            const rawRecords = (masterLedgerData?.value?.length ? masterLedgerData.value : treesSalesData?.value) || [];
+            if (!rawRecords.length) return [];
+            const targetBrand = String(brandName).toUpperCase();
+            const sitePrefix = (activeSite.value || '').toUpperCase().split(' ')[0];
+            const brandPromos = rawRecords
+            .filter(e => {
+                const b = (e.brand || e['Product Brand'] || e.vendor || '').toUpperCase();
+                const s = (e.site || e.detectedSite || e['Store Name'] || e.Location || '').toUpperCase();
+                return b === targetBrand && s.includes(sitePrefix);
+            })
+            .map(e => e.discountTitle || e['Discount Title'] || e.promoType || e.Discount_Title)
+            .filter(Boolean); // removes nulls/undefined/empty strings
+            return [...new Set(brandPromos)].sort();
         };
 
         // Toggle promo inclusion
