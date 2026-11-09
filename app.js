@@ -103,6 +103,7 @@ createApp({
 
         // BATCH PROCESSING STATE
         const isBatchProcessing = ref(false);
+        const isExporting = ref(false);
         const batchProgress = ref(0);
         const batchTotal = ref(0);
                 const batchType = ref('');
@@ -294,8 +295,8 @@ createApp({
                 const getFilteredBrandTotal = (brand) => {
                     const rawRecords = treesSalesData.value || [];
                     const brandName = (brand.name || brand.vendor || '').toUpperCase();
-                    const cleanTarget = brandName.replace(/[^A-Z0-9]/g, '');
-                    const sitePrefix = (activeSite.value || '').toUpperCase().split(' ')[0];
+                                        const cleanTarget = brandName.replace(/[^A-Z0-9]/g, '');
+                    const targetIsBluff = (activeSite.value || '').toUpperCase().includes('BLUFF');
                     const selected = brandPromoFilters.value[brand.name || brand.vendor];
             
                     // Filter matching records
@@ -303,10 +304,14 @@ createApp({
                         const b = (e.brand || e['Product Brand'] || e.vendor || '').toUpperCase();
                         const cleanB = b.replace(/[^A-Z0-9]/g, '');
                         const s = (e.site || e.detectedSite || e['Store Name'] || '').toUpperCase();
-                        const promo = e.discountTitle || e['Discount Title'] || e.promoType || '';
+                                                const promo = e.discountTitle || e['Discount Title'] || e.promoType || '';
                 
                         const brandMatch = cleanB === cleanTarget || cleanB.includes(cleanTarget) || cleanTarget.includes(cleanB);
-                        const siteMatch = s.includes(sitePrefix);
+                        
+                        const isBluff = (str) => str.includes('BLUFF') || str.includes('RB') || str.includes('E12');
+                        const isRedding = (str) => (str.includes('REDDING') || str.includes('RD') || str.includes('E11')) && !str.includes('BLUFF');
+                        const siteMatch = activeSite.value === 'All' || (targetIsBluff ? isBluff(s) : isRedding(s));
+                        
                 const promoMatch = !selected || selected.includes(promo);
                 
                 return brandMatch && siteMatch && promoMatch;
@@ -325,9 +330,9 @@ createApp({
             }, 0);
         };
         
-                                const brandPromoCatalog = computed(() => {
+                                                                const brandPromoCatalog = computed(() => {
             const rawRecords = treesSalesData.value || [];
-            const sitePrefix = (activeSite.value || '').toUpperCase().split(' ')[0];
+            const targetIsBluff = (activeSite.value || '').toUpperCase().includes('BLUFF');
             const catalog = {};
             
             rawRecords.forEach(e => {
@@ -335,7 +340,11 @@ createApp({
                 const s = (e.site || e.detectedSite || e['Store Name'] || '').toUpperCase();
                 const promo = e.discountTitle || e['Discount Title'] || e.promoType;
                 
-                if (b && promo && s.includes(sitePrefix)) {
+                const isBluff = (str) => str.includes('BLUFF') || str.includes('RB') || str.includes('E12');
+                const isRedding = (str) => (str.includes('REDDING') || str.includes('RD') || str.includes('E11')) && !str.includes('BLUFF');
+                const siteMatch = activeSite.value === 'All' || (targetIsBluff ? isBluff(s) : isRedding(s));
+                
+                if (b && promo && siteMatch) {
                     const bUpper = b.toUpperCase();
                     if (!catalog[bUpper]) catalog[bUpper] = new Set();
                     catalog[bUpper].add(promo);
@@ -357,17 +366,23 @@ createApp({
                     const rawRecords = treesSalesData.value || [];
                     if (!rawRecords.length) return [];
                         const targetBrand = String(brandName).toUpperCase();
-            const cleanTarget = targetBrand.replace(/[^A-Z0-9]/g, '');
-            const sitePrefix = (activeSite.value || '').toUpperCase().split(' ')[0];
-            const brandPromos = rawRecords
-            .filter(e => {
-                const b = (e.brand || e['Product Brand'] || e.vendor || '').toUpperCase();
-                const cleanB = b.replace(/[^A-Z0-9]/g, '');
-                const s = (e.site || e.detectedSite || e['Store Name'] || e.Location || '').toUpperCase();
-                // Match the site string properly to avoid prefix cutoff bugs
-                const brandMatch = cleanB === cleanTarget || cleanB.includes(cleanTarget) || cleanTarget.includes(cleanB);
-                return brandMatch && (s.includes(sitePrefix) || s.includes((activeSite.value || '').toUpperCase()));
-            })
+                        const cleanTarget = targetBrand.replace(/[^A-Z0-9]/g, '');
+                        const targetIsBluff = (activeSite.value || '').toUpperCase().includes('BLUFF');
+            
+                        const brandPromos = rawRecords
+                        .filter(e => {
+                            const b = (e.brand || e['Product Brand'] || e.vendor || '').toUpperCase();
+                            const cleanB = b.replace(/[^A-Z0-9]/g, '');
+                            const s = (e.site || e.detectedSite || e['Store Name'] || e.Location || '').toUpperCase();
+                            // Match the site string properly to avoid prefix cutoff bugs
+                            const brandMatch = cleanB === cleanTarget || cleanB.includes(cleanTarget) || cleanTarget.includes(cleanB);
+                
+                            const isBluff = (str) => str.includes('BLUFF') || str.includes('RB') || str.includes('E12');
+                            const isRedding = (str) => (str.includes('REDDING') || str.includes('RD') || str.includes('E11')) && !str.includes('BLUFF');
+                            const siteMatch = activeSite.value === 'All' || (targetIsBluff ? isBluff(s) : isRedding(s));
+                
+                            return brandMatch && siteMatch;
+                        })
             .map(e => e.discountTitle || e['Discount Title'] || e.promoType || e.Discount_Title)
             .filter(Boolean); // removes nulls/undefined/empty strings
             return [...new Set(brandPromos)].sort();
@@ -945,11 +960,28 @@ createApp({
         };
 
 
-                                                                                                                                                                                                                                                                                                const generateAuditStatementCSV = (brand) => {
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                const generateAuditStatementCSV = async (brand) => {
                                                                             const targetBrandVendor = brand.vendor || brand.brand || (typeof brand === 'string' ? brand : '');
             
                                                                             // 1. Gather all in-memory raw records
-                                                                            const rawRecords = treesSalesData.value || [];
+                                                                            let rawRecords = treesSalesData.value || [];
+                                                                            if (rawRecords.length <= 150) {
+                                                                                isExporting.value = true;
+                                                                                try {
+                                                                                    let q = query(collection(db, "treesSales"));
+                                                                                    if (activeMonth.value !== 'All') {
+                                                                                        q = query(q, where("month", "==", activeMonth.value));
+                                                                                    }
+                                                                                    const snap = await getDocs(q);
+                                                                                    const fullDataset = [];
+                                                                                    snap.forEach(docSnap => fullDataset.push({ id: docSnap.id, ...docSnap.data() }));
+                                                                                    rawRecords = fullDataset;
+                                                                                } catch (error) {
+                                                                                    console.error("Full fetch failed:", error);
+                                                                                } finally {
+                                                                                    isExporting.value = false;
+                                                                                }
+                                                                            }
                                                                             const inMemoryEvents = rawRecords.map(sale => {
                                                                                 const owedAmt = Number(
                                                                                     sale.owed ?? 
@@ -1009,7 +1041,7 @@ createApp({
                                                                             return generateAuditStatementService(finalPayload);
                                                                         };
 
-                        const downloadMonthlyReport = (brand) => {
+                                                const downloadMonthlyReport = async (brand) => {
                             const isFullMonth = !!brand.brandList; 
     
                             if (!isFullMonth) {
@@ -1019,25 +1051,31 @@ createApp({
                                     alert("No promotional data selected for export. Please select at least one promo type.");
                                     return;
                                 }
-                                const csv = generateAuditStatementCSV(brand);
-                                const currentYear = new Date().getFullYear();
-                                const safeBrandName = (brand.vendor || brand.brand || 'Brand').replace(/\s/g, '_');
-                                const safeSite = (activeSite.value || 'Store').replace(/\s/g, '_');
-                                const blob = new Blob(
-                                    ['\ufeff' + csv],
-                                    {
-                                        type: 'text/csv;charset=utf-8;'
-                                    }
-                                );
-                                const url = URL.createObjectURL(blob);
-                                const link = document.createElement("a");
-                                link.setAttribute("href", url);
-                                link.setAttribute("download", `${safeSite}_Statement_${safeBrandName}_${currentYear}.csv`);
-                                document.body.appendChild(link);
-                                link.click();
-                                document.body.removeChild(link);
-                                logSystemAction("EXPORT", `Audit Statement exported for ${safeBrandName}`);
-                                setTimeout(() => URL.revokeObjectURL(url), 150);
+                                
+                                isExporting.value = true;
+                                try {
+                                    const csv = await generateAuditStatementCSV(brand);
+                                    const currentYear = new Date().getFullYear();
+                                    const safeBrandName = (brand.vendor || brand.brand || 'Brand').replace(/\s/g, '_');
+                                    const safeSite = (activeSite.value || 'Store').replace(/\s/g, '_');
+                                    const blob = new Blob(
+                                        ['\ufeff' + csv],
+                                        {
+                                            type: 'text/csv;charset=utf-8;'
+                                        }
+                                    );
+                                    const url = URL.createObjectURL(blob);
+                                    const link = document.createElement("a");
+                                    link.setAttribute("href", url);
+                                    link.setAttribute("download", `${safeSite}_Statement_${safeBrandName}_${currentYear}.csv`);
+                                    document.body.appendChild(link);
+                                    link.click();
+                                    document.body.removeChild(link);
+                                    logSystemAction("EXPORT", `Audit Statement exported for ${safeBrandName}`);
+                                    setTimeout(() => URL.revokeObjectURL(url), 150);
+                                } finally {
+                                    isExporting.value = false;
+                                }
                                 return;
                             }
 
@@ -1047,7 +1085,26 @@ createApp({
 
                             let csvTotal = 0;
     
-                            treesSalesData.value.forEach(sale => {
+                            let rawRecords = treesSalesData.value || [];
+                            if (rawRecords.length <= 150) {
+                                isExporting.value = true;
+                                try {
+                                    let q = query(collection(db, "treesSales"));
+                                    if (activeMonth.value !== 'All') {
+                                        q = query(q, where("month", "==", activeMonth.value));
+                                    }
+                                    const snap = await getDocs(q);
+                                    const fullDataset = [];
+                                    snap.forEach(docSnap => fullDataset.push({ id: docSnap.id, ...docSnap.data() }));
+                                    rawRecords = fullDataset;
+                                } catch (error) {
+                                    console.error("Full fetch failed:", error);
+                                } finally {
+                                    isExporting.value = false;
+                                }
+                            }
+
+                            rawRecords.forEach(sale => {
                                 const promoTitle = sale.discountTitle || sale['Discount Title'] || sale.promoType;
                                 const vendorName = sale.brand || sale['Product Brand'] || sale.Brand || '';
                     
@@ -1084,7 +1141,7 @@ createApp({
                             logSystemAction("EXPORT", `Downloaded Detailed Report for Full Month ${reportMonth}`);
                         };
 
-                const draftEmail = (brand) => {
+                                const draftEmail = async (brand) => {
                     const vendorName = brand.vendor || brand.brand;
                     if (!brand.email) {
                         alert(`No email mapped for ${vendorName}. Please add one in the Brand Directory first.`);
@@ -1096,30 +1153,35 @@ createApp({
                     const monthStr = brand.month || activeMonth.value;
                     const periodStr = `${monthStr} ${currentYear}`;
             
-                    // Build the 3-tier statement CSV
-                    const statementCSV = generateAuditStatementCSV(brand);
+                    isExporting.value = true;
+                    try {
+                        // Build the 3-tier statement CSV
+                        const statementCSV = await generateAuditStatementCSV(brand);
 
-                    // Trigger statement download for the user to attach
-                    const blob = new Blob(['\ufeff' + statementCSV], { type: 'text/csv;charset=utf-8;' });
-                    const url = URL.createObjectURL(blob);
-                    const link = document.createElement("a");
-                    link.setAttribute("href", url);
-                    link.setAttribute("download", `${vendorName.replace(/\s/g, '_')}_Statement_${activeSite.value.replace(/\s/g, '_')}_${currentYear}.csv`);
-                    document.body.appendChild(link);
-                    link.click();
-                    document.body.removeChild(link);
+                        // Trigger statement download for the user to attach
+                        const blob = new Blob(['\ufeff' + statementCSV], { type: 'text/csv;charset=utf-8;' });
+                        const url = URL.createObjectURL(blob);
+                        const link = document.createElement("a");
+                        link.setAttribute("href", url);
+                        link.setAttribute("download", `${vendorName.replace(/\s/g, '_')}_Statement_${activeSite.value.replace(/\s/g, '_')}_${currentYear}.csv`);
+                        document.body.appendChild(link);
+                        link.click();
+                        document.body.removeChild(link);
 
-                    const subject = `Promo Credit Statement - ${storeName} - ${periodStr}`;
-            
-                    let body = `Hello ${vendorName},\n\n`;
-                    body += `Please find the attached cumulative promo credit statement for ${storeName} for the period ending ${periodStr}.\n\n`;
-                    body += `This statement includes a month-by-month reconciliation of credits generated vs. collections received, itemized promotional details, and active dates.\n\n`;
-                    body += `Please let us know if you have any questions or when we can expect the remaining balance to be applied to our account.\n\n`;
-                    body += `Best regards,\n\n${storeName} Accounting Team\n`;
+                        const subject = `Promo Credit Statement - ${storeName} - ${periodStr}`;
+                
+                        let body = `Hello ${vendorName},\n\n`;
+                        body += `Please find the attached cumulative promo credit statement for ${storeName} for the period ending ${periodStr}.\n\n`;
+                        body += `This statement includes a month-by-month reconciliation of credits generated vs. collections received, itemized promotional details, and active dates.\n\n`;
+                        body += `Please let us know if you have any questions or when we can expect the remaining balance to be applied to our account.\n\n`;
+                        body += `Best regards,\n\n${storeName} Accounting Team\n`;
 
-                    window.location.href = buildMailtoUrl(brand.email, 'accounting@rredco.com', subject, body);
-            
-                    logSystemAction("EXPORT", `Generated 3-Tier Statement for ${vendorName}`);
+                        window.location.href = buildMailtoUrl(brand.email, 'accounting@rredco.com', subject, body);
+                
+                        logSystemAction("EXPORT", `Generated 3-Tier Statement for ${vendorName}`);
+                    } finally {
+                        isExporting.value = false;
+                    }
                 };
 
 
@@ -1439,20 +1501,27 @@ createApp({
             let ledgerQ = query(collection(db, "masterLedger"), where("site", "==", activeSite.value));
 
                         // Constrain sales query to prevent browser crashes / read quota blowout on 20,000+ row datasets
-            if (activeMonth.value !== 'All') {
+                        if (activeMonth.value !== 'All') {
                 salesQ = query(salesQ, where("month", "==", activeMonth.value));
             }
+            
+            salesQ = query(salesQ, limit(150));
 
             ledgerQ = query(ledgerQ, limit(8000));
 
             unsubscribeSales = onSnapshot(salesQ, (snapshot) => {
                 const loaded = [];
                 snapshot.forEach(doc => {
-                    const data = doc.data();
+                                        const data = doc.data();
                     const s = (data.detectedSite || data['Store Name'] || data.Location || '').toUpperCase();
-                    const activeS = (activeSite.value || '').toUpperCase().split(' ')[0];
+                    
+                    const isBluff = (str) => str.includes('BLUFF') || str.includes('RB') || str.includes('E12');
+                    const isRedding = (str) => (str.includes('REDDING') || str.includes('RD') || str.includes('E11')) && !str.includes('BLUFF');
+                    const targetIsBluff = (activeSite.value || '').toUpperCase().includes('BLUFF');
+                    const siteMatch = activeSite.value === 'All' || (targetIsBluff ? isBluff(s) : isRedding(s));
+                    
                     // Only keep records matching the active site
-                    if (activeSite.value === 'All' || s.includes(activeS)) {
+                    if (siteMatch) {
                         loaded.push({ id: doc.id, ...data });
                     }
                 });
@@ -1561,9 +1630,11 @@ createApp({
 
         // --- 4. UPLOAD & BATCH HANDLERS (V1.0 Service-Linked) ---
                 const helpersObj = { getStandardizedBrandName, detectSiteFromName, detectMonthFromDate, normalizeSiteName, normalizeTreezLedger, normalizeSageLedger };
-                                const handleTreezLedgerUpload = async (e) => {
+                                                                const handleTreezLedgerUpload = async (e) => {
             const file = e.target.files[0];
             if (!file) return;
+            
+            if (unsubscribeSales) unsubscribeSales();
 
             const storagePath = `master_csvs/${activeSite.value}/${new Date().getFullYear()}/${activeMonth.value}/${Date.now()}_${file.name}`;
             const fileRef = sRef(storage, storagePath);
@@ -1632,10 +1703,11 @@ createApp({
                             return '';
                         };
 
-                                                                                                let batch = writeBatch(db);
+                                                                                                                                                                                                let batch = writeBatch(db);
                         let count = 0;
                         let skippedCount = 0;
                         const errorRecords = [];
+                        const formattedSalesRows = [];
 
                         for (let i = headerIdx + 1; i < rows.length; i++) {
                             if (!rows[i].trim()) continue;
@@ -1688,16 +1760,16 @@ createApp({
                             };
 
                                                         const deterministicId = `treez_${storeCode}_${trackingVal}_${dateStr}_${owedAmt}_${discountTitle}`.replace(/[^a-zA-Z0-9_]/g, '');
-                            const newDocRef = doc(collection(db, "treesSales"), deterministicId);
+                                                        const newDocRef = doc(collection(db, "treesSales"), deterministicId);
                             
-                            // DO NOT push locally here, allow onSnapshot to hydrate seamlessly
+                                                        // DO NOT push locally here, allow onSnapshot to hydrate seamlessly
                             
-                            batch.set(newDocRef, newSale, { merge: true });
+                                                        batch.set(newDocRef, newSale, { merge: true });
                             
-                            // Push directly to memory array to prevent needing a full Firestore fetch
-                            treesSalesData.value.push({ id: deterministicId, ...newSale });
+                                                        // Push directly to memory array to prevent needing a full Firestore fetch
+                                                        formattedSalesRows.push({ id: deterministicId, ...newSale });
                             
-                            count++;
+                                                        count++;
 
                                                         if (count % 400 === 0) {
                                                             await batch.commit();
@@ -1708,13 +1780,10 @@ createApp({
                         }
 
                                                 await batch.commit();
-                        await updateDoc(doc(db, "source_uploads", uploadId), { status: 'Parsed', rowCount: count, skippedCount: skippedCount });
+                                                await updateDoc(doc(db, "source_uploads", uploadId), { status: 'Parsed', rowCount: count, skippedCount: skippedCount });
                         console.log("Firestore batch commit successful!");
                         
-                        // Force the app to re-fetch all ledger data so the UI updates instantly
-                        if (typeof setupFilteredListeners === 'function') {
-                            setupFilteredListeners();
-                        }
+                        treesSalesData.value = formattedSalesRows;
                 
                         logSystemAction("IMPORT", `Uploaded ${count} raw sales items from Trees CSV. Skipped ${skippedCount} items.`);
                         
@@ -2222,7 +2291,7 @@ console.log(`[Rollback] Extracted ${baselineEvents.length} baseline events ready
         activeSite, activeTab, isSuperAdmin, showAdminMenu, showWorkspaceMenu,
         activeWorkspaceInfo, workspaceTabs, calendarMonths, activeMonth,
         searchQueryInput, searchQuery, treezLedgerCount, treezLedgerLastUpload,
-        sage4545LedgerCount, sage4545LedgerLastUpload, isBatchProcessing,
+        sage4545LedgerCount, sage4545LedgerLastUpload, isBatchProcessing, isExporting,
         batchProgress, batchTotal, batchType, batchError, masterLedgerData,
         selectedLedgerVendor, ledgerTotals, totalPending, totalApplied,
         totalTreesOwedYTD, totalTreesPending, unsyncedSalesCount,
