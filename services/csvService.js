@@ -4,6 +4,21 @@ export const parseCSVText = (text) => {
     return text.split(/\r?\n/).filter(r => r.trim() !== '');
 };
 
+export const parseCompoundStatement = (text) => {
+    const lines = text.split(/\r?\n/);
+    const sections = { section1: [], section2: [], section3: [] };
+    let currentSection = 'section1';
+
+    lines.forEach(line => {
+        if (line.includes('--- SECTION 2')) { currentSection = 'section2'; return; }
+        if (line.includes('--- SECTION 3')) { currentSection = 'section3'; return; }
+        if (line.trim()) {
+            sections[currentSection].push(parseCSVRow(line));
+        }
+    });
+    return sections;
+};
+
 export const parseCSVRow = (str) => {
     const result = [];
     let cell = '';

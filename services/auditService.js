@@ -29,9 +29,9 @@ export function generateAuditStatementCSV({
         const s = (e.site || e.detectedSite || e['Store Name'] || e.Location || '').toUpperCase();
         const promo = e.discountTitle || e['Discount Title'] || e.promoType || 'Standard Promo';
 
-        const brandMatch = b === targetBrand;
-        const siteMatch = s.includes(sitePrefix);
-        const promoMatch = !selectedPromos || selectedPromos.includes(promo);
+                const brandMatch = b === targetBrand;
+        const siteMatch = s.includes(sitePrefix) || s.includes((targetSite || '').toUpperCase());
+        const promoMatch = !selectedPromos || selectedPromos.length === 0 || selectedPromos.includes(promo);
 
         return brandMatch && siteMatch && promoMatch;
     });

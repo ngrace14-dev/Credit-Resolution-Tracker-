@@ -8,7 +8,7 @@ import { getStorage, ref as sRef, uploadBytes, getBytes } from "https://www.gsta
 import { initializeAppCheck, ReCaptchaEnterpriseProvider } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-app-check.js";
 
 // NEW PHASE 1, 2, 3, 4, 5, 6 & 7A IMPORTS
-import { parseCSVText, parseCSVRow, cleanString, cleanCurrency, csvEscape, normalizeHeader, validateHeaders } from './services/csvService.js';
+import { parseCSVText, parseCSVRow, parseCompoundStatement, cleanString, cleanCurrency, csvEscape, normalizeHeader, validateHeaders } from './services/csvService.js';
 import { normalizeTreezLedger, normalizeSageLedger } from './services/ledgerService.js';
 import { parseExcelDate, generateAuditStatementCSV as generateAuditStatementService } from './services/auditService.js';
 import { buildStandardEmail, buildAuditFindingEmail, buildMailtoUrl } from './services/emailService.js';
@@ -1556,10 +1556,22 @@ createApp({
                 await uploadBytes(fileRef, file);
                 console.log("CSV preserved to storage:", storagePath);
 
-                                const reader = new FileReader();
+                                                                const reader = new FileReader();
                 reader.onload = async (evt) => {
                     try {
                         const text = evt.target.result;
+                        
+                        // Phase 3 Compound Statement Handling
+                        if (text.includes('--- SECTION 2') || text.includes('--- SECTION 3')) {
+                            const compoundData = parseCompoundStatement(text);
+                            console.log("Compound statement detected.", compoundData);
+                            // Normally, route this structured data to the appropriate multi-schema ledger injector
+                            // But for standard uploads we expect raw POS generated files. 
+                            alert("This is an exported Audit Statement, not raw POS or GL data. Please upload raw Treez CSVs here.");
+                            e.target.value = '';
+                            return;
+                        }
+
                         const lines = parseCSVText(text);
                         if (lines.length === 0) return alert("File is empty or invalid.");
 
@@ -1730,7 +1742,7 @@ createApp({
             }
         };
 
-        const handleSage4545Upload = async (e) => {
+                const handleSage4545Upload = async (e) => {
             const file = e.target.files[0];
             if (!file) return;
 
@@ -1746,6 +1758,15 @@ createApp({
                 reader.onload = async (evt) => {
                     try {
                         const text = evt.target.result;
+                        
+                        // Phase 3 Compound Statement Handling
+                        if (text.includes('--- SECTION 2') || text.includes('--- SECTION 3')) {
+                            parseCompoundStatement(text);
+                            alert("This is an exported Audit Statement, not raw GL data. Please upload raw Sage CSVs here.");
+                            e.target.value = '';
+                            return;
+                        }
+
                         const lines = parseCSVText(text);
                         const headers = parseCSVRow(lines[0]).map(normalizeHeader);
                         const rows = lines.slice(1);
