@@ -1468,12 +1468,6 @@ Recipient: <span class="text-emerald-400 font-semibold">{{ selectedBrandForEmail
             }
         });
         
-        document.getElementById('local-sage-input').addEventListener('change', async (e) => {
-            const file = e.target.files[0];
-            if (!file) return;
-            const rows = await ingestSageGLCSV(file);
-            document.getElementById('sage-status').innerText = `Loaded (${rows.length} rows)`;
-        });
         
         document.getElementById('btn-sync-memory').addEventListener('click', () => {
             try {
