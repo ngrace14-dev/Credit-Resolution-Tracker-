@@ -1996,7 +1996,7 @@ createApp({
             brandMappedHeaders, brandAvailableHeaders, availableHeaders, form, handleLogin, forceLock,
             filteredBrands, selectBrand, formatCurrency, filteredCredits, filteredTreesSalesData,
                         displayTreesSalesData, totalPending, totalApplied, unsyncedSalesCount, openPromoModal,
-            totalTreesOwedYTD, totalTreesPending, getFilteredBrandTotal,
+            totalTreesOwedYTD, totalTreesPending, getFilteredBrandTotal, getAvailablePromosForBrand, toggleBrandPromo, isPromoSelected, brandPromoCatalog, brandPromoFilters,
             closePromoModal, handleFileUpload, saveCredit, editCredit, deleteCredit, openImportModal,
             loadTreezDirectlyToMemory, handleSage4545Upload, syncDiscoveryToShards, rollbackShardsToWorkbook, continueBatch,
                         closeImportModal, resetImport, displayGrid, processRawPaste, processImport, regenerateBrandSummary,

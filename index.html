@@ -34,7 +34,7 @@
                 <p class="text-gray-500 mb-6 font-medium">Enter your authorized email and password.</p>
                 
                 <form @submit.prevent="handleLogin" class="flex flex-col gap-4">
-                    <input type="email" v-model="emailInput" class="border-2 border-gray-300 p-3 w-full rounded-xl focus:border-emerald-600 focus:ring-4 focus:ring-emerald-600/10 outline-none text-center font-bold text-gray-900 transition-all" placeholder="Email Address">
+                    <input type="email" v-model="emailInput" autocomplete="username" class="border-2 border-gray-300 p-3 w-full rounded-xl focus:border-emerald-600 focus:ring-4 focus:ring-emerald-600/10 outline-none text-center font-bold text-gray-900 transition-all" placeholder="Email Address">
                     <input type="password" v-model="passwordInput" autocomplete="current-password" class="border-2 border-gray-300 p-3 w-full rounded-xl focus:border-emerald-600 focus:ring-4 focus:ring-emerald-600/10 outline-none text-center font-bold text-gray-900 transition-all" placeholder="Password">
                     
                     <p v-if="authError" class="text-red-500 text-sm font-bold my-2">{{ authError }}</p>
