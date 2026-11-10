@@ -35,7 +35,7 @@
                 
                 <form @submit.prevent="handleLogin" class="flex flex-col gap-4">
                     <input type="email" v-model="emailInput" class="border-2 border-gray-300 p-3 w-full rounded-xl focus:border-emerald-600 focus:ring-4 focus:ring-emerald-600/10 outline-none text-center font-bold text-gray-900 transition-all" placeholder="Email Address">
-                    <input type="password" v-model="passwordInput" class="border-2 border-gray-300 p-3 w-full rounded-xl focus:border-emerald-600 focus:ring-4 focus:ring-emerald-600/10 outline-none text-center font-bold text-gray-900 transition-all" placeholder="Password">
+                    <input type="password" v-model="passwordInput" autocomplete="current-password" class="border-2 border-gray-300 p-3 w-full rounded-xl focus:border-emerald-600 focus:ring-4 focus:ring-emerald-600/10 outline-none text-center font-bold text-gray-900 transition-all" placeholder="Password">
                     
                     <p v-if="authError" class="text-red-500 text-sm font-bold my-2">{{ authError }}</p>
                     <button type="submit" class="w-full py-3.5 bg-gray-950 hover:bg-gray-800 text-amber-500 rounded-xl font-bold text-lg shadow-md transition-colors flex items-center justify-center gap-2">Access Tracker</button>
@@ -1450,43 +1450,54 @@ Recipient: <span class="text-emerald-400 font-semibold">{{ selectedBrandForEmail
             localWorkbookState
         } from './services/workbookService.js';
         
-        document.getElementById('local-wb-input').addEventListener('change', async (e) => {
-            const file = e.target.files[0];
-            if (!file) return;
-            const res = await ingestMasterWorkbookFile(file);
-            document.getElementById('wb-status').innerText = `Loaded (${res.totalSheets} sheets)`;
-        });
+                const wbInput = document.getElementById('local-wb-input');
+        if (wbInput) {
+            wbInput.addEventListener('change', async (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                const res = await ingestMasterWorkbookFile(file);
+                document.getElementById('wb-status').innerText = `Loaded (${res.totalSheets} sheets)`;
+            });
+        }
         
-        document.getElementById('local-treez-input').addEventListener('change', async (e) => {
-            const file = e.target.files[0];
-            if (!file) return;
-            const activeMonth = window.__vueAppMonth || 'October';
-            const rows = await ingestTreezPOSCSV(file, activeMonth);
-            document.getElementById('treez-status').innerText = `Loaded (${rows.length} rows)`;
-            // Feed Vue's memory array directly if it exists, without triggering Firestore
-            if (window.vueAppInstance && window.vueAppInstance.treesSalesData) {
-                window.vueAppInstance.treesSalesData.value = rows;
-            }
-        });
-        
-        
-        document.getElementById('btn-sync-memory').addEventListener('click', () => {
-            try {
+        const treezInput = document.getElementById('local-treez-input');
+        if (treezInput) {
+            treezInput.addEventListener('change', async (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
                 const activeMonth = window.__vueAppMonth || 'October';
-                const stats = syncDataToWorkbook(activeMonth);
-                document.getElementById('sync-summary').innerText = `Synced ${stats.updatedBrands} brands successfully.`;
-            } catch (err) {
-                alert(err.message);
-            }
-        });
+                const rows = await ingestTreezPOSCSV(file, activeMonth);
+                document.getElementById('treez-status').innerText = `Loaded (${rows.length} rows)`;
+                // Feed Vue's memory array directly if it exists, without triggering Firestore
+                if (window.vueAppInstance && window.vueAppInstance.treesSalesData) {
+                    window.vueAppInstance.treesSalesData.value = rows;
+                }
+            });
+        }
         
-        document.getElementById('btn-export-wb').addEventListener('click', () => {
-            try {
-                exportMasterWorkbookFile();
-            } catch (err) {
-                alert(err.message);
-            }
-        });
+        const btnSyncMemory = document.getElementById('btn-sync-memory');
+        if (btnSyncMemory) {
+            btnSyncMemory.addEventListener('click', () => {
+                try {
+                    const activeMonth = window.__vueAppMonth || 'October';
+                    const stats = syncDataToWorkbook(activeMonth);
+                    document.getElementById('sync-summary').innerText = `Synced ${stats.updatedBrands} brands successfully.`;
+                } catch (err) {
+                    alert(err.message);
+                }
+            });
+        }
+        
+        const btnExportWb = document.getElementById('btn-export-wb');
+        if (btnExportWb) {
+            btnExportWb.addEventListener('click', () => {
+                try {
+                    exportMasterWorkbookFile();
+                } catch (err) {
+                    alert(err.message);
+                }
+            });
+        }
     </script>
 </body>
 </html>
