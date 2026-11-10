@@ -182,7 +182,7 @@ export const runCanonicalMigration = async (db, masterWorkbookData, promoCredits
                     const val = String(row[exactKey]).trim().toLowerCase();
                     if (val === 'x') {
                         const pk = rowKeys.find(k => k.toLowerCase().includes('promo credits'));
-                        rawAmt = row[promoKey] || 0;
+                        rawAmt = row[pk] || 0;
                     } else {
                         rawAmt = row[exactKey];
                     }

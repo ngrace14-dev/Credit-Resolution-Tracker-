@@ -14,7 +14,12 @@ export default [
                 Blob: "readonly",
                 Chart: "readonly",
                 setTimeout: "readonly",
-                clearTimeout: "readonly"
+                clearTimeout: "readonly",
+                location: "readonly",
+                self: "readonly",
+                navigator: "readonly",
+                XLSX: "readonly",
+                Papa: "readonly"
             }
         },
         rules: {
