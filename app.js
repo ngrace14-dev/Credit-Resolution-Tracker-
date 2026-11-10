@@ -2264,6 +2264,37 @@ console.log(`[Rollback] Extracted ${baselineEvents.length} baseline events ready
             }, 150);
         };
 
+                const loadTreezDirectlyToMemory = async (e) => {
+const file = e.target.files[0];
+if (!file) return;
+try {
+const text = await file.text();
+Papa.parse(text, {
+header: true,
+skipEmptyLines: true,
+complete: (results) => {
+const formatted = results.data.map((row, idx) => {
+const cleanOwed = Number(String(row['Vendor Credit Owed'] || row.owed || 0).replace(/[^0-9.-]+/g, '')) || 0;
+return {
+id: `local_treez_${idx}_${Date.now()}`,
+brand: row['Product Brand'] || row.Brand || row.brand || '',
+site: row['Store Name'] || row.site || row.Location || '',
+discountTitle: row['Discount Title'] || row.discountTitle || row.promoType || '',
+owed: cleanOwed,
+owedAmt: cleanOwed,
+date: row['Date Closed'] || row.date || '',
+raw: row
+};
+});
+treesSalesData.value = formatted;
+alert(`Loaded ${formatted.length} sales records directly into memory!`);
+}
+});
+} catch (err) {
+console.error("Local parse error:", err);
+}
+};
+
                 // --- 8. TEMPLATE BINDINGS RETURN ---
                 return {
                 // State
@@ -2344,8 +2375,9 @@ alert("Error pushing records to Main Tracker. Check console for details.");
 }
 },
                 openEmailDraft: draftEmail, markReportGroupAsSent,
-        downloadMonthlyReport, exportYTDVariancePDF, exportBrandCSVReports,
+                downloadMonthlyReport, exportYTDVariancePDF, exportBrandCSVReports,
         exportVendorsAndBrandsCSV, regenerateMonthReports, regenerateBrandSummary,
+        loadTreezDirectlyToMemory,
         openLegacyVerification: (item) => { alert(`Verifying Legacy Data for ${item?.vendor || 'Vendor'}...`); },
         deleteSelectedBrands, toggleAllBrands, updateBrandField,
         openDimeHelper: (brand) => window.open('https://brand.dime.industries', '_blank'),
