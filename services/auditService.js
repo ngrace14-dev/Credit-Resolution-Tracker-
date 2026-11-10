@@ -5,6 +5,16 @@ if (typeof value === 'number') return new Date(Math.round((value - 25569) * 8640
 const d = new Date(value);
 return isNaN(d.getTime()) ? null : d;
 };
+const isSoftPromoMatch = (targetPromo, posPromo) => {
+    if (!targetPromo || !posPromo) return false;
+    // Strip everything except letters and numbers, then uppercase
+    const clean = (str) => str.replace(/[^A-Z0-9]/gi, '').toUpperCase();
+    const cleanTarget = clean(targetPromo);
+    const cleanPos = clean(posPromo);
+    // Soft match: Does the POS string contain the core target string?
+    return cleanPos.includes(cleanTarget) || cleanTarget.includes(cleanPos);
+};
+
 export function generateAuditStatementCSV({
     brandVendor,
     targetSite,
@@ -35,7 +45,7 @@ export function generateAuditStatementCSV({
         const brandMatch = cleanB === cleanTarget || cleanB.includes(cleanTarget) || cleanTarget.includes(cleanB);
         
         const siteMatch = s.includes(sitePrefix) || s.includes((targetSite || '').toUpperCase());
-        const promoMatch = !selectedPromos || selectedPromos.length === 0 || selectedPromos.includes(promo);
+        const promoMatch = !selectedPromos || selectedPromos.length === 0 || selectedPromos.some(targetPromo => isSoftPromoMatch(targetPromo, promo));
         
         const eventMonth = (e.isolation_month || e.month || '').toUpperCase();
         const monthMatch = activeMonth ? eventMonth === activeMonth.toUpperCase() : true;
