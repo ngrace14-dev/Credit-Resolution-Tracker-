@@ -1766,6 +1766,13 @@ createApp({
                 console.error("Preservation Failed:", err);
             }
         };
+        const handleLogin = async () => {
+            console.log([Auth] Login triggered);
+        };
+        const forceLock = () => {
+            isManagerUnlocked.value = false;
+        };
+
         return {
             isManagerUnlocked, isSuperAdmin, loggedInUser, emailInput, passwordInput, authError, activeSite, activeTab,
 
