@@ -1766,8 +1766,8 @@ createApp({
                 console.error("Preservation Failed:", err);
             }
         };
-        const handleLogin = async () => {
-            console.log([Auth] Login triggered);
+                const handleLogin = async () => {
+            console.log("[Auth] Login triggered");
         };
         const forceLock = () => {
             isManagerUnlocked.value = false;
