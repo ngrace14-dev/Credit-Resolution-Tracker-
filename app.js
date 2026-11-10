@@ -1767,3 +1767,40 @@ createApp({
             }
         };
                                                      
+    }\
+}).mount('#app');
+
+        return {
+            isManagerUnlocked, isSuperAdmin, loggedInUser, emailInput, passwordInput, authError, activeSite, activeTab,
+
+            treesSalesData, masterBrands, selectedBrands, allBrandsSelected, toggleAllBrands,
+            deleteSelectedBrands, updateBrandField, promoCredits, calendarMonths, activeMonth,
+            searchQueryInput, searchQuery, showPromoModal, showBrandDropdown, editingId, showReportModal,
+            showResolutionModal, resolutionCredit, resolutionForm, markAsSent, markReportGroupAsSent,
+            openResolutionModal, submitResolution, monthlyReportSummaries, downloadMonthlyReport,
+            groupedPendingReports, draftEmail, archiveAndExportAnnualReport, showImportModal,
+            rawPasteData, pastedGrid, mappedHeaders, showBrandImportModal, brandPasteData, brandPastedGrid,
+            brandMappedHeaders, brandAvailableHeaders, availableHeaders, form, handleLogin, forceLock,
+            filteredBrands, selectBrand, formatCurrency, filteredCredits, filteredTreesSalesData,
+            displayTreesSalesData, totalPending, totalApplied, unsyncedSalesCount, openPromoModal,
+            totalTreesOwedYTD, totalTreesPending,
+            closePromoModal, handleFileUpload, saveCredit, editCredit, deleteCredit, openImportModal,
+                        closeImportModal, resetImport, displayGrid, processRawPaste, processImport, regenerateBrandSummary,
+            regenerateMonthReports, handleTreesCsvUpload, handleSageCsvUpload, pushToMainTracker, resetBrandImport,
+            processBrandRawPaste, processBrandImport, systemLogs, refreshIcons, clearAllSalesData,
+            detectMonthInString, drawCharts, detectMonthFromDate, detectSiteFromName, openDimeHelper, exportVendorsAndBrandsCSV,
+            masterLedgerData, selectedLedgerVendor, refreshLedger, openLegacyVerification, ledgerTotals,
+                        masterWorkbook, showWorkspaceMenu, showAdminMenu, workspaceTabs, selectWorkspace, activeWorkspaceInfo,
+                        scrollMonths, scrollWorkbookTabs, workbookSchema, activeWorkbookSheet, isWorkbookLoaded,
+                        auditRange, brandAuditData, sageAuditData, activeWorkbookHeaders,
+            showWorkbookSyncModal, workbookPasteData, openWorkbookSyncModal, processWorkbookSync,
+                        repopulateFromMasterWorkbook, updateWorkbookFromSales, loadWorkbookFromStorage,
+                        exportYTDVariancePDF, exportBrandCSVReports,
+            emailReportMode,             auditStartMonth: startMonth, auditEndMonth: endMonth, showEmailDraftModal, selectedBrandForEmail,
+            emailDraftSubject, emailDraftBody, openEmailDraft, refreshEmailDraft, sendEmailDraft, copyEmailToClipboard
+        };
+
+
+
+    }
+}).mount('#app');
