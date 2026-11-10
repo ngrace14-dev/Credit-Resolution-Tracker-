@@ -157,7 +157,10 @@ createApp({
         const brandPastedGrid = ref([]);
         const brandPasteData = ref('');
         const brandMappedHeaders = ref([]);
-        const brandAvailableHeaders = ref(['Brand', 'Redding', 'Red-Bluff', 'Email', 'Contact']);
+        const brandAvailableHeaders = ref([
+            '-- Ignore Column --', 'Brand', 'Rep', 'Email', 'Name as appears in TREES',
+            'Distro', 'Asset Library', 'Order From', 'Payee', 'Notes'
+        ]);
         
         const refreshEmailDraft = () => {
             console.log('Refreshing email draft...');
@@ -178,16 +181,28 @@ createApp({
             window.open(`mailto:${to}?subject=${subject}&body=${body}`, '_blank');
         };
         
-        const processBrandRawPaste = () => {
-            if (!brandPasteData.value) {
-                brandPastedGrid.value = [];
-                return;
-            }
-            const lines = brandPasteData.value.trim().split('\n');
-            brandPastedGrid.value = lines.map(line => line.split('\t').map(c => c.trim()));
-            if (brandPastedGrid.value.length > 0) {
-                brandMappedHeaders.value = brandPastedGrid.value[0].map(() => 'Brand');
-            }
+                const processBrandRawPaste = () => {
+            const text = brandPasteData.value;
+            if (!text.trim()) return;
+            const rows = text.split(/\r?\n/).filter(r => r.trim() !== '');
+            const grid = rows.map(r => r.split('\t').map(c => c.trim()));
+            if (grid.length === 0) return;
+            
+            brandPastedGrid.value = grid;
+            
+            const firstRow = grid[0].map(c => c.toLowerCase());
+            brandMappedHeaders.value = firstRow.map(cell => {
+                if (cell.includes('brand') || cell.includes('vendor')) return 'Brand';
+                if (cell.includes('rep')) return 'Rep';
+                if (cell.includes('email')) return 'Email';
+                if (cell.includes('trees')) return 'Name as appears in TREES';
+                if (cell.includes('distro')) return 'Distro';
+                if (cell.includes('asset')) return 'Asset Library';
+                if (cell.includes('order')) return 'Order From';
+                if (cell.includes('payee')) return 'Payee';
+                if (cell.includes('note')) return 'Notes';
+                return '-- Ignore Column --';
+            });
         };
         
         const resetBrandImport = () => {
@@ -196,8 +211,67 @@ createApp({
             brandMappedHeaders.value = [];
         };
         
-        const processBrandImport = () => {
-            showBrandImportModal.value = false;
+                const processBrandImport = async () => {
+            let updatedCount = 0;
+            let newCount = 0;
+            
+            let startRow = 0;
+            if (brandPastedGrid.value.length > 0) {
+                const firstRowStr = brandPastedGrid.value[0].join('').toLowerCase();
+                if (firstRowStr.includes('brand') && (firstRowStr.includes('email') || firstRowStr.includes('rep') || firstRowStr.includes('distro'))) {
+                    startRow = 1;
+                }
+            }
+            
+            const batch = writeBatch(db);
+
+            for (let r = startRow; r < brandPastedGrid.value.length; r++) {
+                const row = brandPastedGrid.value[r];
+                let currentBrand = {};
+                
+                for (let c = 0; c < row.length; c++) {
+                    const header = brandMappedHeaders.value[c];
+                    if (header === '-- Ignore Column --') continue;
+                    currentBrand[header] = row[c] || '';
+                }
+                
+                const vendorName = currentBrand['Brand'];
+                if (!vendorName || vendorName.length <= 1) continue; 
+                
+                const existingBrand = masterBrands.value.find(b => (b.vendor || '').toLowerCase() === vendorName.toLowerCase());
+                
+                const payload = {};
+                if (currentBrand['Rep'] !== undefined) payload.rep = currentBrand['Rep'];
+                if (currentBrand['Email'] !== undefined) payload.email = currentBrand['Email'];
+                if (currentBrand['Name as appears in TREES'] !== undefined) payload.treesName = currentBrand['Name as appears in TREES'];
+                if (currentBrand['Distro'] !== undefined) payload.distributor = currentBrand['Distro'];
+                if (currentBrand['Asset Library'] !== undefined) payload.assetLibrary = currentBrand['Asset Library'];
+                if (currentBrand['Order From'] !== undefined) payload.orderFrom = currentBrand['Order From'];
+                if (currentBrand['Payee'] !== undefined) payload.payee = currentBrand['Payee'];
+                if (currentBrand['Notes'] !== undefined) payload.notes = currentBrand['Notes'];
+
+                if (existingBrand) {
+                    if (Object.keys(payload).length > 0) {
+                        batch.update(doc(db, "brands", existingBrand.id), payload);
+                        updatedCount++;
+                    }
+                } else {
+                    payload.vendor = vendorName;
+                    const newDocRef = doc(collection(db, "brands"));
+                    batch.set(newDocRef, payload);
+                    newCount++;
+                }
+            }
+            
+            try {
+                await batch.commit();
+                alert(`Success! Added ${newCount} new brands and updated ${updatedCount} existing entries in the cloud.`);
+                resetBrandImport();
+                showBrandImportModal.value = false;
+            } catch (error) {
+                console.error("Import error:", error);
+                alert("Failed to save imported brands to the cloud.");
+            }
         };
 
 
@@ -1978,9 +2052,13 @@ createApp({
             console.log('Workbook loaded from storage');
         };
 
-        const openEmailDraft = (brand) => {
+                const openEmailDraft = (brand) => {
             selectedBrandForEmail.value = brand;
             showEmailDraftModal.value = true;
+        };
+
+        const closeEmailDraftModal = () => {
+            showEmailDraftModal.value = false;
         };
 
         return {
@@ -2010,8 +2088,8 @@ createApp({
             showWorkbookSyncModal, workbookPasteData, openWorkbookSyncModal, processWorkbookSync,
                         repopulateFromMasterWorkbook, updateWorkbookFromSales, loadWorkbookFromStorage,
                         exportYTDVariancePDF, exportBrandCSVReports,
-            emailReportMode,             auditStartMonth: startMonth, auditEndMonth: endMonth, showEmailDraftModal, selectedBrandForEmail,
-            emailDraftSubject, emailDraftBody, openEmailDraft, refreshEmailDraft, sendEmailDraft, copyEmailToClipboard
+                        emailReportMode,             auditStartMonth: startMonth, auditEndMonth: endMonth, showEmailDraftModal, selectedBrandForEmail,
+            emailDraftSubject, emailDraftBody, openEmailDraft, refreshEmailDraft, sendEmailDraft, copyEmailToClipboard, closeEmailDraftModal
         };
 
 
