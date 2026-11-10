@@ -1766,10 +1766,6 @@ createApp({
                 console.error("Preservation Failed:", err);
             }
         };
-                                                     
-    }\
-}).mount('#app');
-
         return {
             isManagerUnlocked, isSuperAdmin, loggedInUser, emailInput, passwordInput, authError, activeSite, activeTab,
 
