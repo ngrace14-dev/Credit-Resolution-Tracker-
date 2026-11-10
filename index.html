@@ -189,10 +189,18 @@
                                                         <div class="text-[10px] text-gray-500 font-medium">Last Upload: {{ treezLedgerLastUpload || 'Never' }}</div>
                                                     </div>
                                                                                                         <div class="relative">
-                                                        <button :disabled="isBatchProcessing" class="w-full py-2 bg-emerald-600 hover:bg-emerald-500 disabled:bg-gray-400 text-white rounded-lg font-bold text-xs shadow-sm transition-all flex items-center justify-center gap-2">
+                                                                                                                <button :disabled="isBatchProcessing" class="w-full py-2 bg-emerald-600 hover:bg-emerald-500 disabled:bg-gray-400 text-white rounded-lg font-bold text-xs shadow-sm transition-all flex items-center justify-center gap-2">
                                                             <i data-lucide="file-up" class="w-3.5 h-3.5"></i> {{ isBatchProcessing && batchType === 'Treez' ? 'Processing...' : 'Upload Treez CSV' }}
                                                         </button>
                                                         <input type="file" @change="handleTreezLedgerUpload" accept=".csv" class="absolute inset-0 opacity-0 cursor-pointer" :disabled="isBatchProcessing">
+                                                    </div>
+                                                    
+                                                    <!-- NEW DIRECT TO MEMORY LOAD -->
+                                                    <div class="relative mt-2">
+                                                        <button :disabled="isBatchProcessing" class="w-full py-2 bg-indigo-600 hover:bg-indigo-500 disabled:bg-gray-400 text-white rounded-lg font-bold text-xs shadow-sm transition-all flex items-center justify-center gap-2">
+                                                            <i data-lucide="zap" class="w-3.5 h-3.5"></i> Fast Load Treez (Memory)
+                                                        </button>
+                                                        <input type="file" @change="loadTreezDirectlyToMemory" accept=".csv" class="absolute inset-0 opacity-0 cursor-pointer" :disabled="isBatchProcessing">
                                                     </div>
                                                 </div>
 
@@ -539,11 +547,17 @@
                         <button v-if="isSuperAdmin && treesSalesData.length > 0" @click="clearAllSalesData" class="w-full sm:w-auto px-4 py-2 bg-red-50 border border-red-200 hover:bg-red-100 text-red-600 rounded-lg font-bold shadow-sm transition-colors flex items-center justify-center gap-2 text-sm">
                             <i data-lucide="trash-2" class="w-4 h-4"></i> Clear All Data
                         </button>
-                        <div class="relative overflow-hidden inline-block w-full sm:w-auto">
+                                                <div class="relative overflow-hidden inline-block w-full sm:w-auto">
                             <button class="w-full px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold shadow-md transition-colors flex items-center justify-center gap-2 text-sm">
                                 <i data-lucide="file-up" class="w-4 h-4"></i> Upload Treez CSV
                             </button>
                             <input type="file" @change="handleTreezLedgerUpload" accept=".csv" class="absolute left-0 top-0 w-full h-full opacity-0 cursor-pointer">
+                        </div>
+                        <div class="relative overflow-hidden inline-block w-full sm:w-auto ml-2">
+                            <button class="w-full px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-bold shadow-md transition-colors flex items-center justify-center gap-2 text-sm">
+                                <i data-lucide="zap" class="w-4 h-4"></i> Fast Load (Memory)
+                            </button>
+                            <input type="file" @change="loadTreezDirectlyToMemory" accept=".csv" class="absolute left-0 top-0 w-full h-full opacity-0 cursor-pointer">
                         </div>
                     </div>
                 </div>
