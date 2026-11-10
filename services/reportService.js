@@ -32,7 +32,7 @@ export const buildDefinitiveBrandMetrics = (masterWorkbookData) => {
     return metrics;
 };
 
-export const buildMonthlyReportSummaries = ({ ledgerEvents, targetMonth, targetSite, calendarMonths, masterBrands, isPromoSelected }) => {
+export const buildMonthlyReportSummaries = ({ ledgerEvents, targetMonth, targetSite, calendarMonths, masterBrands, isPromoSelected, fallbackEmailMap }) => {
     const groups = {};
 
     const ensureStructure = (m, v) => {
@@ -43,7 +43,7 @@ export const buildMonthlyReportSummaries = ({ ledgerEvents, targetMonth, targetS
         if (!groups[m].brands[vendorName]) {
             const brandInfo = masterBrands.find(b => String(b.vendor || '').toUpperCase() === vendorName.toUpperCase()) || {};
             groups[m].brands[vendorName] = {
-                vendor: vendorName, month: m, email: brandInfo.email || '', rep: brandInfo.rep || '',
+                vendor: vendorName, month: m, email: (fallbackEmailMap && fallbackEmailMap[vendorName]) || brandInfo.email || "", rep: brandInfo.rep || "",
                 credits: [], total: 0, generated: 0, recovered: 0
             };
         }

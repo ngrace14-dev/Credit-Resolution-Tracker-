@@ -42,18 +42,8 @@ if (typeof location !== 'undefined' && (
     if (typeof self !== 'undefined') {
         self.FIREBASE_APPCHECK_DEBUG_TOKEN = '87e17f0c-bae3-4f23-8245-cd99984e47e7';
     }
-    console.log("[AppCheck] Debug Token Active");
 }
-/*
-try {
-    initializeAppCheck(firebaseApp, {
-        provider: new ReCaptchaEnterpriseProvider("6LeNEb8tAAAAAN454U2BgfO-ot6wN8T3VexIgIMq"),
-        isTokenAutoRefreshEnabled: true
-    });
-} catch (error) {
-    console.error("App Check Error:", error);
-}
-*/
+
 
 const db = getFirestore(firebaseApp);
 const auth = getAuth(firebaseApp); 
@@ -64,6 +54,20 @@ const { createApp, ref, computed, nextTick, onMounted, watch } = window.Vue;
 
 createApp({
     setup() {
+
+        const fallbackEmailMap = ref({});
+        onMounted(async () => {
+            try {
+                const response = await fetch("./email-mapping.json");
+                if (response.ok) {
+                    fallbackEmailMap.value = await response.json();
+                } else {
+                    console.warn("Could not fetch email-mapping.json", response.status);
+                }
+            } catch (err) {
+                console.error("Error fetching email-mapping.json:", err);
+            }
+        });
         const normalizeSiteName = (val) => String(val || '').toLowerCase().replace(/[\s_-]/g, '');
 
         // --- Core State ---
@@ -136,11 +140,9 @@ createApp({
                 });
 
                 if (loaded.length === 0 && treesSalesData.value.length > 0) {
-                    console.log(`[SalesSync] Blocked Firestore from wiping ${treesSalesData.value.length} local in-memory records.`);
                 } else {
                     treesSalesData.value = loaded;
                 }
-                console.log(`[SalesSync] Hydrated ${loaded.length} records for ${activeSite.value} (${activeMonth.value})`);
             } catch (err) {
                 console.error("Sales Fetch Failed:", err);
             } finally {
@@ -163,7 +165,6 @@ createApp({
         ]);
         
         const refreshEmailDraft = () => {
-            console.log('Refreshing email draft...');
         };
         
                 const copyEmailToClipboard = () => {
@@ -714,7 +715,8 @@ createApp({
                         targetSite: activeSite.value,
                         calendarMonths,
                         masterBrands: masterBrands.value,
-                        isPromoSelected // Injected so report summaries react to promo toggles
+                        isPromoSelected,
+                        fallbackEmailMap: fallbackEmailMap.value
                     });
                 });
 
@@ -1128,16 +1130,6 @@ createApp({
                                                                             };
                                                                             
                                                                             // === DEBUG INJECTION ===
-                                                                            console.log("=== STATEMENT GENERATOR DEBUG ===");
-                                                                            console.log("Target Brand:", targetBrandVendor);
-                                                                            console.log("Target Site:", activeSite.value);
-                                                                            console.log("Active Month:", activeMonth.value);
-                                                                            console.log("Total Raw Records inside treesSalesData:", rawRecords.length);
-                                                                            console.log("Total mapped inMemoryEvents (Raw POS items):", inMemoryEvents.length);
-                                                                            console.log("Total ledgerEventsList (Summary Shards):", ledgerEventsList.value.length);
-                                                                            console.log("First mapped POS item (if exists):", inMemoryEvents[0]);
-                                                                            console.log("===================================");
-                                                                            
                                                                             return generateAuditStatementService(finalPayload);
                                                                         };
 
@@ -1227,9 +1219,10 @@ createApp({
                             logSystemAction("EXPORT", `Downloaded Detailed Report for Full Month ${reportMonth}`);
                         };
 
-                                const draftEmail = async (brand) => {
+                                                                const draftEmail = async (brand) => {
                     const vendorName = brand.vendor || brand.brand;
-                    if (!brand.email) {
+                    const email = fallbackEmailMap.value[vendorName] || brand.email || '';
+                    if (!email) {
                         alert(`No email mapped for ${vendorName}. Please add one in the Brand Directory first.`);
                         return;
                     }
@@ -1262,7 +1255,7 @@ createApp({
                         body += `Please let us know if you have any questions or when we can expect the remaining balance to be applied to our account.\n\n`;
                         body += `Best regards,\n\n${storeName} Accounting Team\n`;
 
-                        window.location.href = buildMailtoUrl(brand.email, 'accounting@rredco.com', subject, body);
+                        window.location.href = buildMailtoUrl(email, "accounting@rredco.com", subject, body);
                 
                         logSystemAction("EXPORT", `Generated 3-Tier Statement for ${vendorName}`);
                     } finally {
@@ -1712,8 +1705,6 @@ createApp({
                 const uploadId = manifestRef.id;
 
                 await uploadBytes(fileRef, file);
-                console.log("CSV preserved to storage:", storagePath);
-
                                                                                 // eslint-disable-next-line no-undef
                 const reader = typeof FileReader !== 'undefined' ? new FileReader() : null;
                 if (!reader) {
@@ -1727,7 +1718,6 @@ createApp({
                         // Phase 3 Compound Statement Handling
                         if (text.includes('--- SECTION 2') || text.includes('--- SECTION 3')) {
                             const compoundData = parseCompoundStatement(text);
-                            console.log("Compound statement detected.", compoundData);
                             // Normally, route this structured data to the appropriate multi-schema ledger injector
                             // But for standard uploads we expect raw POS generated files. 
                             alert("This is an exported Audit Statement, not raw POS or GL data. Please upload raw Treez CSVs here.");
@@ -1847,7 +1837,6 @@ createApp({
             }
         };
                 const handleLogin = async () => {
-                    console.log("[Auth] Login triggered");
                     // Basic login logic for dev
                     if (emailInput.value && passwordInput.value) {
                         isManagerUnlocked.value = true;
@@ -1940,7 +1929,6 @@ createApp({
         });
 
         const selectBrand = (brand) => {
-            console.log('Brand selected:', brand);
         };
 
         const openPromoModal = () => {
@@ -1952,19 +1940,15 @@ createApp({
         };
 
         const handleFileUpload = (e) => {
-            console.log('File uploaded:', e.target.files[0]);
         };
 
         const saveCredit = () => {
-            console.log('Credit saved');
         };
 
         const editCredit = (credit) => {
-            console.log('Editing credit:', credit);
         };
 
         const deleteCredit = (creditId) => {
-            console.log('Deleting credit:', creditId);
         };
 
         const openImportModal = () => {
@@ -1976,7 +1960,6 @@ createApp({
         };
 
         const resetImport = () => {
-            console.log('Import reset');
         };
 
         const displayGrid = computed(() => {
@@ -1984,48 +1967,37 @@ createApp({
         });
 
         const processRawPaste = () => {
-            console.log('Raw paste processed');
         };
 
         const processImport = () => {
-            console.log('Import processed');
         };
 
         const handleTreesCsvUpload = (e) => {
-            console.log('Trees CSV uploaded:', e.target.files[0]);
         };
 
         const handleSageCsvUpload = (e) => {
-            console.log('Sage CSV uploaded:', e.target.files[0]);
         };
 
         const pushToMainTracker = () => {
-            console.log('Pushed to main tracker');
         };
 
         const clearAllSalesData = () => {
-            console.log('Sales data cleared');
         };
 
         const detectMonthInString = (str) => {
-            console.log('Month detected:', str);
             return 'Unknown';
         };
 
         const openDimeHelper = (brand) => {
-            console.log('Dime helper opened:', brand);
         };
 
         const openLegacyVerification = (vendor) => {
-            console.log('Legacy verification opened:', vendor);
         };
 
         const scrollMonths = (direction) => {
-            console.log('Scrolling months:', direction);
         };
 
         const scrollWorkbookTabs = (direction) => {
-            console.log('Scrolling workbook tabs:', direction);
         };
 
         const showWorkbookSyncModal = ref(false);
@@ -2036,20 +2008,16 @@ createApp({
         };
 
         const processWorkbookSync = () => {
-            console.log('Workbook sync processed');
             showWorkbookSyncModal.value = false;
         };
 
         const repopulateFromMasterWorkbook = () => {
-            console.log('Repopulated from master workbook');
         };
 
         const updateWorkbookFromSales = () => {
-            console.log('Workbook updated from sales');
         };
 
         const loadWorkbookFromStorage = () => {
-            console.log('Workbook loaded from storage');
         };
 
                 const openEmailDraft = (brand) => {
@@ -2062,6 +2030,7 @@ createApp({
         };
 
         return {
+            fallbackEmailMap,
             isManagerUnlocked, isSuperAdmin, loggedInUser, emailInput, passwordInput, authError, activeSite, activeTab,
 
             treesSalesData, masterBrands, selectedBrands, allBrandsSelected, toggleAllBrands,
