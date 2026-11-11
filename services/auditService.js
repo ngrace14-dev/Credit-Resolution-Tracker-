@@ -28,37 +28,36 @@ export function generateAuditStatementCSV({
     csvEscape = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`
 }) {
     const csvRows = [];
-    const sitePrefix = (targetSite || '').toUpperCase().split(' ')[0]; // Matches "RED" or "REDDING"
-    const targetBrand = (brandVendor || '').toUpperCase();
+        const targetBrand = (brandVendor || '').toUpperCase();
 
-        // 1. Filter raw transactions to this Brand, Site, and Active Promo Selection
-        const activeRawEvents = ledgerEvents.filter(ev => {
-            // Exclude general ledger baseline summary rows from granular item lists
-            if (ev.source === 'WORKBOOK_BASELINE' || ev.type === 'APPLIED') return false;
+    // Stage 1 (YTD Pool): Create a baseline array of all events for this specific brand and store across the entire year.
+    const ytdEvents = ledgerEvents.filter(ev => {
+        const evBrand = (ev.brand || ev.vendor || '').toUpperCase();
+        return evBrand === targetBrand && ev.site === targetSite;
+    });
 
-            // Requirement 1.1: Match Brand
-            const brandMatch = (ev.brand || ev.vendor || '').toUpperCase() === targetBrand;
-        
-            // Requirement 1.2: Match Site
-            const siteMatch = ev.site === targetSite;
-        
-            // Requirement 1.3: Match Month
-            const evMonth = (ev.month || ev.isolation_month || '').toUpperCase();
-            const monthMatch = activeMonth ? evMonth === activeMonth.toUpperCase() : true;
+    // Stage 2 (Active Month Pool): Create a subset for the itemized section.
+    const isPromoSelected = (promo) => !selectedPromos || selectedPromos.length === 0 || selectedPromos.some(targetPromo => isSoftPromoMatch(targetPromo, promo));
+    
+    const activeMonthEvents = ytdEvents.filter(ev => {
+        // Exclude general ledger baseline summary rows from granular item lists
+        if (ev.source === 'WORKBOOK_BASELINE' || ev.type === 'APPLIED') return false;
 
-            // Requirement 1.4: Respect Filter
-            const promo = ev.discountTitle || ev.creditType || '';
-            const promoMatch = !selectedPromos || selectedPromos.length === 0 || selectedPromos.some(targetPromo => isSoftPromoMatch(targetPromo, promo));
+        const evMonth = (ev.month || ev.isolation_month || '').toUpperCase();
+        const monthMatch = activeMonth ? evMonth === activeMonth.toUpperCase() : true;
 
-            return brandMatch && siteMatch && monthMatch && promoMatch;
-        });
+        const promo = ev.discountTitle || ev.creditType || '';
+        const promoMatch = isPromoSelected(promo);
+
+        return monthMatch && promoMatch;
+    });
     
     console.log("=== AUDIT SERVICE FILTER DEBUG ===");
     console.log("Target Brand:", targetBrand);
-    console.log("Target Site Prefix:", sitePrefix);
+    console.log("Target Site:", targetSite);
     console.log("Active Month required:", activeMonth);
-    console.log("Total incoming events to filter:", ledgerEvents.length);
-    console.log("Total events that survived all filters (activeRawEvents):", activeRawEvents.length);
+    console.log("YTD Events Pool Size:", ytdEvents.length);
+    console.log("Active Month Events (Itemized Pool):", activeMonthEvents.length);
     console.log("=====================================");
 
     // ========================================================
@@ -101,36 +100,31 @@ export function generateAuditStatementCSV({
             return;
         }
 
-        // Calculate New Credits Generated for this month from active events
-        const monthEvents = activeRawEvents.filter(e => {
+                // Calculate New Credits Generated for this month from ytdEvents (unfiltered by promo)
+        const monthEvents = ytdEvents.filter(e => {
             const m = (e.isolation_month || e.month || '').toUpperCase();
-            return m === mUpper;
+            return m === mUpper && e.type !== 'APPLIED' && e.source !== 'WORKBOOK_BASELINE';
         });
 
         let newGen = monthEvents.reduce((sum, e) => 
             sum + Number(e.amount ?? e.owed ?? e.creditOwed ?? e.Vendor_Credit_Owed ?? 0), 0
         );
 
-                // Fallback: If no granular Treez records exist for this month, check for a baseline workbook row
-        // (Only use baseline if user hasn't explicitly filtered out promotions)
-        if (monthEvents.length === 0 && (!selectedPromos || selectedPromos.length === 0)) {
-            const baselineRow = ledgerEvents.find(e => 
+        // Fallback: baseline row (ignoring filters for summary)
+        if (monthEvents.length === 0) {
+            const baselineRow = ytdEvents.find(e => 
                 e.source === 'WORKBOOK_BASELINE' &&
-                (e.isolation_month || e.month || '').toUpperCase() === mUpper &&
-                (e.brand || e.vendor || '').toUpperCase() === targetBrand &&
-                e.site === targetSite
+                (e.isolation_month || e.month || '').toUpperCase() === mUpper
             );
             if (baselineRow) {
                 newGen = Number(baselineRow.amount ?? baselineRow.owed ?? 0);
             }
         }
 
-        // Match Credits Applied from SAGE GL 4545
-        const appliedEvents = ledgerEvents.filter(e => 
+        // Match Credits Applied from ytdEvents
+        const appliedEvents = ytdEvents.filter(e => 
             e.type === 'APPLIED' && 
-            (e.isolation_month || e.month || '').toUpperCase() === mUpper &&
-            (e.brand || e.vendor || '').toUpperCase() === targetBrand &&
-            e.site === targetSite
+            (e.isolation_month || e.month || '').toUpperCase() === mUpper
         );
         const newApplied = appliedEvents.reduce((sum, e) => sum + Number(e.amount || 0), 0);
 
@@ -182,12 +176,12 @@ export function generateAuditStatementCSV({
     csvRows.push(''); // Blank row separator
     csvRows.push(csvEscape('--- SECTION 2: ITEMIZED ACTIVITY GROUPED BY PROMOTION ---'));
 
-    if (activeRawEvents.length === 0) {
+        if (activeMonthEvents.length === 0) {
         csvRows.push(csvEscape('No promotional line-item activity cataloged matching current filters.'));
     } else {
         // Group transactions by Discount Title
         const promoGroups = {};
-        activeRawEvents.forEach(e => {
+        activeMonthEvents.forEach(e => {
             const promo = e.discountTitle || e['Discount Title'] || e.promoType || 'Standard Discount';
             if (!promoGroups[promo]) promoGroups[promo] = [];
             promoGroups[promo].push(e);
@@ -267,13 +261,13 @@ export function generateAuditStatementCSV({
         'Total Promo Credit Generated'
     ].join(','));
 
-    if (activeRawEvents.length === 0) {
+        if (activeMonthEvents.length === 0) {
         csvRows.push(csvEscape('No promotional run dates cataloged.'));
     } else {
         // Map keyed by "MONTH:::PROMO_TITLE"
         const scheduleMap = {};
 
-        activeRawEvents.forEach(e => {
+        activeMonthEvents.forEach(e => {
             const m = e.isolation_month || e.month || 'October';
             const promo = e.discountTitle || e['Discount Title'] || e.promoType || 'Standard Discount';
             const key = `${m}:::${promo}`;
