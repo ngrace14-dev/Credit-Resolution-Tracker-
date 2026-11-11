@@ -395,32 +395,38 @@ createApp({
             }).format(rounded);
         };
 
-        const detectMonthFromDate = (dateStr) => {
+        function detectMonthFromDate(dateStr) {
             if (!dateStr) return '';
-            const str = String(dateStr).trim().split(' ')[0];
             const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-            if (str.includes('-')) { // ISO: YYYY-MM-DD
-                const m = parseInt(str.split('-')[1], 10);
-                if (m >= 1 && m <= 12) return months[m - 1];
+            // Clean the string and parse natively
+            const cleanStr = String(dateStr).trim().split(' ')[0];
+            const parsedDate = new Date(cleanStr);
+            if (!isNaN(parsedDate.getTime())) {
+                // getMonth() returns 0-11
+                // Forcing UTC prevents timezone shifting from rolling the month backward
+                const m = parsedDate.getUTCMonth();
+                return months[m];
             }
-            if (str.includes('/')) { // US: MM/DD/YYYY
-                const m = parseInt(str.split('/')[0], 10);
-                if (m >= 1 && m <= 12) return months[m - 1];
+            // Fallback for weird manual formats
+            if (cleanStr.includes('-')) {
+                const parts = cleanStr.split('-');
+                const val = parts[0].length === 4 ? parseInt(parts[1], 10) : parseInt(parts[0], 10);
+                if (val >= 1 && val <= 12) return months[val - 1];
+            }
+            if (cleanStr.includes('/')) {
+                const val = parseInt(cleanStr.split('/')[0], 10);
+                if (val >= 1 && val <= 12) return months[val - 1];
             }
             return '';
-        };
+        }
 
-        const detectSiteFromName = (storeNameStr) => {
-            if (!storeNameStr) return ''; 
-            const s = storeNameStr.toUpperCase();
-            if (s.includes('RED BLUFF') || s.includes('BLUFF') || s.includes('E12') || s.includes('RB')) {
-                return 'Red Bluff';
-            }
-            if (s.includes('REDDING') || s.includes('E11') || s.includes('RD')) {
-                return 'Redding';
-            }
-            return ''; 
-        };
+        function detectSiteFromName(rawSite) {
+            if (!rawSite) return '';
+            const safeSite = String(rawSite).toUpperCase().trim();
+            if (safeSite.includes('RED BLUFF') || safeSite.includes('BLUFF') || safeSite.includes('E12') || safeSite.includes('RB')) return 'Red Bluff';
+            if (safeSite.includes('REDDING') || safeSite.includes('E11') || safeSite.includes('RD')) return 'Redding';
+            return '';
+        }
 
         const getStandardizedBrandName = (name) => {
             if (!name) return '';
