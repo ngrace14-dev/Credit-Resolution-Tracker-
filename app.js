@@ -520,7 +520,9 @@ createApp({
 
         const globalPromoFilters = ref([]);
         watch(allAvailablePromos, (newPromos) => {
-            globalPromoFilters.value = [...newPromos];
+            const storeFundedRegex = /EMPLOYEE|FIRST TIME|FTP|SENIOR|VETERAN|STATE MEDICAL|STORE CREDIT/i;
+            // Auto-exclude internal/dispensary-funded discounts; only vendor/brand promos default to true (selected)
+            globalPromoFilters.value = newPromos.filter(promo => !storeFundedRegex.test(promo));
         }, { immediate: true });
 
         const toggleGlobalPromo = (promoTitle) => {
@@ -887,8 +889,11 @@ createApp({
                 const brandName = sale.brand || sale['Product Brand'] || sale.Brand || '';
                 const siteName = sale.detectedSite || sale.site || sale['Store Name'] || sale.Location || '';
                 return {
-                    ...sale, type: 'GENERATED', amount: owedAmt, brand: brandName, vendor: brandName, site: siteName, detectedSite: siteName,
+                    ...sale, type: 'GENERATED', amount: owedAmt, brand: brandName, vendor: brandName,
+                    site: detectSiteFromName(siteName),
+                    detectedSite: siteName,
                     isolation_month: sale.month || sale.isolation_month || '', dateClosed: rawDate, discountTitle: promo,
+                    creditType: promo,
                     productName: sale.productName || sale['Product Name'] || sale.Product_Name || 'N/A',
                     unitsSold: sale.unitsSold || sale['Units Sold'] || sale.Units_Sold || 1,
                     discountPercent: sale.discountPercent || sale['Discount %'] || sale['Discount Percent'] || ''

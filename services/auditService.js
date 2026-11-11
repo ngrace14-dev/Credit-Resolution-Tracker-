@@ -32,27 +32,26 @@ export function generateAuditStatementCSV({
     const targetBrand = (brandVendor || '').toUpperCase();
 
         // 1. Filter raw transactions to this Brand, Site, and Active Promo Selection
-    const activeRawEvents = ledgerEvents.filter(e => {
-        // Exclude general ledger baseline summary rows from granular item lists
-        if (e.source === 'WORKBOOK_BASELINE' || e.type === 'APPLIED') return false;
+        const activeRawEvents = ledgerEvents.filter(ev => {
+            // Exclude general ledger baseline summary rows from granular item lists
+            if (ev.source === 'WORKBOOK_BASELINE' || ev.type === 'APPLIED') return false;
 
-        const b = (e.brand || e['Product Brand'] || e.vendor || '').toUpperCase();
-        const s = (e.site || e.detectedSite || e['Store Name'] || e.Location || '').toUpperCase();
-        const promo = e.discountTitle || e['Discount Title'] || e.promoType || 'Standard Promo';
-
-        const cleanB = b.replace(/[^A-Z0-9]/g, '');
-        const cleanTarget = targetBrand.replace(/[^A-Z0-9]/g, '');
-        const brandMatch = cleanB === cleanTarget || cleanB.includes(cleanTarget) || cleanTarget.includes(cleanB);
+            // Requirement 1.1: Match Brand
+            const brandMatch = (ev.brand || ev.vendor || '').toUpperCase() === targetBrand;
         
-        const siteMatch = s.includes(sitePrefix) || s.includes((targetSite || '').toUpperCase());
-        const promoMatch = !selectedPromos || selectedPromos.length === 0 || selectedPromos.some(targetPromo => isSoftPromoMatch(targetPromo, promo));
+            // Requirement 1.2: Match Site
+            const siteMatch = ev.site === targetSite;
         
-        const eventMonth = (e.isolation_month || e.month || '').toUpperCase();
-        const monthMatch = activeMonth ? eventMonth === activeMonth.toUpperCase() : true;
+            // Requirement 1.3: Match Month
+            const evMonth = (ev.month || ev.isolation_month || '').toUpperCase();
+            const monthMatch = activeMonth ? evMonth === activeMonth.toUpperCase() : true;
 
-        const isMatch = brandMatch && siteMatch && promoMatch && monthMatch;
-        return isMatch;
-    });
+            // Requirement 1.4: Respect Filter
+            const promo = ev.discountTitle || ev.creditType || '';
+            const promoMatch = !selectedPromos || selectedPromos.length === 0 || selectedPromos.some(targetPromo => isSoftPromoMatch(targetPromo, promo));
+
+            return brandMatch && siteMatch && monthMatch && promoMatch;
+        });
     
     console.log("=== AUDIT SERVICE FILTER DEBUG ===");
     console.log("Target Brand:", targetBrand);
@@ -112,14 +111,14 @@ export function generateAuditStatementCSV({
             sum + Number(e.amount ?? e.owed ?? e.creditOwed ?? e.Vendor_Credit_Owed ?? 0), 0
         );
 
-        // Fallback: If no granular Treez records exist for this month, check for a baseline workbook row
+                // Fallback: If no granular Treez records exist for this month, check for a baseline workbook row
         // (Only use baseline if user hasn't explicitly filtered out promotions)
         if (monthEvents.length === 0 && (!selectedPromos || selectedPromos.length === 0)) {
             const baselineRow = ledgerEvents.find(e => 
                 e.source === 'WORKBOOK_BASELINE' &&
                 (e.isolation_month || e.month || '').toUpperCase() === mUpper &&
                 (e.brand || e.vendor || '').toUpperCase() === targetBrand &&
-                (e.site || e.detectedSite || '').toUpperCase().includes(sitePrefix)
+                e.site === targetSite
             );
             if (baselineRow) {
                 newGen = Number(baselineRow.amount ?? baselineRow.owed ?? 0);
@@ -131,7 +130,7 @@ export function generateAuditStatementCSV({
             e.type === 'APPLIED' && 
             (e.isolation_month || e.month || '').toUpperCase() === mUpper &&
             (e.brand || e.vendor || '').toUpperCase() === targetBrand &&
-            (e.site || e.detectedSite || '').toUpperCase().includes(sitePrefix)
+            e.site === targetSite
         );
         const newApplied = appliedEvents.reduce((sum, e) => sum + Number(e.amount || 0), 0);
 
