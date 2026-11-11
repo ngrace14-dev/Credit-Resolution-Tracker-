@@ -1004,6 +1004,17 @@ createApp({
         });
 
         const refreshIcons = () => { nextTick(() => { if (window.lucide) window.lucide.createIcons(); }); };
+
+        const handleLogin = async () => {
+            if (emailInput.value && passwordInput.value) {
+                isManagerUnlocked.value = true;
+                loggedInUser.value = emailInput.value;
+                nextTick(() => refreshIcons());
+            } else {
+                authError.value = "Invalid credentials";
+            }
+        };
+
         const forceLock = () => { isManagerUnlocked.value = false; };
         const showWorkbookSyncModal = ref(false);
         const workbookPasteData = ref('');
@@ -1036,7 +1047,7 @@ createApp({
             monthlyReportSummaries, downloadMonthlyReport,
             draftEmail,
             showBrandImportModal, brandPasteData, brandPastedGrid,
-            brandMappedHeaders, brandAvailableHeaders, forceLock,
+            brandMappedHeaders, brandAvailableHeaders, handleLogin, forceLock,
             formatCurrency, filteredCredits, filteredTreesSalesData,
             displayTreesSalesData, totalPending, totalApplied, unsyncedSalesCount,
             totalTreesOwedYTD, totalTreesPending, getFilteredBrandTotal,
