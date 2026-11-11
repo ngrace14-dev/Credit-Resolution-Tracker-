@@ -1,8 +1,0 @@
-// MERGED PREVIEW: GL Raw by Store
-// Total Expected Rows: 555
-// 541 Baseline + 14 Unique New Appends
-[
-  { "Posted dt.": "01/01/2026", "Store": "Redding", "Location": "Sundial", "Memo/Description": "Baseline Record 1", "Mapped Brand": "Lumpy's", "Credit": 100.00 },
-  "...",
-  { "Posted dt.": "10/24/2026", "Store": "Red Bluff", "Location": "Red Bluff", "Memo/Description": "Lumpy's ACH Recovery | Doc: ACH-99281", "Mapped Brand": "Lumpy's", "Credit": 1442.50 }
-]
