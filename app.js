@@ -395,24 +395,18 @@ createApp({
             }).format(rounded);
         };
 
-        const detectMonthFromDate = (dateString) => {
-            if (!dateString) return '';
-            const cleanStr = String(dateString).trim();
-            
-            // ISO Date: YYYY-MM-DD
-            const isoMatch = cleanStr.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
-            if (isoMatch) {
-                const monthIndex = parseInt(isoMatch[2], 10) - 1;
-                if (monthIndex >= 0 && monthIndex <= 11) return calendarMonths[monthIndex];
+        const detectMonthFromDate = (dateStr) => {
+            if (!dateStr) return '';
+            const str = String(dateStr).trim().split(' ')[0];
+            const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+            if (str.includes('-')) { // ISO: YYYY-MM-DD
+                const m = parseInt(str.split('-')[1], 10);
+                if (m >= 1 && m <= 12) return months[m - 1];
             }
-            
-            // US Slash Date: MM/DD/YYYY
-            const usMatch = cleanStr.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
-            if (usMatch) {
-                const monthIndex = parseInt(usMatch[1], 10) - 1;
-                if (monthIndex >= 0 && monthIndex <= 11) return calendarMonths[monthIndex];
+            if (str.includes('/')) { // US: MM/DD/YYYY
+                const m = parseInt(str.split('/')[0], 10);
+                if (m >= 1 && m <= 12) return months[m - 1];
             }
-
             return '';
         };
 
@@ -488,9 +482,9 @@ createApp({
                     brand: brandName,
                     vendor: brandName,
                     site: normalizedSite,
-                    month: resolvedMonth,
-                    isolation_month: resolvedMonth,
-                    trackingMonth: resolvedMonth,
+                    month: resolvedMonth || 'Unknown',
+                    isolation_month: resolvedMonth || 'Unknown',
+                    trackingMonth: resolvedMonth || 'Unknown',
                     dateClosed: rawDate,
                     discountTitle: promoTitle,
                     creditType: promoTitle,
