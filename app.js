@@ -1144,6 +1144,7 @@ createApp({
         const clearAllSalesData = () => {};
 
         return {
+            inMemoryLedgerEvents,
             isProcessing, progressPercent, progressMessage, progressDetails, progressETA,
             isGlobalLoading, allAvailablePromos, globalPromoFilters,
             toggleGlobalPromo, setAllGlobalPromos, isPromoSelected,
