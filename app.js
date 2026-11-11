@@ -688,14 +688,31 @@ createApp({
         });
 
         const monthlyReportSummaries = computed(() => {
+            let effectiveBrands = masterBrands.value;
+            if (!effectiveBrands || effectiveBrands.length === 0) {
+                const uniqueBrands = [...new Set((treesSalesData.value || []).map(s => (s.brand || s['Product Brand'] || '').trim()).filter(Boolean))];
+                effectiveBrands = uniqueBrands.map(name => ({
+                    id: name,
+                    vendor: name,
+                    brand: name,
+                    email: (fallbackEmailMap.value && fallbackEmailMap.value[name]) || ''
+                }));
+            }
+
+            const combinedEvents = [
+                ...(ledgerEventsList.value || []),
+                ...(inMemoryLedgerEvents.value || [])
+            ];
+
             return buildMonthlyReportSummaries({
-                ledgerEvents: [...ledgerEventsList.value, ...inMemoryLedgerEvents.value],
+                ledgerEvents: combinedEvents,
                 targetMonth: activeMonth.value,
                 targetSite: activeSite.value,
                 calendarMonths,
-                masterBrands: masterBrands.value,
+                masterBrands: effectiveBrands,
                 isPromoSelected,
-                fallbackEmailMap: fallbackEmailMap.value
+                fallbackEmailMap: fallbackEmailMap.value,
+                searchQuery: searchQuery.value || ''
             });
         });
 
