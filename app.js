@@ -67,6 +67,11 @@ createApp({
             try {
                 const res = await ingestMasterWorkbookFile(file);
                 localWbStatus.value = `Loaded (${res.totalSheets} sheets)`;
+                // Assign parsed workbook data immediately for reactivity
+                masterWorkbook.value = { 
+                    data: localWorkbookState.workbookData,
+                    summary: res 
+                };
             } catch (err) {
                 alert(err.message);
             } finally {
@@ -448,6 +453,34 @@ createApp({
             return base.sort((a, b) => new Date(b.dateClosed) - new Date(a.dateClosed));
         });
 
+        const inMemoryLedgerEvents = computed(() => {
+            if (!treesSalesData.value || treesSalesData.value.length === 0) return [];
+            return treesSalesData.value.map((sale, idx) => {
+                const brandName = (sale.brand || sale['Product Brand'] || sale.Brand || 'Unknown').trim();
+                const rawSite = sale.detectedSite || sale.site || sale['Store Name'] || sale.Location || '';
+                const normalizedSite = detectSiteFromName(rawSite);
+                const rawDate = sale.dateClosed || sale['Date Closed'] || sale.date || '';
+                const resolvedMonth = sale.month || detectMonthFromDate(rawDate) || activeMonth.value || 'October';
+                const promoTitle = sale.discountTitle || sale['Discount Title'] || sale.promoType || 'Promo';
+                const amt = Number(sale.owed ?? sale.creditOwed ?? sale.Vendor_Credit_Owed ?? sale['Vendor Credit Owed'] ?? sale.discountAmount ?? 0);
+                return {
+                    id: sale.id || `inmem_${idx}`,
+                    type: 'GENERATED',
+                    status: 'ACTIVE',
+                    brand: brandName,
+                    vendor: brandName,
+                    site: normalizedSite,
+                    month: resolvedMonth,
+                    isolation_month: resolvedMonth,
+                    trackingMonth: resolvedMonth,
+                    dateClosed: rawDate,
+                    discountTitle: promoTitle,
+                    creditType: promoTitle,
+                    amount: amt
+                };
+            });
+        });
+
         // --- GLOBAL PROMO FILTER LOGIC ---
         const allAvailablePromos = computed(() => {
             const rawRecords = treesSalesData.value || [];
@@ -458,7 +491,10 @@ createApp({
                 const isBluff = (str) => str.includes('BLUFF') || str.includes('RB') || str.includes('E12');
                 const isRedding = (str) => (str.includes('REDDING') || str.includes('RD') || str.includes('E11')) && !str.includes('BLUFF');
                 const siteMatch = activeSite.value === 'All' || (targetIsBluff ? isBluff(s) : isRedding(s));
-                const monthMatch = targetMonth === 'All' || e.month === targetMonth;
+                
+                const monthName = e.month || detectMonthFromDate(e.dateClosed || e['Date Closed'] || e.date || '');
+                const monthMatch = targetMonth === 'All' || monthName === targetMonth;
+                
                 return siteMatch && monthMatch;
             }).map(e => e.discountTitle || e['Discount Title'] || e.promoType || e.Discount_Title).filter(Boolean);
             return [...new Set(promos)].sort();
@@ -507,7 +543,10 @@ createApp({
                 const isBluff = (str) => str.includes('BLUFF') || str.includes('RB') || str.includes('E12');
                 const isRedding = (str) => (str.includes('REDDING') || str.includes('RD') || str.includes('E11')) && !str.includes('BLUFF');
                 const siteMatch = activeSite.value === 'All' || (targetIsBluff ? isBluff(s) : isRedding(s));
-                const monthMatch = targetMonth === 'All' || e.month === targetMonth;
+                
+                const monthName = e.month || detectMonthFromDate(e.dateClosed || e['Date Closed'] || e.date || '');
+                const monthMatch = targetMonth === 'All' || monthName === targetMonth;
+                
                 const promoMatch = selected.includes(promo);
                 return brandMatch && siteMatch && monthMatch && promoMatch;
             });
@@ -650,7 +689,7 @@ createApp({
 
         const monthlyReportSummaries = computed(() => {
             return buildMonthlyReportSummaries({
-                ledgerEvents: ledgerEventsList.value,
+                ledgerEvents: [...ledgerEventsList.value, ...inMemoryLedgerEvents.value],
                 targetMonth: activeMonth.value,
                 targetSite: activeSite.value,
                 calendarMonths,
