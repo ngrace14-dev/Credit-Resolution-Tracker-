@@ -89,11 +89,18 @@ export function syncDataToWorkbook(monthName) {
 if (!localWorkbookState.rawWorkbook || !localWorkbookState.workbookData) {
 throw new Error("Master Workbook not loaded in memory.");
 }
-const sheetName = monthName; // e.g., "October"
-const sheetData = localWorkbookState.workbookData[sheetName];
-if (!sheetData) {
-throw new Error(`Sheet '${sheetName}' not found in the loaded Master Workbook.`);
+// Fuzzy sheet lookup
+const searchMonth = monthName.trim().toLowerCase();
+const yearSuffix = "2026";
+const availableSheets = Object.keys(localWorkbookState.workbookData);
+const targetSheetName = availableSheets.find(s => s.toLowerCase() === `${searchMonth} ${yearSuffix}`) ||
+                        availableSheets.find(s => s.toLowerCase() === searchMonth) ||
+                        availableSheets.find(s => s.toLowerCase().includes(searchMonth) && s.includes(yearSuffix));
+
+if (!targetSheetName) {
+throw new Error(`Sheet for '${monthName}' not found in the loaded Master Workbook.`);
 }
+const sheetData = localWorkbookState.workbookData[targetSheetName];
 // Aggregate Treez sales by brand for Redding and Red Bluff
 const posTotals = {};
 localWorkbookState.treezData.forEach(row => {
@@ -111,11 +118,12 @@ posTotals[brandKey].redBluff += row.owedAmt;
 posTotals[brandKey].redding += row.owedAmt;
 }
 });
-// Locate header row in sheet (Brand, Redding, Red-Bluff)
+// Locate header row in sheet (Brand, Redding, Red-Bluff, Promo Credits)
 let headerRowIdx = -1;
 let brandColIdx = -1;
 let reddingColIdx = -1;
 let bluffColIdx = -1;
+let promoCreditsColIdx = -1;
 for (let i = 0; i < sheetData.length; i++) {
 const row = sheetData[i] || [];
 for (let j = 0; j < row.length; j++) {
@@ -123,8 +131,9 @@ const val = String(row[j] || '').trim().toLowerCase();
 if (val === 'brand' || val === 'vendor') brandColIdx = j;
 if (val === 'redding') reddingColIdx = j;
 if (val === 'red bluff' || val === 'red-bluff') bluffColIdx = j;
+if (val === 'promo credits') promoCreditsColIdx = j;
 }
-if (brandColIdx !== -1 && reddingColIdx !== -1) {
+if (brandColIdx !== -1 && (reddingColIdx !== -1 || bluffColIdx !== -1)) {
 headerRowIdx = i;
 break;
 }
@@ -137,9 +146,21 @@ const row = sheetData[r];
 if (!row || !row[brandColIdx]) continue;
 const sheetBrand = String(row[brandColIdx]).trim().toUpperCase();
 if (sheetBrand === 'TOTAL' || sheetBrand === 'TOTALS') break;
+
 if (posTotals[sheetBrand]) {
+// Dual-Row "x" Pivot Handling
+const isReddingX = reddingColIdx !== -1 && String(row[reddingColIdx]).toLowerCase() === 'x';
+const isBluffX = bluffColIdx !== -1 && String(row[bluffColIdx]).toLowerCase() === 'x';
+
+if (isReddingX && promoCreditsColIdx !== -1) {
+row[promoCreditsColIdx] = posTotals[sheetBrand].redding;
+} else if (isBluffX && promoCreditsColIdx !== -1) {
+row[promoCreditsColIdx] = posTotals[sheetBrand].redBluff;
+} else {
+// Normal flat row
 if (reddingColIdx !== -1) row[reddingColIdx] = posTotals[sheetBrand].redding;
 if (bluffColIdx !== -1) row[bluffColIdx] = posTotals[sheetBrand].redBluff;
+}
 matchedBrands.add(sheetBrand);
 updatedCount++;
 }
@@ -147,15 +168,19 @@ updatedCount++;
 }
 // Refresh GL Raw by Store sheet if Sage data is present
 if (localWorkbookState.sageData.length > 0 && localWorkbookState.workbookData['GL Raw by Store']) {
-const glSheet = localWorkbookState.workbookData['GL Raw by Store'];
-glSheet.length = 1; // Preserve headers
+const glSheetName = 'GL Raw by Store';
+const glSheetData = localWorkbookState.workbookData[glSheetName];
+// Append incoming sageData rows directly onto the existing array
 localWorkbookState.sageData.forEach(row => {
-glSheet.push(Object.values(row));
+glSheetData.push(Object.values(row));
 });
+// Write back to the SheetJS workbook object
+const updatedGLWorksheet = XLSX.utils.aoa_to_sheet(glSheetData);
+localWorkbookState.rawWorkbook.Sheets[glSheetName] = updatedGLWorksheet;
 }
 // Write back into the SheetJS workbook object
 const updatedWorksheet = XLSX.utils.aoa_to_sheet(sheetData);
-localWorkbookState.rawWorkbook.Sheets[sheetName] = updatedWorksheet;
+localWorkbookState.rawWorkbook.Sheets[targetSheetName] = updatedWorksheet;
 localWorkbookState.lastSyncStats = {
 updatedBrands: updatedCount,
 totalPosBrands: Object.keys(posTotals).length
