@@ -396,18 +396,36 @@ createApp({
         };
 
         const detectMonthFromDate = (dateString) => {
-            if (!dateString) return 'Unknown';
-            const d = new Date(dateString);
-            if (isNaN(d.getTime())) return 'Unknown';
-            return calendarMonths[d.getMonth()];
+            if (!dateString) return '';
+            const cleanStr = String(dateString).trim();
+            
+            // ISO Date: YYYY-MM-DD
+            const isoMatch = cleanStr.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+            if (isoMatch) {
+                const monthIndex = parseInt(isoMatch[2], 10) - 1;
+                if (monthIndex >= 0 && monthIndex <= 11) return calendarMonths[monthIndex];
+            }
+            
+            // US Slash Date: MM/DD/YYYY
+            const usMatch = cleanStr.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+            if (usMatch) {
+                const monthIndex = parseInt(usMatch[1], 10) - 1;
+                if (monthIndex >= 0 && monthIndex <= 11) return calendarMonths[monthIndex];
+            }
+
+            return '';
         };
 
         const detectSiteFromName = (storeNameStr) => {
-            if (!storeNameStr) return activeSite.value; 
-            const s = storeNameStr.toLowerCase();
-            if (s.includes('red bluff') || s.includes('redbluff') || s.includes('e12')) return 'Red Bluff';
-            if (s.includes('redding') || s.includes('sundial') || s.includes('e11')) return 'Redding';
-            return activeSite.value; 
+            if (!storeNameStr) return ''; 
+            const s = storeNameStr.toUpperCase();
+            if (s.includes('RED BLUFF') || s.includes('BLUFF') || s.includes('E12') || s.includes('RB')) {
+                return 'Red Bluff';
+            }
+            if (s.includes('REDDING') || s.includes('E11') || s.includes('RD')) {
+                return 'Redding';
+            }
+            return ''; 
         };
 
         const getStandardizedBrandName = (name) => {
@@ -460,7 +478,7 @@ createApp({
                 const rawSite = sale.detectedSite || sale.site || sale['Store Name'] || sale.Location || '';
                 const normalizedSite = detectSiteFromName(rawSite);
                 const rawDate = sale.dateClosed || sale['Date Closed'] || sale.date || '';
-                const resolvedMonth = sale.month || detectMonthFromDate(rawDate) || activeMonth.value || 'October';
+                const resolvedMonth = detectMonthFromDate(rawDate);
                 const promoTitle = sale.discountTitle || sale['Discount Title'] || sale.promoType || 'Promo';
                 const amt = Number(sale.owed ?? sale.creditOwed ?? sale.Vendor_Credit_Owed ?? sale['Vendor Credit Owed'] ?? sale.discountAmount ?? 0);
                 return {
