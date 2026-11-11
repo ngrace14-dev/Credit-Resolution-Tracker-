@@ -64,6 +64,64 @@ const { createApp, ref, computed, nextTick, onMounted, watch } = window.Vue;
 
 createApp({
     setup() {
+        const localWbStatus = ref('Not loaded');
+        const localTreezStatus = ref('Not loaded');
+        const localSageStatus = ref('Not loaded');
+        const localSyncSummary = ref('');
+
+        const handleLocalWbUpload = async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            try {
+                const res = await ingestMasterWorkbookFile(file);
+                localWbStatus.value = `Loaded (${res.totalSheets} sheets)`;
+            } catch (err) {
+                alert(err.message);
+            }
+        };
+
+        const handleLocalTreezUpload = async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            try {
+                const activeMonthLocal = activeMonth.value || 'October';
+                const rows = await ingestTreezPOSCSV(file, activeMonthLocal);
+                localTreezStatus.value = `Loaded (${rows.length} rows)`;
+                treesSalesData.value = rows;
+            } catch (err) {
+                alert(err.message);
+            }
+        };
+
+        const handleLocalSageUpload = async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            try {
+                const rows = await ingestSageGLCSV(file);
+                localSageStatus.value = `Loaded (${rows.length} rows)`;
+            } catch (err) {
+                alert(err.message);
+            }
+        };
+
+        const handleLocalSyncMemory = () => {
+            try {
+                const activeMonthLocal = activeMonth.value || 'October';
+                const stats = syncDataToWorkbook(activeMonthLocal);
+                localSyncSummary.value = `Synced ${stats.updatedBrands} brands successfully.`;
+            } catch (err) {
+                alert(err.message);
+            }
+        };
+
+        const handleLocalExportWb = () => {
+            try {
+                exportMasterWorkbookFile();
+            } catch (err) {
+                alert(err.message);
+            }
+        };
+
 
         const fallbackEmailMap = ref({});
         onMounted(async () => {
@@ -2040,6 +2098,9 @@ createApp({
         };
 
         return {
+            localWbStatus, localTreezStatus, localSageStatus, localSyncSummary,
+            handleLocalWbUpload, handleLocalTreezUpload, handleLocalSageUpload,
+            handleLocalSyncMemory, handleLocalExportWb,
             fallbackEmailMap,
             isManagerUnlocked, isSuperAdmin, loggedInUser, emailInput, passwordInput, authError, activeSite, activeTab,
 
