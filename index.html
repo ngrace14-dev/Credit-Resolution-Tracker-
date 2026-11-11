@@ -1407,97 +1407,39 @@ Recipient: <span class="text-emerald-400 font-semibold">{{ selectedBrandForEmail
             <!-- Step 1: Master Workbook -->
             <div class="bg-slate-800 p-3.5 rounded-lg border border-slate-700">
                 <label class="block text-xs font-semibold text-slate-300 mb-2">Master Workbook (.xlsx)</label>
-                <input type="file" id="local-wb-input" accept=".xlsx, .xls" class="text-xs text-slate-400 file:mr-2 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-slate-700 file:text-white hover:file:bg-slate-600 cursor-pointer w-full" />
-                <div id="wb-status" class="text-[11px] text-slate-400 mt-2 font-mono">Not loaded</div>
+                <input type="file" id="local-wb-input" @change="handleLocalWbUpload" accept=".xlsx, .xls" class="text-xs text-slate-400 file:mr-2 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-slate-700 file:text-white hover:file:bg-slate-600 cursor-pointer w-full" />
+                <div id="wb-status" class="text-[11px] text-slate-400 mt-2 font-mono">{{ localWbStatus }}</div>
             </div>
             
             <!-- Step 2: Treez POS CSV -->
             <div class="bg-slate-800 p-3.5 rounded-lg border border-slate-700">
                 <label class="block text-xs font-semibold text-slate-300 mb-2">2. Treez POS Sales (.csv)</label>
-                <input type="file" id="local-treez-input" accept=".csv" class="text-xs text-slate-400 file:mr-2 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-slate-700 file:text-white hover:file:bg-slate-600 cursor-pointer w-full" />
-                <div id="treez-status" class="text-[11px] text-slate-400 mt-2 font-mono">Not loaded</div>
+                <input type="file" id="local-treez-input" @change="handleLocalTreezUpload" accept=".csv" class="text-xs text-slate-400 file:mr-2 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-slate-700 file:text-white hover:file:bg-slate-600 cursor-pointer w-full" />
+                <div id="treez-status" class="text-[11px] text-slate-400 mt-2 font-mono">{{ localTreezStatus }}</div>
             </div>
             
             <!-- Step 3: Sage GL CSV (Optional) -->
             <div class="bg-slate-800 p-3.5 rounded-lg border border-slate-700">
                 <label class="block text-xs font-semibold text-slate-300 mb-2">3. Sage 4545 GL (.csv)</label>
-                <input type="file" id="local-sage-input" accept=".csv" class="text-xs text-slate-400 file:mr-2 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-slate-700 file:text-white hover:file:bg-slate-600 cursor-pointer w-full" />
-                <div id="sage-status" class="text-[11px] text-slate-400 mt-2 font-mono">Not loaded (optional)</div>
+                <input type="file" id="local-sage-input" @change="handleLocalSageUpload" accept=".csv" class="text-xs text-slate-400 file:mr-2 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-slate-700 file:text-white hover:file:bg-slate-600 cursor-pointer w-full" />
+                <div id="sage-status" class="text-[11px] text-slate-400 mt-2 font-mono">{{ localSageStatus }}</div>
             </div>
         </div>
         
         <!-- Action Buttons -->
         <div class="flex flex-wrap items-center gap-3">
-            <button id="btn-sync-memory" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-bold text-xs shadow-md transition-all flex items-center gap-2">
+            <button id="btn-sync-memory" @click="handleLocalSyncMemory" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-bold text-xs shadow-md transition-all flex items-center gap-2">
                 <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i> Sync Data to Workbook (RAM)
             </button>
-            <button id="btn-export-wb" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-bold text-xs shadow-md transition-all flex items-center gap-2">
+            <button id="btn-export-wb" @click="handleLocalExportWb" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-bold text-xs shadow-md transition-all flex items-center gap-2">
                 <i data-lucide="download" class="w-3.5 h-3.5"></i> Export Updated Master Workbook
             </button>
-            <div id="sync-summary" class="text-xs text-slate-300 font-mono ml-auto"></div>
+            <div id="sync-summary" class="text-xs text-slate-300 font-mono ml-auto">{{ localSyncSummary }}</div>
         </div>
     </div>
         </div>
     </div>
     <script type="module" src="app.js"></script>
-    <script type="module">
-        import {
-            ingestMasterWorkbookFile,
-            ingestTreezPOSCSV,
-            ingestSageGLCSV,
-            syncDataToWorkbook,
-            exportMasterWorkbookFile,
-            localWorkbookState
-        } from './services/workbookService.js';
-        
-                const wbInput = document.getElementById('local-wb-input');
-        if (wbInput) {
-            wbInput.addEventListener('change', async (e) => {
-                const file = e.target.files[0];
-                if (!file) return;
-                const res = await ingestMasterWorkbookFile(file);
-                document.getElementById('wb-status').innerText = `Loaded (${res.totalSheets} sheets)`;
-            });
-        }
-        
-        const treezInput = document.getElementById('local-treez-input');
-        if (treezInput) {
-            treezInput.addEventListener('change', async (e) => {
-                const file = e.target.files[0];
-                if (!file) return;
-                const activeMonth = window.__vueAppMonth || 'October';
-                const rows = await ingestTreezPOSCSV(file, activeMonth);
-                document.getElementById('treez-status').innerText = `Loaded (${rows.length} rows)`;
-                // Feed Vue's memory array directly if it exists, without triggering Firestore
-                if (window.vueAppInstance && window.vueAppInstance.treesSalesData) {
-                    window.vueAppInstance.treesSalesData.value = rows;
-                }
-            });
-        }
-        
-        const btnSyncMemory = document.getElementById('btn-sync-memory');
-        if (btnSyncMemory) {
-            btnSyncMemory.addEventListener('click', () => {
-                try {
-                    const activeMonth = window.__vueAppMonth || 'October';
-                    const stats = syncDataToWorkbook(activeMonth);
-                    document.getElementById('sync-summary').innerText = `Synced ${stats.updatedBrands} brands successfully.`;
-                } catch (err) {
-                    alert(err.message);
-                }
-            });
-        }
-        
-        const btnExportWb = document.getElementById('btn-export-wb');
-        if (btnExportWb) {
-            btnExportWb.addEventListener('click', () => {
-                try {
-                    exportMasterWorkbookFile();
-                } catch (err) {
-                    alert(err.message);
-                }
-            });
-        }
-    </script>
+    
 </body>
 </html>

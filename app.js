@@ -18,6 +18,16 @@ import { buildTrackerSyncPayloads, buildGridImportPayloads, buildBrandImportPayl
 import { processTreezUpload, processSageUpload } from './services/uploadService.js';
 
 
+
+import {
+    ingestMasterWorkbookFile,
+    ingestTreezPOSCSV,
+    ingestSageGLCSV,
+    syncDataToWorkbook,
+    exportMasterWorkbookFile,
+    localWorkbookState
+} from './services/workbookService.js';
+
 // 2. FIREBASE CONFIGURATION
 const firebaseConfig = {
     apiKey: "AIzaSyAslKhO_Wn2l1paJkqWj5lhxX_2YSekynk",
