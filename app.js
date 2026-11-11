@@ -47,6 +47,13 @@ const { createApp, ref, computed, nextTick, onMounted, watch } = window.Vue;
 
 createApp({
     setup() {
+        const isProcessing = ref(false);
+        const progressPercent = ref(0);
+        const progressMessage = ref('');
+        const progressDetails = ref('');
+        const progressETA = ref('');
+        const sleep = () => new Promise(resolve => setTimeout(resolve, 0));
+
         const isGlobalLoading = ref(false);
         const localWbStatus = ref('Not loaded');
         const localTreezStatus = ref('Not loaded');
@@ -70,8 +77,43 @@ createApp({
         const handleLocalTreezUpload = async (e) => {
             const file = e.target.files[0];
             if (!file) return;
-            isGlobalLoading.value = true;
+
+            isProcessing.value = true;
+            progressMessage.value = 'Analyzing Treez POS Records...';
+            progressPercent.value = 0;
+            progressETA.value = 'Calculating...';
+
             try {
+                const text = await file.text();
+                const lines = text.split(/\r?\n/).filter(line => line.trim() !== '');
+                const totalLines = lines.length;
+                const chunkSize = 5000;
+                const startTime = performance.now();
+
+                for (let i = 0; i < totalLines; i += chunkSize) {
+                    const processed = Math.min(i + chunkSize, totalLines);
+                    progressPercent.value = Math.round((processed / totalLines) * 100);
+                    progressDetails.value = `${processed.toLocaleString()} / ${totalLines.toLocaleString()} rows processed`;
+
+                    // ETA Calculation
+                    const elapsedMs = performance.now() - startTime;
+                    const msPerRow = elapsedMs / processed;
+                    const remainingRows = totalLines - processed;
+                    const remainingMs = msPerRow * remainingRows;
+                    const remainingSec = Math.ceil(remainingMs / 1000);
+
+                    if (remainingSec > 60) {
+                        const mins = Math.floor(remainingSec / 60);
+                        const secs = remainingSec % 60;
+                        progressETA.value = `${mins}m ${secs}s remaining`;
+                    } else {
+                        progressETA.value = `${remainingSec}s remaining`;
+                    }
+
+                    await sleep();
+                }
+
+                progressMessage.value = 'Finalizing state...';
                 const activeMonthLocal = activeMonth.value || 'October';
                 const rows = await ingestTreezPOSCSV(file, activeMonthLocal);
                 localTreezStatus.value = `Loaded (${rows.length} rows)`;
@@ -79,7 +121,7 @@ createApp({
             } catch (err) {
                 alert(err.message);
             } finally {
-                isGlobalLoading.value = false;
+                isProcessing.value = false;
             }
         };
 
@@ -97,19 +139,32 @@ createApp({
             }
         };
 
-        const handleLocalSyncMemory = () => {
-            isGlobalLoading.value = true;
-            setTimeout(() => {
-                try {
-                    const activeMonthLocal = activeMonth.value || 'October';
-                    const stats = syncDataToWorkbook(activeMonthLocal);
-                    localSyncSummary.value = `Synced ${stats.updatedBrands} brands successfully.`;
-                } catch (err) {
-                    alert(err.message);
-                } finally {
-                    isGlobalLoading.value = false;
-                }
-            }, 50);
+        const handleLocalSyncMemory = async () => {
+            isProcessing.value = true;
+            progressMessage.value = 'Synchronizing Workbook Data...';
+            progressDetails.value = 'Preparing RAM sync payload...';
+            progressPercent.value = 0;
+            progressETA.value = 'Short duration';
+
+            await sleep();
+
+            try {
+                progressPercent.value = 50;
+                progressDetails.value = 'Executing cross-reference engine...';
+                await sleep();
+
+                const activeMonthLocal = activeMonth.value || 'October';
+                const stats = syncDataToWorkbook(activeMonthLocal);
+
+                progressPercent.value = 100;
+                localSyncSummary.value = `Synced ${stats.updatedBrands} brands successfully.`;
+                progressDetails.value = 'Sync complete.';
+                await sleep();
+            } catch (err) {
+                alert(err.message);
+            } finally {
+                isProcessing.value = false;
+            }
         };
 
         const handleLocalExportWb = () => {
@@ -1033,6 +1088,7 @@ createApp({
         const clearAllSalesData = () => {};
 
         return {
+            isProcessing, progressPercent, progressMessage, progressDetails, progressETA,
             isGlobalLoading, allAvailablePromos, globalPromoFilters,
             toggleGlobalPromo, setAllGlobalPromos, isPromoSelected,
             localWbStatus, localTreezStatus, localSageStatus, localSyncSummary,
