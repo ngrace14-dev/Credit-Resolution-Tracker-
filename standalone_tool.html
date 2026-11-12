@@ -505,18 +505,55 @@ Search for the [TAG] to jump to the exact module.
                 });
             });
         },
-        syncDataToWorkbook: (monthName) => {
+                syncDataToWorkbook: (activeMonth, ledgerEvents) => {
             if (!localWorkbookState.rawWorkbook) throw new Error("Workbook not loaded.");
+            if (!activeMonth || activeMonth === 'All') throw new Error("Select a specific month to sync.");
+
+            const monthData = ledgerEvents.filter(e => e.month === activeMonth && e.type === 'GENERATED');
             const posTotals = {};
-            localWorkbookState.treezData.forEach(row => {
-                const b = row.brand.toUpperCase();
+            
+            monthData.forEach(row => {
+                const b = (row.brand || '').toUpperCase();
                 if (!posTotals[b]) posTotals[b] = { redding: 0, redBluff: 0 };
-                const s = row.site.toUpperCase();
+                const s = (row.site || '').toUpperCase();
                 if (s.includes('BLUFF') || s.includes('RB')) posTotals[b].redBluff += row.amount;
                 else posTotals[b].redding += row.amount;
             });
-            // Simplified sync for demo
-            return { updatedBrands: Object.keys(posTotals).length };
+
+            const sheetName = `${activeMonth} 2026`;
+            const sheet = localWorkbookState.rawWorkbook.Sheets[sheetName];
+            if (!sheet) throw new Error(`Sheet "${sheetName}" not found in workbook.`);
+
+            const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+            const headers = rows[0];
+            const brandIdx = headers.indexOf("Brand");
+            const reddingIdx = headers.indexOf("Redding");
+            const redBluffIdx = headers.indexOf("Red-Bluff");
+
+            if (brandIdx === -1 || reddingIdx === -1 || redBluffIdx === -1) {
+                throw new Error("Target sheet missing required columns (Brand, Redding, Red-Bluff).");
+            }
+
+            let updateCount = 0;
+            for (let i = 1; i < rows.length; i++) {
+                const row = rows[i];
+                const brandName = String(row[brandIdx] || '').toUpperCase();
+                if (posTotals[brandName]) {
+                    row[reddingIdx] = posTotals[brandName].redding;
+                    row[redBluffIdx] = posTotals[brandName].redBluff;
+                    updateCount++;
+                }
+            }
+
+            const newSheet = XLSX.utils.aoa_to_sheet(rows);
+            localWorkbookState.rawWorkbook.Sheets[sheetName] = newSheet;
+            localWorkbookState.workbookData[sheetName] = rows;
+
+            return { updatedBrands: updateCount, month: activeMonth };
+        },
+        exportMasterWorkbookFile: () => {
+            if (!localWorkbookState.rawWorkbook) throw new Error("No workbook to export.");
+            XLSX.writeFile(localWorkbookState.rawWorkbook, `Master_Workbook_Export_${new Date().toISOString().split('T')[0]}.xlsx`);
         }
     };
 
@@ -540,8 +577,24 @@ Search for the [TAG] to jump to the exact module.
             const activeMonth = ref('October');
             const masterWorkbook = ref({ data: {}, summary: {} });
             const activeWorkbookSheet = ref('Board Recon - Red Bluff');
-            const calendarMonths = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+                        const calendarMonths = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
             
+            const workspaceTabs = [
+                { name: 'Ledger', label: 'Master Ledger', icon: 'calculator', group: 'Workbook' },
+                { name: 'Recovery', label: 'Recovery Log', icon: 'undo-2', group: 'Workbook' },
+                { name: 'Reports', label: 'Brand Reports', icon: 'file-bar-chart', group: 'Workbook' },
+                { name: 'Directory', label: 'Brand Directory', icon: 'users', group: 'Identity' }
+            ];
+
+            const activeWorkspaceInfo = computed(() => {
+                return workspaceTabs.find(t => t.name === activeTab.value) || { name: activeTab.value, icon: 'layout' };
+            });
+
+            const selectWorkspace = (tab) => {
+                activeTab.value = tab.name;
+                showWorkspaceMenu.value = false;
+            };
+
             const isProcessing = ref(false);
             const isGlobalLoading = ref(false);
             const progressPercent = ref(0);
@@ -1019,9 +1072,16 @@ Search for the [TAG] to jump to the exact module.
                 "Bbrand": "jessicap@buddiesbrand.com"
             };
 
-            const treesSalesData = ref([]);
+                        const treesSalesData = ref([]);
             const ledgerEventsList = ref([]);
             const searchQueryInput = ref('');
+
+            const inMemoryLedgerEvents = computed(() => {
+                return [
+                    ...treesSalesData.value.map(s => ({ ...s, type: 'GENERATED' })),
+                    ...ledgerEventsList.value
+                ];
+            });
 
             const formatCurrency = (val) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(val || 0);
 
@@ -1619,5 +1679,57 @@ Search for the [TAG] to jump to the exact module.
                 }, { generated: 0, recovered: 0, outstanding: 0, variance: 0 });
             });
 
+                        // ==========================================
+            // [MOD_EXPORT] - CSV, PDF & Workbook Sync Generation
             // ==========================================
-            // [MOD_EXPORT] - CSV, PDF & Workbook Sync Genera
+            const handleLocalSyncMemory = async () => {
+                if (activeMonth.value === 'All') {
+                    alert("Please select a specific month to sync (cannot sync 'All Year').");
+                    return;
+                }
+                isGlobalLoading.value = true;
+                try {
+                    const result = workbookService.syncDataToWorkbook(activeMonth.value, inMemoryLedgerEvents.value);
+                    localSyncSummary.value = `Synced ${result.updatedBrands} brands for ${result.month}`;
+                } catch (err) {
+                    alert("Sync Error: " + err.message);
+                } finally {
+                    isGlobalLoading.value = false;
+                }
+            };
+
+            const handleLocalExportWb = () => {
+                isGlobalLoading.value = true;
+                try {
+                    workbookService.exportMasterWorkbookFile();
+                } catch (err) {
+                    alert("Export Error: " + err.message);
+                } finally {
+                    isGlobalLoading.value = false;
+                }
+            };
+
+                        return {
+                isManagerUnlocked, showWorkspaceMenu, showAdminMenu, loggedInUser,
+                emailInput, passwordInput, authError, activeSite, activeTab,
+                activeMonth, masterWorkbook, activeWorkbookSheet, calendarMonths,
+                workspaceTabs, activeWorkspaceInfo, selectWorkspace,
+                isProcessing, isGlobalLoading, progressPercent, progressMessage,
+                progressDetails, progressETA, localWbStatus, localTreezStatus,
+                localSageStatus, localSyncSummary, treesSalesData, ledgerEventsList,
+                searchQueryInput, inMemoryLedgerEvents, handleLogin, handleLocalWbUpload,
+                handleLocalTreezUpload, handleLocalSageUpload, handleLocalSyncMemory,
+                handleLocalExportWb, formatCurrency, masterBrands, selectedBrands,
+                allBrandsSelected, toggleAllBrands, deleteSelectedBrands,
+                updateBrandField, exportVendorsAndBrandsCSV, activeWorkbookHeaders,
+                definitiveBrandMetrics, brandAuditData, sageAuditData,
+                monthlyReportSummaries, filteredCredits, totalPending, totalApplied,
+                filteredTreesSalesData, displayTreesSalesData, unsyncedSalesCount,
+                allAvailablePromos, globalPromoFilters, toggleGlobalPromo,
+                setAllGlobalPromos, getFilteredBrandTotal, masterLedgerData, ledgerTotals
+            };
+        }
+    }).mount('#app');
+</script>
+</body>
+</html>
