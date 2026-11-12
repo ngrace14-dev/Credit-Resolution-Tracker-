@@ -420,7 +420,7 @@ Search for the [TAG] to jump to the exact module.
         return '';
     };
 
-        const getStandardizedBrandName = (name, workbookData = null) => {
+                const getStandardizedBrandName = (name, workbookData = null) => {
         if (!name) return '';
         const clean = String(name).trim();
         const mappingRows = (workbookData && workbookData["Brand_Mapping"]) ? workbookData["Brand_Mapping"] : [];
@@ -430,6 +430,86 @@ Search for the [TAG] to jump to the exact module.
         return match ? String(match["Standardized POS Name (CSV)"] || '').trim() : clean;
     };
 
+    const normalizeBrandKey = (str) => String(str || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+const _treezBrandListCache = new WeakMap();
+const _resolvedBrandResultCache = new WeakMap();
+const getCachedTreezBrands = (workbookData, treezRows) => {
+const rowsKey = Array.isArray(treezRows) ? treezRows : [];
+let wbMap = _treezBrandListCache.get(rowsKey);
+if (!wbMap) {
+wbMap = new Map();
+_treezBrandListCache.set(rowsKey, wbMap);
+}
+const wbKey = workbookData || '__NO_WB__';
+if (wbMap.has(wbKey)) {
+return wbMap.get(wbKey);
+}
+const treezBrandSet = new Set();
+rowsKey.forEach(r => {
+const b = String(r.brand || r['Product Brand'] || '').trim();
+if (b) treezBrandSet.add(b);
+});
+const mappingRows = (workbookData && workbookData["Brand_Mapping"]) ? workbookData["Brand_Mapping"] : [];
+mappingRows.forEach(r => {
+const std = String(r["Standardized POS Name (CSV)"] || '').trim();
+if (std) treezBrandSet.add(std);
+});
+const arr = Array.from(treezBrandSet);
+wbMap.set(wbKey, arr);
+return arr;
+};
+const resolveToTreezBrandName = (rawName, workbookData = null, treezRows = []) => {
+if (!rawName) return '';
+const cleaned = String(rawName).trim();
+if (!cleaned) return '';
+const rowsKey = Array.isArray(treezRows) ? treezRows : [];
+const wbKey = workbookData || '__NO_WB__';
+let wbResultMap = _resolvedBrandResultCache.get(rowsKey);
+if (!wbResultMap) {
+wbResultMap = new Map();
+_resolvedBrandResultCache.set(rowsKey, wbResultMap);
+}
+let strCache = wbResultMap.get(wbKey);
+if (!strCache) {
+strCache = new Map();
+wbResultMap.set(wbKey, strCache);
+}
+if (strCache.has(cleaned)) {
+return strCache.get(cleaned);
+}
+const mappedFromSheet = getStandardizedBrandName(cleaned, workbookData);
+const candidate = mappedFromSheet || cleaned;
+const candidateLower = candidate.toLowerCase();
+const candidateNorm = normalizeBrandKey(candidate);
+const treezBrands = getCachedTreezBrands(workbookData, rowsKey);
+let resolved = candidate;
+if (treezBrands.length > 0) {
+const exactMatch = treezBrands.find(tb => tb.toLowerCase() === candidateLower);
+if (exactMatch) {
+resolved = exactMatch;
+} else {
+const normMatch = treezBrands.find(tb => normalizeBrandKey(tb) === candidateNorm);
+if (normMatch) {
+resolved = normMatch;
+} else if (candidateLower === 'wct' || candidateLower === 'west coast treez') {
+const wctMatch = treezBrands.find(tb => {
+const tl = tb.toLowerCase();
+return tl === 'wct' || tl === 'west coast treez';
+});
+if (wctMatch) resolved = wctMatch;
+} else {
+const prefixMatch = treezBrands.find(tb => {
+const tl = tb.toLowerCase();
+return candidateLower.length >= 4 && (tl.startsWith(candidateLower + ' ') || candidateLower.startsWith(tl + ' '));
+});
+if (prefixMatch) resolved = prefixMatch;
+}
+}
+}
+strCache.set(cleaned, resolved);
+return resolved;
+};
+
         const escapeRegExp = (str) => String(str).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const hasWordMatch = (text, keyword) => {
         if (!text || !keyword) return false;
@@ -437,12 +517,18 @@ Search for the [TAG] to jump to the exact module.
         return regex.test(text);
     };
     
-    const MULTI_BRAND_DISTRIBUTORS = [
+        const MULTI_BRAND_DISTRIBUTORS = [
         {
             name: 'Nabifive LLC (Nabis)',
             distributorPatterns: ['NABIFIVE LLC', 'NABIFIVE', 'NABIS'],
             poolLabel: 'Nabifive LLC (Unallocated Pool)',
             childBrands: [
+                { patterns: ["HIGH 90'S", "HIGH 90S"], brand: "High 90's" },
+                { patterns: ['WEST COAST TREEZ', 'WCT'], brand: 'WCT' },
+                { patterns: ['WOODWIDE', 'WOOD WIDE'], brand: 'WoodWide' },
+                { patterns: ['MR. ZIPS', 'MR ZIPS'], brand: 'Mr. Zips' },
+                { patterns: ['TUTTI'], brand: 'Tutti' },
+                { patterns: ['URSA'], brand: 'URSA' },
                 { patterns: ['OBER SLUGGERS', 'SLUGGERS'], brand: 'Sluggers' },
                 { patterns: ['HEADY HEADS'], brand: 'Heady Heads' },
                 { patterns: ['RAW GARDEN'], brand: 'Raw Garden' },
@@ -476,7 +562,12 @@ Search for the [TAG] to jump to the exact module.
         }
     ];
 
-    const DIRECT_AND_SPECIALIZED_DISTRIBUTORS = [
+        const DIRECT_AND_SPECIALIZED_DISTRIBUTORS = [
+        { patterns: ['SUNDERSTORM BAY LLC', 'SUNDERSTORM', 'KANHA'], brand: 'Kanha' },
+        { patterns: ['DECIBEL ENTERPRISE INC', 'DECIBEL ENTERPRISE', 'DECIBEL GARDENS'], brand: 'Decibel Gardens' },
+        { patterns: ['BUD TECHNOLOGY', 'DIME INDUSTRIES', 'DIME'], brand: 'Dime' },
+        { patterns: ['ROSIN TECH'], brand: 'Rosin Tech' },
+        { patterns: ['CLARKIES'], brand: 'Clarkies' },
         { patterns: ['EMERALD BAY EXTRACTS'], brand: 'Emerald Bay Extracts' },
         { patterns: ['UPNORTH DISTRIBUTION', 'GLOBS LIVE RESIN', 'UPNORTH'], brand: 'UpNorth' },
         { patterns: ['CLEANLINE MANAGEMENT LLC', 'CLEANLINE MANAGEMENT', 'VUZE'], brand: 'Vuze' },
@@ -490,7 +581,7 @@ Search for the [TAG] to jump to the exact module.
         { patterns: ['OAKFRUITLAND'], brand: 'Oakfruitland' }
     ];
 
-    const resolveBrandFromSageMemo = (rawMemo, workbookData = null, brandDirectory = []) => {
+        const resolveBrandFromSageMemo = (rawMemo, workbookData = null, brandDirectory = [], treezRows = []) => {
         if (!rawMemo) return 'Unmapped';
         const upperMemo = String(rawMemo).toUpperCase().trim();
         
@@ -518,7 +609,7 @@ Search for the [TAG] to jump to the exact module.
             for (const cand of candidates) {
                 const cleanCand = String(cand).toUpperCase().trim();
                 if (cleanCand.length >= 3 && hasWordMatch(strippedMemo, cleanCand)) {
-                    return stdName;
+                    return resolveToTreezBrandName(stdName, workbookData, treezRows);
                 }
             }
         }
@@ -528,7 +619,7 @@ Search for the [TAG] to jump to the exact module.
             for (const entry of dist.childBrands) {
                 for (const pattern of entry.patterns) {
                     if (hasWordMatch(strippedMemo, pattern)) {
-                        return getStandardizedBrandName(entry.brand, workbookData);
+                        return resolveToTreezBrandName(entry.brand, workbookData, treezRows);
                     }
                 }
             }
@@ -538,7 +629,7 @@ Search for the [TAG] to jump to the exact module.
         for (const entry of DIRECT_AND_SPECIALIZED_DISTRIBUTORS) {
             for (const pattern of entry.patterns) {
                 if (hasWordMatch(upperMemo, pattern)) {
-                    return getStandardizedBrandName(entry.brand, workbookData);
+                    return resolveToTreezBrandName(entry.brand, workbookData, treezRows);
                 }
             }
         }
@@ -547,7 +638,7 @@ Search for the [TAG] to jump to the exact module.
         for (const entry of (brandDirectory || [])) {
             const vendorName = String(entry.vendor || '').trim();
             if (vendorName.length >= 3 && hasWordMatch(strippedMemo, vendorName)) {
-                return getStandardizedBrandName(vendorName, workbookData);
+                return resolveToTreezBrandName(vendorName, workbookData, treezRows);
             }
         }
         
@@ -560,7 +651,7 @@ Search for the [TAG] to jump to the exact module.
             }
         }
         
-        return getStandardizedBrandName(rawMemo, workbookData) || rawMemo;
+        return resolveToTreezBrandName(rawMemo, workbookData, treezRows) || rawMemo;
     };
 
     const csvService = {
@@ -763,7 +854,7 @@ Search for the [TAG] to jump to the exact module.
     // --- MAIN VUE APP ---
     const { createApp, ref, computed, nextTick, onMounted } = Vue;
 
-    createApp({
+        createApp({
         setup() {
             const isManagerUnlocked = ref(true); // Default to true to bypass login
             const showWorkspaceMenu = ref(false);
@@ -1273,20 +1364,93 @@ Search for the [TAG] to jump to the exact module.
             };
 
                         const treesSalesData = ref([]);
-            const ledgerEventsList = ref([]);
+                        const ledgerEventsList = ref([]);
             const searchQueryInput = ref('');
 
-                        const inMemoryLedgerEvents = computed(() => {
-return [
-...treesSalesData.value
-.filter(s => {
-const title = String(s.discountTitle || s['Discount Title'] || '').toUpperCase();
-return !title.includes('CUSTOM PRICE ADJUSTMENT');
-})
-.map(s => ({ ...s, type: 'GENERATED' })),
-...ledgerEventsList.value
-];
-});
+            const unifiedRecoveryEvents = computed(() => {
+                const results = [];
+                const seenKeys = new Set();
+                
+                // 1. Process uploaded live Sage GL CSV rows
+                (ledgerEventsList.value || []).forEach(e => {
+                    const eDate = e.date || 'N/A';
+                    const eSite = detectSiteFromName(e.site || e.Store || '');
+                    const eAmount = csvService.cleanCurrency(e.amount);
+                    const eMemo = String(e.memo || '').trim();
+                    const eBrand = resolveBrandFromSageMemo(e.memo || e.brand, masterWorkbook.value?.data, masterBrands.value, treesSalesData.value);
+                    
+                    const dedupeKey = `${eDate}|${eSite}|${eAmount.toFixed(2)}|${eMemo.slice(0, 40).toUpperCase()}`;
+                    if (!seenKeys.has(dedupeKey)) {
+                        seenKeys.add(dedupeKey);
+                        results.push({
+                            id: `live_${results.length}`,
+                            type: 'RECOVERY',
+                            date: eDate,
+                            isolation_month: detectMonthFromDate(eDate),
+                            site: eSite,
+                            brand: eBrand,
+                            amount: eAmount,
+                            memo: eMemo,
+                            source: 'Live CSV'
+                        });
+                    }
+                });
+
+                // 2. Process historical 'GL Raw by Store' rows from workbook
+                const rawGlRows = masterWorkbook.value?.data?.['GL Raw by Store'] || [];
+                rawGlRows.forEach(row => {
+                    const postedDt = row['Posted dt.'] || '';
+                    if (!postedDt) return;
+                    
+                    const rSite = detectSiteFromName(row['Store'] || row['Location'] || '');
+                    const rAmount = csvService.cleanCurrency(row['Credit']);
+                    if (rAmount === 0) return;
+                    
+                    const rMemo = String(row['Memo/Description'] || '').trim();
+                    
+                    let rBrand = '';
+                    const mappedBrand = String(row['Mapped Brand'] || '').trim();
+                    
+                    if (!mappedBrand || mappedBrand.startsWith('Nabifive Portfolio') || mappedBrand === 'Unassigned Distributor GL Entry') {
+                        rBrand = resolveBrandFromSageMemo(rMemo, masterWorkbook.value?.data, masterBrands.value, treesSalesData.value);
+                    } else if (mappedBrand.includes(',')) {
+                        rBrand = 'Nabifive LLC (Unallocated Pool)';
+                    } else {
+                        rBrand = resolveToTreezBrandName(mappedBrand, masterWorkbook.value?.data, treesSalesData.value);
+                    }
+
+                    const dedupeKey = `${postedDt}|${rSite}|${rAmount.toFixed(2)}|${rMemo.slice(0, 40).toUpperCase()}`;
+                    
+                    if (!seenKeys.has(dedupeKey)) {
+                        seenKeys.add(dedupeKey);
+                        results.push({
+                            id: `hist_${results.length}`,
+                            type: 'RECOVERY',
+                            date: postedDt,
+                            isolation_month: detectMonthFromDate(postedDt),
+                            site: rSite,
+                            brand: rBrand,
+                            amount: rAmount,
+                            memo: rMemo,
+                            source: 'Historical GL'
+                        });
+                    }
+                });
+
+                return results;
+            });
+
+            const inMemoryLedgerEvents = computed(() => {
+                return [
+                    ...treesSalesData.value
+                        .filter(s => {
+                            const title = String(s.discountTitle || s['Discount Title'] || '').toUpperCase();
+                            return !title.includes('CUSTOM PRICE ADJUSTMENT');
+                        })
+                        .map(s => ({ ...s, type: 'GENERATED' })),
+                    ...unifiedRecoveryEvents.value
+                ];
+            });
 
             const formatCurrency = (val) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(val || 0);
 
@@ -1815,7 +1979,7 @@ return results;
                 const allEvents = inMemoryLedgerEvents.value;
 
                 allEvents.forEach(e => {
-                    const rawBrand = e.type === 'RECOVERY' ? resolveBrandFromSageMemo(e.memo || e.brand, masterWorkbook.value?.data, masterBrands.value) : (e.brand || e['Mapped Brand'] || 'Unmapped');
+                    const rawBrand = e.type === 'RECOVERY' ? resolveBrandFromSageMemo(e.memo || e.brand, masterWorkbook.value?.data, masterBrands.value, treesSalesData.value) : (e.brand || e['Mapped Brand'] || 'Unmapped');
                     const b = rawBrand;
                     const s = e.site || e.Store || '';
                     if (activeSite.value !== 'All' && detectSiteFromName(s) !== activeSite.value) return;
@@ -1909,170 +2073,118 @@ return results;
                 window.location.href = emailService.buildMailtoUrl(to, '', subject, body);
             };
 
-                        const downloadMonthlyReport = (brandOrMonthGroup) => {
-const isSingleBrand = !!brandOrMonthGroup.vendor;
-const targetVendor = isSingleBrand ? brandOrMonthGroup.vendor : 'All';
-const targetMonth = activeMonth.value;
-const targetSite = activeSite.value;
-let csvContent = "";
-// SECTION 1: SUMMARY (12-Month & YTD)
-csvContent += "Period,Location,Brand,New_Cred,Credits_Applied,Remaining,Status\n";
-const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-let ytdGenerated = 0;
-let ytdApplied = 0;
-months.forEach(m => {
-let monthGen = 0;
-let monthApp = 0;
-// 1. Pull from RAM (Treez POS + Sage GL files currently loaded)
-inMemoryLedgerEvents.value.forEach(e => {
-if (e.isolation_month !== m) return;
-const eSite = detectSiteFromName(e.site || e.Store || '');
-if (targetSite !== 'All' && eSite !== targetSite) return;
-const eBrand = e.type === 'RECOVERY' ? resolveBrandFromSageMemo(e.memo || e.brand, masterWorkbook.value?.data, masterBrands.value) : getStandardizedBrandName(e.brand || e['Mapped Brand'] || 'Unmapped', masterWorkbook.value?.data);
-if (targetVendor !== 'All' && eBrand !== targetVendor) return;
-if (e.type === 'GENERATED') monthGen += (Number(e.amount) || 0);
-if (e.type === 'RECOVERY') monthApp += (Number(e.amount) || 0);
-});
-// 2. Pull from Historical Master Workbook ("Collected" / "Applied" / "Recovered" columns)
-if (masterWorkbook.value && masterWorkbook.value.data) {
-const monthShort = m.slice(0, 3).toLowerCase();
-const monthFull = m.toLowerCase();
-Object.entries(masterWorkbook.value.data).forEach(([sheetName, rows]) => {
-if (!Array.isArray(rows) || rows.length === 0) return;
-const sLower = sheetName.toLowerCase();
-if (sLower.includes('mapping') || sLower.includes('directory') || sLower.includes('brand_list')) return;
-const sheetSite = detectSiteFromName(sheetName);
-if (targetSite !== 'All' && sheetSite && sheetSite !== targetSite) return;
-const isMonthSheet = sLower.includes(monthFull) || new RegExp(`\\b${monthShort}\\b`, 'i').test(sLower);
-const isGeneric2026Sheet = sLower.includes('2026') || sLower.includes('ytd') || sLower.includes('summary') || sLower.includes('master') || sLower.includes('collected');
-if (!isMonthSheet && !isGeneric2026Sheet) return;
-rows.forEach(row => {
-const rawRowBrand = row["Brand"] || row["Vendor"] || row["Product Brand"] || row[0];
-const rowBrand = getStandardizedBrandName(rawRowBrand, masterWorkbook.value?.data);
-if (!rowBrand || rowBrand.toLowerCase().includes('total')) return;
-if (targetVendor !== 'All' && rowBrand.toLowerCase() !== targetVendor.toLowerCase()) return;
-const rowSiteRaw = row["Location"] || row["Store"] || row["Site"] || '';
-const rowSite = detectSiteFromName(rowSiteRaw);
-if (targetSite !== 'All' && rowSite && rowSite !== targetSite) return;
-if (!isMonthSheet) {
-const rowPeriod = String(row["Period"] || row["Month"] || '').toLowerCase();
-if (rowPeriod) {
-if (!rowPeriod.includes(monthFull) && !rowPeriod.includes(monthShort)) return;
-} else {
-// Handle matrix/summary sheets where months are column headers (e.g. "Oct Collected", "October")
-const monthCols = Object.keys(row).filter(k => {
-const kl = k.toLowerCase();
-const matchesMonth = kl.includes(monthFull) || new RegExp(`\\b${monthShort}\\b`, 'i').test(kl);
-const matchesCredit = kl.includes('collected') || kl.includes('applied') || kl.includes('recovered') || sLower.includes('collected') || sLower.includes('applied');
-return matchesMonth && matchesCredit;
-});
-if (monthCols.length === 0) return;
-monthCols.forEach(mc => {
-const colSite = detectSiteFromName(mc);
-if (targetSite !== 'All' && colSite && colSite !== targetSite) return;
-const val = csvService.cleanCurrency(row[mc]);
-if (!isNaN(val) && val !== 0) monthApp += val;
-});
-return;
-}
-}
-// Extract Collected / Applied credits from monthly or period-filtered rows
-Object.keys(row).forEach(k => {
-const kl = k.toLowerCase();
-const isCreditCol = kl.includes('collected') || kl.includes('applied') || kl.includes('recovered');
-if (!isCreditCol) return;
-const colSite = detectSiteFromName(k);
-if (targetSite !== 'All' && colSite && colSite !== targetSite) return;
-const val = csvService.cleanCurrency(row[k]);
-if (!isNaN(val) && val !== 0) {
-monthApp += val;
-}
-});
-});
-});
-}
-const remaining = monthGen - monthApp;
-let status = 'No Activity';
-if (remaining > 0) status = 'Outstanding';
-if (remaining < 0) status = 'Pending';
-if (monthGen > 0 && remaining === 0) status = 'Resolved';
-csvContent += `"${m}-26","${targetSite}","${targetVendor}","${monthGen.toFixed(2)}","${monthApp.toFixed(2)}","${remaining.toFixed(2)}","${status}"\n`;
-ytdGenerated += monthGen;
-ytdApplied += monthApp;
-});
-const ytdRemaining = ytdGenerated - ytdApplied;
-let ytdStatus = 'No Activity';
-if (ytdRemaining > 0) ytdStatus = 'Outstanding';
-if (ytdRemaining < 0) ytdStatus = 'Pending';
-if (ytdGenerated > 0 && ytdRemaining === 0) ytdStatus = 'Resolved';
-csvContent += `"YTD Total","${targetSite}","${targetVendor}","${ytdGenerated.toFixed(2)}","${ytdApplied.toFixed(2)}","${ytdRemaining.toFixed(2)}","${ytdStatus}"\n`;
-if (isSingleBrand) {
-const parentDist = MULTI_BRAND_DISTRIBUTORS.find(d =>
-d.childBrands.some(cb => getStandardizedBrandName(cb.brand, masterWorkbook.value?.data).toUpperCase() === targetVendor.toUpperCase())
-);
-if (parentDist) {
-const unallocatedPoolTotal = inMemoryLedgerEvents.value
-.filter(e => {
-if (e.type !== 'RECOVERY') return false;
-const eSite = detectSiteFromName(e.site || e.Store || '');
-if (targetSite !== 'All' && eSite !== targetSite) return false;
-return resolveBrandFromSageMemo(e.memo || e.brand, masterWorkbook.value?.data, masterBrands.value) === parentDist.poolLabel;
-})
-.reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
-if (unallocatedPoolTotal > 0) {
-csvContent += `"Note","${targetSite}","${targetVendor}","0.00","${unallocatedPoolTotal.toFixed(2)}","0.00","Unallocated ${parentDist.name} GL pool held separately (not double-counted)"\n`;
-}
-}
-}
-csvContent += "\n--- SECTION 2: ITEMIZED ACTIVITY GROUPED BY PROMOTION ---\n\n";
-// SECTION 2: ITEMIZED (Uses activeMonth filter)
-const rawSales = inMemoryLedgerEvents.value.filter(sale => {
-if (sale.type !== 'GENERATED') return false;
-if (targetMonth !== 'All' && sale.isolation_month !== targetMonth) return false;
-const saleSite = detectSiteFromName(sale.site || '');
-if (targetSite !== 'All' && saleSite !== targetSite) return false;
-const promoTitle = sale.discountTitle || 'Promo';
-if (!globalPromoFilters.value.includes(promoTitle)) return false;
-const v = getStandardizedBrandName(sale.brand || 'Unmapped', masterWorkbook.value?.data);
-if (targetVendor !== 'All' && v !== targetVendor) return false;
-return true;
-});
-const promoGroups = {};
-rawSales.forEach(sale => {
-const p = sale.discountTitle || 'Unknown Promo';
-if (!promoGroups[p]) promoGroups[p] = [];
-promoGroups[p].push(sale);
-});
-Object.keys(promoGroups).forEach(promoName => {
-csvContent += `PROMOTION: ${promoName}\n`;
-csvContent += "Date Closed,Month,Store Location,Product Brand,Product Name,Units Sold,Discount,Credit Amount Owed\n";
-let subtotal = 0;
-promoGroups[promoName].forEach(sale => {
-const date = sale.date || '';
-const month = sale.isolation_month || '';
-const site = detectSiteFromName(sale.site || '');
-const brand = getStandardizedBrandName(sale.brand, masterWorkbook.value?.data);
-const prodName = String(sale['Product Name'] || sale.productName || 'N/A').replace(/"/g, '""');
-const units = sale['Qty Sold'] || sale.qty || sale.units || 1;
-const amt = Number(sale.amount) || 0;
-subtotal += amt;
-csvContent += `"${date}","${month}","${site}","${brand}","${prodName}","${units}","${amt.toFixed(2)}","${amt.toFixed(2)}"\n`;
-});
-csvContent += `Subtotal for ${promoName},,,,,,,"${subtotal.toFixed(2)}"\n\n`;
-});
-const filename = isSingleBrand 
-? `${targetVendor}_${targetMonth}_2026_Statement.csv` 
-: `${targetMonth}_2026_Full_Promo_Report.csv`;
-const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
-const url = URL.createObjectURL(blob);
-const link = document.createElement("a"); 
-link.setAttribute("href", url); 
-link.setAttribute("download", filename);
-document.body.appendChild(link); 
-link.click(); 
-document.body.removeChild(link);
-setTimeout(() => URL.revokeObjectURL(url), 150);
-};
+                                                const downloadMonthlyReport = (brandOrMonthGroup) => {
+                                                const isSingleBrand = !!brandOrMonthGroup.vendor;
+                                                const targetVendor = isSingleBrand ? resolveToTreezBrandName(brandOrMonthGroup.vendor, masterWorkbook.value?.data, treesSalesData.value) : 'All';
+                                                const targetMonth = activeMonth.value;
+                                                const targetSite = activeSite.value;
+                                                let csvContent = "";
+                                                // SECTION 1: SUMMARY (12-Month & YTD)
+                                                csvContent += "Period,Location,Brand,New_Cred,Credits_Applied,Remaining,Status\n";
+                                                const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+                                                let ytdGenerated = 0;
+                                                                                                let ytdApplied = 0;
+                                                const monthGenMap = Object.fromEntries(months.map(m => [m, 0]));
+                                                const monthAppMap = Object.fromEntries(months.map(m => [m, 0]));
+                                                inMemoryLedgerEvents.value.forEach(e => {
+                                                    if (e.type !== 'GENERATED' || !Object.prototype.hasOwnProperty.call(monthGenMap, e.isolation_month)) return;
+                                                    const eSite = detectSiteFromName(e.site || e.Store || '');
+                                                    if (targetSite !== 'All' && eSite !== targetSite) return;
+                                                    const eBrand = resolveToTreezBrandName(e.brand || e['Mapped Brand'] || 'Unmapped', masterWorkbook.value?.data, treesSalesData.value);
+                                                    if (targetVendor !== 'All' && eBrand !== targetVendor) return;
+                                                    monthGenMap[e.isolation_month] += (Number(e.amount) || 0);
+                                                });
+                                                unifiedRecoveryEvents.value.forEach(e => {
+                                                    if (!Object.prototype.hasOwnProperty.call(monthAppMap, e.isolation_month)) return;
+                                                    const eSite = detectSiteFromName(e.site || e.Store || '');
+                                                    if (targetSite !== 'All' && eSite !== targetSite) return;
+                                                    if (targetVendor !== 'All' && e.brand !== targetVendor) return;
+                                                    monthAppMap[e.isolation_month] += (Number(e.amount) || 0);
+                                                });
+                                                months.forEach(m => {
+                                                    const monthGen = monthGenMap[m] || 0;
+                                                    const monthApp = monthAppMap[m] || 0;
+                                                    const remaining = monthGen - monthApp;
+                                                    let status = 'No Activity';
+                                                    if (remaining > 0) status = 'Outstanding';
+                                                    if (remaining < 0) status = 'Pending';
+                                                    if (monthGen > 0 && remaining === 0) status = 'Resolved';
+                                                    csvContent += `"${m}-26","${targetSite}","${targetVendor}","${monthGen.toFixed(2)}","${monthApp.toFixed(2)}","${remaining.toFixed(2)}","${status}"\n`;
+                                                    ytdGenerated += monthGen;
+                                                    ytdApplied += monthApp;
+                                                });
+                                                const ytdRemaining = ytdGenerated - ytdApplied;
+                                                let ytdStatus = 'No Activity';
+                                                if (ytdRemaining > 0) ytdStatus = 'Outstanding';
+                                                if (ytdRemaining < 0) ytdStatus = 'Pending';
+                                                if (ytdGenerated > 0 && ytdRemaining === 0) ytdStatus = 'Resolved';
+                                                csvContent += `"YTD Total","${targetSite}","${targetVendor}","${ytdGenerated.toFixed(2)}","${ytdApplied.toFixed(2)}","${ytdRemaining.toFixed(2)}","${ytdStatus}"\n`;
+                                                if (isSingleBrand) {
+                                                const parentDist = MULTI_BRAND_DISTRIBUTORS.find(d =>
+                                                d.childBrands.some(cb => resolveToTreezBrandName(cb.brand, masterWorkbook.value?.data, treesSalesData.value).toUpperCase() === targetVendor.toUpperCase())
+                                                );
+                                                if (parentDist) {
+                                                const unallocatedPoolTotal = unifiedRecoveryEvents.value
+                                                .filter(e => {
+                                                const eSite = detectSiteFromName(e.site || e.Store || '');
+                                                if (targetSite !== 'All' && eSite !== targetSite) return false;
+                                                return e.brand === parentDist.poolLabel;
+                                                })
+                                                .reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
+                                                if (unallocatedPoolTotal > 0) {
+                                                csvContent += `"Note","${targetSite}","${targetVendor}","0.00","${unallocatedPoolTotal.toFixed(2)}","0.00","Unallocated ${parentDist.name} GL pool held separately (not double-counted)"\n`;
+                                                }
+                                                }
+                                                }
+                                                csvContent += "\n--- SECTION 2: ITEMIZED ACTIVITY GROUPED BY PROMOTION ---\n\n";
+                                                // SECTION 2: ITEMIZED (Uses activeMonth filter)
+                                                const rawSales = inMemoryLedgerEvents.value.filter(sale => {
+                                                if (sale.type !== 'GENERATED') return false;
+                                                if (targetMonth !== 'All' && sale.isolation_month !== targetMonth) return false;
+                                                const saleSite = detectSiteFromName(sale.site || '');
+                                                if (targetSite !== 'All' && saleSite !== targetSite) return false;
+                                                const promoTitle = sale.discountTitle || 'Promo';
+                                                if (!globalPromoFilters.value.includes(promoTitle)) return false;
+                                                const v = resolveToTreezBrandName(sale.brand || 'Unmapped', masterWorkbook.value?.data, treesSalesData.value);
+                                                if (targetVendor !== 'All' && v !== targetVendor) return false;
+                                                return true;
+                                                });
+                                                const promoGroups = {};
+                                                rawSales.forEach(sale => {
+                                                const p = sale.discountTitle || 'Unknown Promo';
+                                                if (!promoGroups[p]) promoGroups[p] = [];
+                                                promoGroups[p].push(sale);
+                                                });
+                                                Object.keys(promoGroups).forEach(promoName => {
+                                                csvContent += `PROMOTION: ${promoName}\n`;
+                                                csvContent += "Date Closed,Month,Store Location,Product Brand,Product Name,Units Sold,Discount,Credit Amount Owed\n";
+                                                let subtotal = 0;
+                                                promoGroups[promoName].forEach(sale => {
+                                                const date = sale.date || '';
+                                                const month = sale.isolation_month || '';
+                                                const site = detectSiteFromName(sale.site || '');
+                                                const brand = resolveToTreezBrandName(sale.brand, masterWorkbook.value?.data, treesSalesData.value);
+                                                const prodName = String(sale['Product Name'] || sale.productName || 'N/A').replace(/"/g, '""');
+                                                const units = sale['Qty Sold'] || sale.qty || sale.units || 1;
+                                                const amt = Number(sale.amount) || 0;
+                                                subtotal += amt;
+                                                csvContent += `"${date}","${month}","${site}","${brand}","${prodName}","${units}","${amt.toFixed(2)}","${amt.toFixed(2)}"\n`;
+                                                });
+                                                csvContent += `Subtotal for ${promoName},,,,,,,"${subtotal.toFixed(2)}"\n\n`;
+                                                });
+                                                const filename = isSingleBrand
+                                                ? `${targetVendor}_${targetMonth}_2026_Statement.csv`
+                                                : `${targetMonth}_2026_Full_Promo_Report.csv`;
+                                                const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
+                                                const url = URL.createObjectURL(blob);
+                                                const link = document.createElement("a");
+                                                link.setAttribute("href", url);
+                                                link.setAttribute("download", filename);
+                                                document.body.appendChild(link);
+                                                link.click();
+                                                document.body.removeChild(link);
+                                                setTimeout(() => URL.revokeObjectURL(url), 150);
+                                                };
 
             const exportYTDVariancePDF = () => {
 if (typeof window.jspdf === 'undefined') {
