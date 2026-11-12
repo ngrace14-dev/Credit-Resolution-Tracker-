@@ -186,7 +186,7 @@
 
         <!-- MAIN WORKSPACE CONTENT -->
         <main class="flex-1 overflow-hidden flex flex-col">
-            <!-- TAB: MASTER LEDGER -->
+                        <!-- TAB: MASTER LEDGER -->
             <div v-if="activeTab === 'Ledger'" class="flex-1 flex flex-col p-4 md:p-6 bg-gray-100 overflow-hidden">
                 <div class="flex flex-col lg:flex-row justify-between items-start lg:items-end mb-4 shrink-0 gap-4">
                     <div>
@@ -194,6 +194,9 @@
                         <p class="text-sm text-gray-500 mt-1">Unified financial workspace. All processing happens in RAM.</p>
                     </div>
                 </div>
+                <div class="bg-white rounded-xl border border-gray-300 shadow-sm p-4 mb-4 h-64 w-full relative">
+<canvas ref="chartCanvas"></canvas>
+</div>
                 <div class="flex flex-col lg:flex-row gap-6 flex-1 min-h-0 overflow-hidden">
                     <div class="bg-white rounded-xl border border-gray-300 shadow-sm flex-1 flex flex-col min-h-0 overflow-hidden">
                         <div class="overflow-auto flex-1 relative">
@@ -387,7 +390,45 @@ Search for the [TAG] to jump to the exact module.
 ====================================================== 
 */
 
-    // --- INTEGRATED SERVICES ---
+        // --- INTEGRATED SERVICES ---
+
+    const detectMonthFromDate = (dateStr) => {
+        if (!dateStr) return '';
+        const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+        const cleanStr = String(dateStr).trim().split(' ')[0];
+        const parsedDate = new Date(cleanStr);
+        if (!isNaN(parsedDate.getTime())) {
+            return months[parsedDate.getUTCMonth()];
+        }
+        if (cleanStr.includes('-')) {
+            const parts = cleanStr.split('-');
+            const val = parts[0].length === 4 ? parseInt(parts[1], 10) : parseInt(parts[0], 10);
+            if (val >= 1 && val <= 12) return months[val - 1];
+        }
+        if (cleanStr.includes('/')) {
+            const val = parseInt(cleanStr.split('/')[0], 10);
+            if (val >= 1 && val <= 12) return months[val - 1];
+        }
+        return '';
+    };
+
+    const detectSiteFromName = (rawSite) => {
+        if (!rawSite) return '';
+        const safeSite = String(rawSite).toUpperCase().trim();
+        if (safeSite.includes('RED BLUFF') || safeSite.includes('BLUFF') || safeSite.includes('E12') || safeSite.includes('RB')) return 'Red Bluff';
+        if (safeSite.includes('REDDING') || safeSite.includes('E11') || safeSite.includes('RD')) return 'Redding';
+        return '';
+    };
+
+    const getStandardizedBrandName = (name, workbookData = null) => {
+        if (!name) return '';
+        const clean = String(name).trim();
+        const mappingRows = (workbookData && workbookData["Brand_Mapping"]) ? workbookData["Brand_Mapping"] : [];
+        const match = mappingRows.find(r => 
+            String(r["Master Workbook Legacy Name"] || '').trim().toLowerCase() === clean.toLowerCase()
+        );
+        return match ? String(match["Standardized POS Name (CSV)"] || '').trim() : clean;
+    };
 
     const csvService = {
         parseCSVText: (text) => (typeof text !== 'string') ? [] : text.split(/\r?\n/).filter(r => r.trim() !== ''),
@@ -489,18 +530,28 @@ Search for the [TAG] to jump to the exact module.
                 });
             });
         },
-        ingestSageGLCSV: async (file) => {
+                ingestSageGLCSV: async (file) => {
             const text = await file.text();
             return new Promise((resolve) => {
                 Papa.parse(text, {
                     header: true,
+                    skipEmptyLines: true,
                     complete: (res) => {
-                        localWorkbookState.sageData = res.data.map(r => ({
-                            ...r,
-                            type: 'RECOVERY',
-                            amount: csvService.cleanCurrency(r['Credit'] || r.amount || 0)
-                        }));
-                        resolve(localWorkbookState.sageData);
+                        const cleaned = res.data.map((r, idx) => {
+                            const memo = r['Memo/Description'] || '';
+                            return {
+                                id: `sage_${idx}`,
+                                ...r,
+                                type: 'RECOVERY',
+                                amount: csvService.cleanCurrency(r['Credit'] || 0),
+                                site: detectSiteFromName(r['Location'] || ''),
+                                date: r['Posted dt.'] || '',
+                                memo: memo,
+                                brand: r['Mapped Brand'] || memo, // Fallback to memo if brand isn't mapped
+                                isolation_month: detectMonthFromDate(r['Posted dt.']) || 'Unknown'
+                            };
+                        });
+                        resolve(cleaned);
                     }
                 });
             });
@@ -1153,57 +1204,22 @@ Search for the [TAG] to jump to the exact module.
                 } finally { isProcessing.value = false; }
             };
 
-            const handleLocalSageUpload = async (e) => {
+                        const handleLocalSageUpload = async (e) => {
                 const file = e.target.files[0];
                 if (!file) return;
                 isGlobalLoading.value = true;
                 try {
                     const rows = await workbookService.ingestSageGLCSV(file);
                     localSageStatus.value = `Loaded (${rows.length} rows)`;
+                    ledgerEventsList.value = rows;
                 } finally { isGlobalLoading.value = false; }
             };
 
-            // ==========================================
+                        // ==========================================
             // [MOD_PARSER] - Intake Parsers & Normalization Utils
             // ==========================================
             // --- NORMALIZATION UTILITIES ---
-            function detectMonthFromDate(dateStr) {
-                if (!dateStr) return '';
-                const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-                const cleanStr = String(dateStr).trim().split(' ')[0];
-                const parsedDate = new Date(cleanStr);
-                if (!isNaN(parsedDate.getTime())) {
-                    return months[parsedDate.getUTCMonth()];
-                }
-                if (cleanStr.includes('-')) {
-                    const parts = cleanStr.split('-');
-                    const val = parts[0].length === 4 ? parseInt(parts[1], 10) : parseInt(parts[0], 10);
-                    if (val >= 1 && val <= 12) return months[val - 1];
-                }
-                if (cleanStr.includes('/')) {
-                    const val = parseInt(cleanStr.split('/')[0], 10);
-                    if (val >= 1 && val <= 12) return months[val - 1];
-                }
-                return '';
-            }
-
-            function detectSiteFromName(rawSite) {
-                if (!rawSite) return '';
-                const safeSite = String(rawSite).toUpperCase().trim();
-                if (safeSite.includes('RED BLUFF') || safeSite.includes('BLUFF') || safeSite.includes('E12') || safeSite.includes('RB')) return 'Red Bluff';
-                if (safeSite.includes('REDDING') || safeSite.includes('E11') || safeSite.includes('RD')) return 'Redding';
-                return '';
-            }
-
-            const getStandardizedBrandName = (name) => {
-                if (!name) return '';
-                const clean = String(name).trim();
-                const mappingRows = masterWorkbook.value.data["Brand_Mapping"] || [];
-                const match = mappingRows.find(r => 
-                    String(r["Master Workbook Legacy Name"] || '').trim().toLowerCase() === clean.toLowerCase()
-                );
-                return match ? String(match["Standardized POS Name (CSV)"] || '').trim() : clean;
-            };
+            
 
             // ==========================================
             // [MOD_STATE] - Global State & Reactive Variables
@@ -1304,10 +1320,10 @@ Search for the [TAG] to jump to the exact module.
 
                 const sheetsToScan = Object.keys(workbookData).filter(s => s.includes('2026') || s.includes('YTD'));
                 
-                sheetsToScan.forEach(sheetName => {
+                                sheetsToScan.forEach(sheetName => {
                     const rows = workbookData[sheetName] || [];
                     rows.forEach(row => {
-                        const vendor = getStandardizedBrandName(row["Brand"] || row[0]);
+                        const vendor = getStandardizedBrandName(row["Brand"] || row[0], workbookData);
                         if (!vendor || vendor.toLowerCase().includes('total')) return;
 
                         if (!metrics[vendor]) {
@@ -1344,9 +1360,9 @@ Search for the [TAG] to jump to the exact module.
                 const metrics = definitiveBrandMetrics.value;
                 const results = [];
                 
-                // Merge with our local masterBrands list
+                                // Merge with our local masterBrands list
                 masterBrands.value.forEach(brand => {
-                    const m = metrics[getStandardizedBrandName(brand.vendor)] || { generated: 0, applied: 0, outstanding: 0 };
+                    const m = metrics[getStandardizedBrandName(brand.vendor, masterWorkbook.value?.data)] || { generated: 0, applied: 0, outstanding: 0 };
                     
                     results.push({
                         vendor: brand.vendor,
@@ -1382,10 +1398,10 @@ Search for the [TAG] to jump to the exact module.
                     const targetIsBluff = (activeSite.value || '').toUpperCase().includes('BLUFF');
                     const saleSite = detectSiteFromName(sale.site || sale.detectedSite || sale['Store Name'] || '');
                     
-                    if (activeSite.value !== 'All' && saleSite !== activeSite.value) return;
+                                        if (activeSite.value !== 'All' && saleSite !== activeSite.value) return;
                     if (activeMonth.value !== 'All' && sale.month !== activeMonth.value) return;
 
-                    const vendor = getStandardizedBrandName(sale.brand || sale['Product Brand']);
+                    const vendor = getStandardizedBrandName(sale.brand || sale['Product Brand'], masterWorkbook.value?.data);
                     if (!vendor) return;
 
                     if (!results[vendor]) results[vendor] = { brand: vendor, totalGenerated: 0, totalApplied: 0 };
@@ -1397,10 +1413,10 @@ Search for the [TAG] to jump to the exact module.
                     const targetIsBluff = (activeSite.value || '').toUpperCase().includes('BLUFF');
                     const glSite = detectSiteFromName(gl.Store || gl.site || '');
                     
-                    if (activeSite.value !== 'All' && glSite !== activeSite.value) return;
+                                        if (activeSite.value !== 'All' && glSite !== activeSite.value) return;
                     // Note: GL usually doesn't map perfectly to month without date parsing, keeping simple for audit
                     
-                    const vendor = getStandardizedBrandName(gl['Mapped Brand'] || gl.brand);
+                    const vendor = getStandardizedBrandName(gl['Mapped Brand'] || gl.brand, masterWorkbook.value?.data);
                     if (!vendor) return;
 
                     if (!results[vendor]) results[vendor] = { brand: vendor, totalGenerated: 0, totalApplied: 0 };
@@ -1427,10 +1443,10 @@ Search for the [TAG] to jump to the exact module.
                         
                         if (activeSite.value !== 'All' && sale.site !== activeSite.value) return;
 
-                        const promoTitle = sale.discountTitle;
+                                                const promoTitle = sale.discountTitle;
                         if (!globalPromoFilters.value.includes(promoTitle)) return; // Excluded by filter
 
-                        const vendor = getStandardizedBrandName(sale.brand);
+                        const vendor = getStandardizedBrandName(sale.brand, masterWorkbook.value?.data);
                         if (!vendor) return;
 
                         if (!brandMap[vendor]) {
@@ -1644,18 +1660,14 @@ Search for the [TAG] to jump to the exact module.
                 }, 0);
             };
 
-            const masterLedgerData = computed(() => {
+                        const masterLedgerData = computed(() => {
                 const map = {};
-                const allEvents = [...treesSalesData.value, ...localWorkbookState.sageData.map(s => ({
-                    brand: s['Mapped Brand'] || s.brand || 'Unmapped',
-                    site: s.Store || s.site || '',
-                    amount: s.amount,
-                    type: 'RECOVERY',
-                    isolation_month: activeMonth.value
-                }))];
+                const allEvents = inMemoryLedgerEvents.value;
 
                 allEvents.forEach(e => {
-                    const b = e.brand || 'Unknown';
+                    const b = e.brand || e['Mapped Brand'] || 'Unmapped';
+                    const s = e.site || e.Store || '';
+                    if (activeSite.value !== 'All' && detectSiteFromName(s) !== activeSite.value) return;
                     if (!map[b]) map[b] = { vendor: b, site: activeSite.value, generated: 0, recovered: 0, outstanding: 0, variance: 0, recoveryEvents: [] };
                     if (e.type === 'GENERATED') map[b].generated += e.amount;
                     if (e.type === 'RECOVERY') {
@@ -1670,7 +1682,7 @@ Search for the [TAG] to jump to the exact module.
                 }).sort((a, b) => b.outstanding - a.outstanding);
             });
 
-            const ledgerTotals = computed(() => {
+                        const ledgerTotals = computed(() => {
                 return masterLedgerData.value.reduce((acc, curr) => {
                     acc.generated += curr.generated;
                     acc.recovered += curr.recovered;
@@ -1678,6 +1690,36 @@ Search for the [TAG] to jump to the exact module.
                     return acc;
                 }, { generated: 0, recovered: 0, outstanding: 0, variance: 0 });
             });
+
+            const chartCanvas = ref(null);
+            let chartInstance = null;
+
+            const renderChart = () => {
+                if (!chartCanvas.value) return;
+                if (chartInstance) chartInstance.destroy();
+                chartInstance = new Chart(chartCanvas.value, {
+                    type: 'bar',
+                    data: {
+                        labels: ['Total Generated', 'Total Recovered', 'Outstanding Balance'],
+                        datasets: [{
+                            label: 'Ledger Totals',
+                            data: [
+                                ledgerTotals.value.generated,
+                                ledgerTotals.value.recovered,
+                                ledgerTotals.value.outstanding
+                            ],
+                            backgroundColor: ['#6366f1', '#10b981', '#f59e0b']
+                        }]
+                    },
+                    options: {
+                        maintainAspectRatio: false
+                    }
+                });
+            };
+
+            Vue.watch(ledgerTotals, () => { if(activeTab.value === 'Ledger') renderChart(); }, { deep: true });
+            Vue.watch(activeTab, (newTab) => { if(newTab === 'Ledger') nextTick(() => renderChart()); });
+            onMounted(() => { renderChart(); });
 
                         // ==========================================
             // [MOD_EXPORT] - CSV, PDF & Workbook Sync Generation
@@ -1698,7 +1740,7 @@ Search for the [TAG] to jump to the exact module.
                 }
             };
 
-            const handleLocalExportWb = () => {
+                        const handleLocalExportWb = () => {
                 isGlobalLoading.value = true;
                 try {
                     workbookService.exportMasterWorkbookFile();
@@ -1707,6 +1749,44 @@ Search for the [TAG] to jump to the exact module.
                 } finally {
                     isGlobalLoading.value = false;
                 }
+            };
+
+            const draftEmail = (brand) => {
+                const to = brand.email || '';
+                const subject = `Promo Credit Reconciliation - ${activeMonth.value} 2026 - ${brand.vendor}`;
+                const body = `Hello Team,\n\nPlease find the attached promo credit reconciliation for ${activeMonth.value}.\n\nTotal Generated: ${formatCurrency(brand.total)}\nTotal Credits: ${brand.credits.length}\n\nPlease review the attached CSV statement and let us know if you have any questions.\n\nBest,\n${loggedInUser.value || 'Accounting'}`;
+                window.location.href = emailService.buildMailtoUrl(to, '', subject, body);
+            };
+
+            const downloadMonthlyReport = (brandOrMonthGroup) => {
+                let csvContent = "Vendor,Type,Amount\n";
+                let filename = "";
+                
+                if (brandOrMonthGroup.brandList) {
+                    // Handle "Full Month CSV" download
+                    filename = `${brandOrMonthGroup.month}_2026_Full_Promo_Report.csv`;
+                    brandOrMonthGroup.brandList.forEach(b => {
+                        b.credits.forEach(c => {
+                            csvContent += `"${b.vendor}","${c.creditType}","${c.amount}"\n`;
+                        });
+                    });
+                } else {
+                    // Handle individual Brand "Download Statement CSV"
+                    filename = `${brandOrMonthGroup.vendor}_${activeMonth.value}_2026_Statement.csv`;
+                    brandOrMonthGroup.credits.forEach(c => {
+                        csvContent += `"${brandOrMonthGroup.vendor}","${c.creditType}","${c.amount}"\n`;
+                    });
+                }
+                
+                const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement("a"); 
+                link.setAttribute("href", url); 
+                link.setAttribute("download", filename);
+                document.body.appendChild(link); 
+                link.click(); 
+                document.body.removeChild(link);
+                setTimeout(() => URL.revokeObjectURL(url), 150);
             };
 
                         return {
@@ -1718,15 +1798,16 @@ Search for the [TAG] to jump to the exact module.
                 progressDetails, progressETA, localWbStatus, localTreezStatus,
                 localSageStatus, localSyncSummary, treesSalesData, ledgerEventsList,
                 searchQueryInput, inMemoryLedgerEvents, handleLogin, handleLocalWbUpload,
-                handleLocalTreezUpload, handleLocalSageUpload, handleLocalSyncMemory,
-                handleLocalExportWb, formatCurrency, masterBrands, selectedBrands,
+                                handleLocalTreezUpload, handleLocalSageUpload, handleLocalSyncMemory,
+                handleLocalExportWb, draftEmail, downloadMonthlyReport, formatCurrency, masterBrands, selectedBrands,
                 allBrandsSelected, toggleAllBrands, deleteSelectedBrands,
                 updateBrandField, exportVendorsAndBrandsCSV, activeWorkbookHeaders,
                 definitiveBrandMetrics, brandAuditData, sageAuditData,
                 monthlyReportSummaries, filteredCredits, totalPending, totalApplied,
                 filteredTreesSalesData, displayTreesSalesData, unsyncedSalesCount,
-                allAvailablePromos, globalPromoFilters, toggleGlobalPromo,
-                setAllGlobalPromos, getFilteredBrandTotal, masterLedgerData, ledgerTotals
+                                allAvailablePromos, globalPromoFilters, toggleGlobalPromo,
+                setAllGlobalPromos, getFilteredBrandTotal, masterLedgerData, ledgerTotals,
+                chartCanvas
             };
         }
     }).mount('#app');
