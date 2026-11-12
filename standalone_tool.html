@@ -420,7 +420,7 @@ Search for the [TAG] to jump to the exact module.
         return '';
     };
 
-    const getStandardizedBrandName = (name, workbookData = null) => {
+        const getStandardizedBrandName = (name, workbookData = null) => {
         if (!name) return '';
         const clean = String(name).trim();
         const mappingRows = (workbookData && workbookData["Brand_Mapping"]) ? workbookData["Brand_Mapping"] : [];
@@ -428,6 +428,60 @@ Search for the [TAG] to jump to the exact module.
             String(r["Master Workbook Legacy Name"] || '').trim().toLowerCase() === clean.toLowerCase()
         );
         return match ? String(match["Standardized POS Name (CSV)"] || '').trim() : clean;
+    };
+
+    const DISTRIBUTOR_ALIASES = {
+        'NABI': 'STIIIZY',
+        'NABIFIVE': 'STIIIZY'
+    };
+    
+    const resolveBrandFromSageMemo = (rawMemo, workbookData = null, brandDirectory = []) => {
+        if (!rawMemo) return 'Unmapped';
+        const upperMemo = String(rawMemo).toUpperCase().trim();
+        
+        // 1. Check Brand_Mapping sheet in Master Workbook (substring match across legacy/vendor/distributor columns)
+        const mappingRows = (workbookData && workbookData["Brand_Mapping"]) ? workbookData["Brand_Mapping"] : [];
+        for (const row of mappingRows) {
+            const stdName = String(row["Standardized POS Name (CSV)"] || '').trim();
+            if (!stdName) continue;
+            
+            const candidates = [
+                row["Master Workbook Legacy Name"],
+                row["Distributor"],
+                row["Vendor"],
+                row["Alias"],
+                stdName
+            ].filter(Boolean);
+            
+            for (const cand of candidates) {
+                const cleanCand = String(cand).toUpperCase().trim();
+                if (cleanCand.length >= 3 && upperMemo.includes(cleanCand)) {
+                    return stdName;
+                }
+            }
+        }
+        
+        // 2. Check Brand Directory (masterBrands) for vendor or distributor match
+        for (const entry of (brandDirectory || [])) {
+            const vendorName = String(entry.vendor || '').trim();
+            const distName = String(entry.distributor || entry.parentCompany || '').toUpperCase().trim();
+            
+            if (distName.length >= 3 && upperMemo.includes(distName)) {
+                return getStandardizedBrandName(vendorName, workbookData);
+            }
+            if (vendorName.length >= 3 && upperMemo.includes(vendorName.toUpperCase())) {
+                return getStandardizedBrandName(vendorName, workbookData);
+            }
+        }
+        
+        // 3. Check explicit distributor alias map
+        for (const [distKey, mappedBrand] of Object.entries(DISTRIBUTOR_ALIASES)) {
+            if (upperMemo.includes(distKey)) {
+                return getStandardizedBrandName(mappedBrand, workbookData);
+            }
+        }
+        
+        return getStandardizedBrandName(rawMemo, workbookData) || rawMemo;
     };
 
     const csvService = {
@@ -530,27 +584,31 @@ Search for the [TAG] to jump to the exact module.
                 });
             });
         },
-                ingestSageGLCSV: async (file) => {
+                                ingestSageGLCSV: async (file) => {
             const text = await file.text();
             return new Promise((resolve) => {
                 Papa.parse(text, {
                     header: true,
                     skipEmptyLines: true,
                     complete: (res) => {
-                        const cleaned = res.data.map((r, idx) => {
-                            const memo = r['Memo/Description'] || '';
-                            return {
-                                id: `sage_${idx}`,
-                                ...r,
-                                type: 'RECOVERY',
-                                amount: csvService.cleanCurrency(r['Credit'] || 0),
-                                site: detectSiteFromName(r['Location'] || ''),
-                                date: r['Posted dt.'] || '',
-                                memo: memo,
-                                brand: r['Mapped Brand'] || memo, // Fallback to memo if brand isn't mapped
-                                isolation_month: detectMonthFromDate(r['Posted dt.']) || 'Unknown'
-                            };
-                        });
+                        const cleaned = res.data
+                            .map((r, idx) => {
+                                const memo = r['Memo/Description'] || '';
+                                const amt = csvService.cleanCurrency(r['Credit'] || 0);
+                                return {
+                                    id: `sage_${idx}`,
+                                    ...r,
+                                    type: 'RECOVERY',
+                                    amount: amt,
+                                    site: detectSiteFromName(r['Location'] || ''),
+                                    date: r['Posted dt.'] || '',
+                                    memo: memo,
+                                    brand: r['Mapped Brand'] || memo,
+                                    isolation_month: detectMonthFromDate(r['Posted dt.']) || 'Unknown'
+                                };
+                            })
+                            .filter(r => r.amount > 0);
+                        localWorkbookState.sageData = cleaned;
                         resolve(cleaned);
                     }
                 });
@@ -1127,12 +1185,17 @@ Search for the [TAG] to jump to the exact module.
             const ledgerEventsList = ref([]);
             const searchQueryInput = ref('');
 
-            const inMemoryLedgerEvents = computed(() => {
-                return [
-                    ...treesSalesData.value.map(s => ({ ...s, type: 'GENERATED' })),
-                    ...ledgerEventsList.value
-                ];
-            });
+                        const inMemoryLedgerEvents = computed(() => {
+return [
+...treesSalesData.value
+.filter(s => {
+const title = String(s.discountTitle || s['Discount Title'] || '').toUpperCase();
+return !title.includes('CUSTOM PRICE ADJUSTMENT');
+})
+.map(s => ({ ...s, type: 'GENERATED' })),
+...ledgerEventsList.value
+];
+});
 
             const formatCurrency = (val) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(val || 0);
 
@@ -1650,12 +1713,13 @@ return results;
                 }, 0);
             };
 
-                        const masterLedgerData = computed(() => {
+                                                const masterLedgerData = computed(() => {
                 const map = {};
                 const allEvents = inMemoryLedgerEvents.value;
 
                 allEvents.forEach(e => {
-                    const b = e.brand || e['Mapped Brand'] || 'Unmapped';
+                    const rawBrand = e.type === 'RECOVERY' ? resolveBrandFromSageMemo(e.memo || e.brand, masterWorkbook.value?.data, masterBrands.value) : (e.brand || e['Mapped Brand'] || 'Unmapped');
+                    const b = rawBrand;
                     const s = e.site || e.Store || '';
                     if (activeSite.value !== 'All' && detectSiteFromName(s) !== activeSite.value) return;
                     if (!map[b]) map[b] = { vendor: b, site: activeSite.value, generated: 0, recovered: 0, outstanding: 0, variance: 0, recoveryEvents: [] };
@@ -1748,36 +1812,167 @@ return results;
                 window.location.href = emailService.buildMailtoUrl(to, '', subject, body);
             };
 
-            const downloadMonthlyReport = (brandOrMonthGroup) => {
-                let csvContent = "Vendor,Type,Amount\n";
-                let filename = "";
-                
-                if (brandOrMonthGroup.brandList) {
-                    // Handle "Full Month CSV" download
-                    filename = `${brandOrMonthGroup.month}_2026_Full_Promo_Report.csv`;
-                    brandOrMonthGroup.brandList.forEach(b => {
-                        b.credits.forEach(c => {
-                            csvContent += `"${b.vendor}","${c.creditType}","${c.amount}"\n`;
-                        });
-                    });
-                } else {
-                    // Handle individual Brand "Download Statement CSV"
-                    filename = `${brandOrMonthGroup.vendor}_${activeMonth.value}_2026_Statement.csv`;
-                    brandOrMonthGroup.credits.forEach(c => {
-                        csvContent += `"${brandOrMonthGroup.vendor}","${c.creditType}","${c.amount}"\n`;
-                    });
-                }
-                
-                const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
-                const url = URL.createObjectURL(blob);
-                const link = document.createElement("a"); 
-                link.setAttribute("href", url); 
-                link.setAttribute("download", filename);
-                document.body.appendChild(link); 
-                link.click(); 
-                document.body.removeChild(link);
-                setTimeout(() => URL.revokeObjectURL(url), 150);
-            };
+                        const downloadMonthlyReport = (brandOrMonthGroup) => {
+const isSingleBrand = !!brandOrMonthGroup.vendor;
+const targetVendor = isSingleBrand ? brandOrMonthGroup.vendor : 'All';
+const targetMonth = activeMonth.value;
+const targetSite = activeSite.value;
+let csvContent = "";
+// SECTION 1: SUMMARY (12-Month & YTD)
+csvContent += "Period,Location,Brand,New_Cred,Credits_Applied,Remaining,Status\n";
+const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+let ytdGenerated = 0;
+let ytdApplied = 0;
+months.forEach(m => {
+let monthGen = 0;
+let monthApp = 0;
+// 1. Pull from RAM (Treez POS + Sage GL files currently loaded)
+inMemoryLedgerEvents.value.forEach(e => {
+if (e.isolation_month !== m) return;
+const eSite = detectSiteFromName(e.site || e.Store || '');
+if (targetSite !== 'All' && eSite !== targetSite) return;
+const eBrand = e.type === 'RECOVERY' ? resolveBrandFromSageMemo(e.memo || e.brand, masterWorkbook.value?.data, masterBrands.value) : getStandardizedBrandName(e.brand || e['Mapped Brand'] || 'Unmapped', masterWorkbook.value?.data);
+if (targetVendor !== 'All' && eBrand !== targetVendor) return;
+if (e.type === 'GENERATED') monthGen += (Number(e.amount) || 0);
+if (e.type === 'RECOVERY') monthApp += (Number(e.amount) || 0);
+});
+// 2. Pull from Historical Master Workbook (Additive YTD tracking)
+if (masterWorkbook.value && masterWorkbook.value.data) {
+const sheetName = `${m} 2026`;
+const historicalRows = masterWorkbook.value.data[sheetName] || [];
+historicalRows.forEach(row => {
+const rowBrand = getStandardizedBrandName(row["Brand"] || row[0], masterWorkbook.value?.data);
+if (targetVendor !== 'All' && rowBrand !== targetVendor) return;
+// Add historical POS (Generated)
+if (targetSite === 'Redding' || targetSite === 'All') monthGen += (Number(row["Redding"] || row[1]) || 0);
+if (targetSite === 'Red Bluff' || targetSite === 'All') monthGen += (Number(row["Red-Bluff"] || row[2]) || 0);
+// Add historical Sage (Applied / Recovered)
+const keys = Object.keys(row);
+const appKey = keys.find(k => k.toLowerCase().includes('applied') || k.toLowerCase().includes('recovered'));
+if (appKey) {
+monthApp += (Number(row[appKey]) || 0);
+} else if (row[4] !== undefined && !isNaN(Number(row[4]))) { 
+monthApp += (Number(row[4]) || 0); // Fallback to 5th column if standard report
+}
+});
+}
+const remaining = monthGen - monthApp;
+let status = 'No Activity';
+if (remaining > 0) status = 'Outstanding';
+if (remaining < 0) status = 'Pending';
+if (monthGen > 0 && remaining === 0) status = 'Resolved';
+csvContent += `"${m}-26","${targetSite}","${targetVendor}","${monthGen.toFixed(2)}","${monthApp.toFixed(2)}","${remaining.toFixed(2)}","${status}"\n`;
+ytdGenerated += monthGen;
+ytdApplied += monthApp;
+});
+const ytdRemaining = ytdGenerated - ytdApplied;
+let ytdStatus = 'No Activity';
+if (ytdRemaining > 0) ytdStatus = 'Outstanding';
+if (ytdRemaining < 0) ytdStatus = 'Pending';
+if (ytdGenerated > 0 && ytdRemaining === 0) ytdStatus = 'Resolved';
+csvContent += `"YTD Total","${targetSite}","${targetVendor}","${ytdGenerated.toFixed(2)}","${ytdApplied.toFixed(2)}","${ytdRemaining.toFixed(2)}","${ytdStatus}"\n`;
+csvContent += "\n--- SECTION 2: ITEMIZED ACTIVITY GROUPED BY PROMOTION ---\n\n";
+// SECTION 2: ITEMIZED (Uses activeMonth filter)
+const rawSales = inMemoryLedgerEvents.value.filter(sale => {
+if (sale.type !== 'GENERATED') return false;
+if (targetMonth !== 'All' && sale.isolation_month !== targetMonth) return false;
+const saleSite = detectSiteFromName(sale.site || '');
+if (targetSite !== 'All' && saleSite !== targetSite) return false;
+const promoTitle = sale.discountTitle || 'Promo';
+if (!globalPromoFilters.value.includes(promoTitle)) return false;
+const v = getStandardizedBrandName(sale.brand || 'Unmapped', masterWorkbook.value?.data);
+if (targetVendor !== 'All' && v !== targetVendor) return false;
+return true;
+});
+const promoGroups = {};
+rawSales.forEach(sale => {
+const p = sale.discountTitle || 'Unknown Promo';
+if (!promoGroups[p]) promoGroups[p] = [];
+promoGroups[p].push(sale);
+});
+Object.keys(promoGroups).forEach(promoName => {
+csvContent += `PROMOTION: ${promoName}\n`;
+csvContent += "Date Closed,Month,Store Location,Product Brand,Product Name,Units Sold,Discount,Credit Amount Owed\n";
+let subtotal = 0;
+promoGroups[promoName].forEach(sale => {
+const date = sale.date || '';
+const month = sale.isolation_month || '';
+const site = detectSiteFromName(sale.site || '');
+const brand = getStandardizedBrandName(sale.brand, masterWorkbook.value?.data);
+const prodName = String(sale['Product Name'] || sale.productName || 'N/A').replace(/"/g, '""');
+const units = sale['Qty Sold'] || sale.qty || sale.units || 1;
+const amt = Number(sale.amount) || 0;
+subtotal += amt;
+csvContent += `"${date}","${month}","${site}","${brand}","${prodName}","${units}","${amt.toFixed(2)}","${amt.toFixed(2)}"\n`;
+});
+csvContent += `Subtotal for ${promoName},,,,,,,"${subtotal.toFixed(2)}"\n\n`;
+});
+const filename = isSingleBrand 
+? `${targetVendor}_${targetMonth}_2026_Statement.csv` 
+: `${targetMonth}_2026_Full_Promo_Report.csv`;
+const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
+const url = URL.createObjectURL(blob);
+const link = document.createElement("a"); 
+link.setAttribute("href", url); 
+link.setAttribute("download", filename);
+document.body.appendChild(link); 
+link.click(); 
+document.body.removeChild(link);
+setTimeout(() => URL.revokeObjectURL(url), 150);
+};
+
+            const exportYTDVariancePDF = () => {
+if (typeof window.jspdf === 'undefined') {
+alert("PDF library is still loading. Please try again in a moment.");
+return;
+}
+const { jsPDF } = window.jspdf;
+const doc = new jsPDF('p', 'pt', 'a4');
+// Header
+doc.setFontSize(16);
+doc.text(`Promo Credit Variance Report`, 40, 40);
+doc.setFontSize(11);
+doc.setTextColor(100);
+doc.text(`Site: ${activeSite.value} | Month: ${activeMonth.value} 2026`, 40, 58);
+// Table Data
+const tableCols = ["Brand", "Store", "Generated", "Recovered", "Outstanding"];
+const tableRows = masterLedgerData.value.map(item => [
+item.vendor,
+item.site,
+formatCurrency(item.generated),
+formatCurrency(item.recovered),
+formatCurrency(item.outstanding)
+]);
+// Totals Row
+tableRows.push([
+"TOTAL", 
+"-", 
+formatCurrency(ledgerTotals.value.generated), 
+formatCurrency(ledgerTotals.value.recovered), 
+formatCurrency(ledgerTotals.value.outstanding)
+]);
+// AutoTable Plugin
+doc.autoTable({
+head: [tableCols],
+body: tableRows,
+startY: 75,
+theme: 'striped',
+headStyles: { fillColor: [16, 185, 129] },
+styles: { fontSize: 9 },
+columnStyles: {
+2: { halign: 'right' },
+3: { halign: 'right' },
+4: { halign: 'right', fontStyle: 'bold' }
+},
+willDrawCell: function (data) {
+if (data.row.index === tableRows.length - 1) {
+doc.setFillColor(243, 244, 246);
+doc.setFont("helvetica", "bold");
+}
+}
+});
+doc.save(`Variance_Report_${activeSite.value.replace(/\s+/g, '_')}_${activeMonth.value}.pdf`);
+};
 
                         return {
                 isManagerUnlocked, showWorkspaceMenu, showAdminMenu, loggedInUser,
@@ -1789,7 +1984,7 @@ return results;
                 localSageStatus, localSyncSummary, treesSalesData, ledgerEventsList,
                 searchQueryInput, inMemoryLedgerEvents, handleLogin, handleLocalWbUpload,
                                 handleLocalTreezUpload, handleLocalSageUpload, handleLocalSyncMemory,
-                handleLocalExportWb, draftEmail, downloadMonthlyReport, formatCurrency, masterBrands, selectedBrands,
+                handleLocalExportWb, draftEmail, downloadMonthlyReport, exportYTDVariancePDF, formatCurrency, masterBrands, selectedBrands,
                 allBrandsSelected, toggleAllBrands, deleteSelectedBrands,
                 updateBrandField, exportVendorsAndBrandsCSV, activeWorkbookHeaders,
                 definitiveBrandMetrics, brandAuditData, sageAuditData,
