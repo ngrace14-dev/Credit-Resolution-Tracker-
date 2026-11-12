@@ -1,0 +1,1623 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Standalone Promo Credit Tracker</title>
+    <!-- Dependencies -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf.plugin.autotable.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Carlito:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        /* INLINED styles.css */
+        body { font-family: 'Calibri', sans-serif; background-color: #f3f4f6; margin: 0; height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
+        .excel-table { border-collapse: separate; border-spacing: 0; font-size: 12px; background-color: white; min-width: 100%; text-align: left; }
+        .excel-table th, .excel-table td { border-bottom: 1px solid #e5e7eb; border-right: 1px solid #e5e7eb; padding: 10px 14px; white-space: nowrap; }
+        .excel-table th { 
+            font-weight: 800; 
+            background-color: #f9fafb; 
+            color: #374151; 
+            border-top: 1px solid #e5e7eb; 
+            text-transform: uppercase; 
+            letter-spacing: 0.1em; 
+            font-size: 10px;
+            position: sticky;
+            top: 0;
+            z-index: 20;
+            box-shadow: inset 0 -1px 0 #e5e7eb;
+        }
+        .excel-table th:first-child, .excel-table td:first-child { border-left: 1px solid #e5e7eb; }
+        [v-cloak] { display: none !important; }
+        ::-webkit-scrollbar { height: 8px; width: 8px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        @media (min-width: 768px) {
+            .sticky-col { position: sticky; right: 0; background-color: white; box-shadow: -3px 0 5px rgba(0,0,0,0.05); z-index: 10; }
+            .sticky-head { position: sticky; right: 0; background-color: #f8f9fa; box-shadow: -3px 0 5px rgba(0,0,0,0.05); z-index: 15; }
+        }
+    </style>
+</head>
+<body>
+<div id="app" class="h-full flex flex-col bg-gray-100" v-cloak>
+    <!-- GLOBAL APP LOADING OVERLAY -->
+    <div v-if="isGlobalLoading" class="fixed inset-0 z-[300] bg-gray-950/80 backdrop-blur-md flex flex-col items-center justify-center">
+        <div class="bg-gray-900 border border-gray-800 p-8 rounded-2xl shadow-2xl flex flex-col items-center gap-4">
+            <i data-lucide="loader-2" class="w-10 h-10 text-emerald-500 animate-spin"></i>
+            <div class="text-white font-bold text-lg tracking-wide">Processing Data...</div>
+            <div class="text-gray-400 text-sm">Please wait while the ETL engine runs.</div>
+        </div>
+    </div>
+
+    <!-- LOCKING PROGRESS OVERLAY -->
+    <div v-if="isProcessing" class="fixed inset-0 z-[9999] bg-gray-950/85 backdrop-blur-md flex flex-col items-center justify-center p-4 cursor-wait select-none">
+        <div class="bg-gray-900 border border-gray-700/80 rounded-2xl p-7 max-w-md w-full shadow-2xl flex flex-col items-center text-center">
+            <div class="mb-5 flex flex-col items-center gap-3">
+                <div class="bg-indigo-500/10 p-3 rounded-xl border border-indigo-500/20">
+                    <i data-lucide="database" class="w-8 h-8 text-indigo-400 animate-pulse"></i>
+                </div>
+                <h3 class="text-xl font-bold text-white tracking-tight">{{ progressMessage }}</h3>
+                <p class="text-gray-400 text-sm font-mono break-all">{{ progressDetails }}</p>
+            </div>
+            <div class="w-full bg-gray-950 rounded-full h-3 border border-gray-800 overflow-hidden mb-3 p-0.5">
+                <div class="bg-gradient-to-r from-indigo-500 to-emerald-400 h-full rounded-full transition-all duration-150" :style="{ width: progressPercent + '%' }"></div>
+            </div>
+            <div class="w-full flex justify-between items-center text-xs font-bold">
+                <span class="text-emerald-400">{{ progressPercent }}% Complete</span>
+                <span class="text-gray-500 flex items-center gap-1.5 uppercase tracking-wider">
+                    <i data-lucide="clock" class="w-3.5 h-3.5"></i> {{ progressETA }}
+                </span>
+            </div>
+        </div>
+    </div>
+
+    <!-- SECURE LOGIN SCREEN -->
+    <main v-if="false" class="flex-1 flex flex-col items-center justify-center bg-gray-900 p-4 min-h-screen">
+        <div class="bg-white rounded-2xl shadow-2xl p-8 md:p-10 max-w-md w-full text-center border border-gray-200">
+            <div class="bg-gray-950 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6 shadow-inner">
+                <i data-lucide="shield-check" class="w-10 h-10 text-emerald-500"></i>
+            </div>
+            <h2 class="text-2xl font-extrabold text-gray-900 mb-2">Secure Login</h2>
+            <p class="text-gray-500 mb-6 font-medium">Enter your authorized email and password.</p>
+            <form @submit.prevent="handleLogin" class="flex flex-col gap-4">
+                <input type="email" v-model="emailInput" autocomplete="username" class="border-2 border-gray-300 p-3 w-full rounded-xl focus:border-emerald-600 focus:ring-4 focus:ring-emerald-600/10 outline-none text-center font-bold text-gray-900 transition-all" placeholder="Email Address">
+                <input type="password" v-model="passwordInput" autocomplete="current-password" class="border-2 border-gray-300 p-3 w-full rounded-xl focus:border-emerald-600 focus:ring-4 focus:ring-emerald-600/10 outline-none text-center font-bold text-gray-900 transition-all" placeholder="Password">
+                <p v-if="authError" class="text-red-500 text-sm font-bold my-2">{{ authError }}</p>
+                <button type="submit" class="w-full py-3.5 bg-gray-950 hover:bg-gray-800 text-amber-500 rounded-xl font-bold text-lg shadow-md transition-colors flex items-center justify-center gap-2">Access Tracker</button>
+            </form>
+        </div>
+    </main>
+
+    <div v-else class="h-full flex flex-col overflow-hidden">
+        <!-- HEADER -->
+        <header class="bg-gray-950 text-white px-4 md:px-5 py-3 flex flex-col md:flex-row justify-between items-center shrink-0 shadow-lg z-20 gap-3 md:gap-0 border-b border-gray-800">
+            <div class="flex items-center gap-3 w-full md:w-auto justify-between md:justify-start">
+                <div class="flex items-center gap-3">
+                    <i data-lucide="badge-dollar-sign" class="w-7 h-7 text-amber-500"></i>
+                    <div>
+                        <h1 class="font-bold tracking-wide text-lg leading-tight text-white">Promo Credit Tracker</h1>
+                        <div class="text-[10px] uppercase font-bold tracking-widest flex items-center gap-2 text-emerald-400">
+                            <span><i data-lucide="cloud" class="w-3 h-3 inline mb-0.5"></i> Standalone Mode Active</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="flex items-center bg-gray-900 p-1 rounded-lg shadow-inner w-full sm:w-auto overflow-hidden border border-gray-800">
+                <button @click="activeSite = 'Red Bluff'" :class="activeSite === 'Red Bluff' ? 'bg-amber-500 text-gray-950 shadow-md font-extrabold' : 'text-gray-400 hover:text-white'" class="px-5 py-1.5 rounded text-sm transition-all flex-1 sm:flex-none">Red Bluff</button>
+                <button @click="activeSite = 'Redding'" :class="activeSite === 'Redding' ? 'bg-amber-500 text-gray-950 shadow-md font-extrabold' : 'text-gray-400 hover:text-white'" class="px-5 py-1.5 rounded text-sm transition-all flex-1 sm:flex-none">Redding</button>
+            </div>
+            <div class="hidden md:flex items-center gap-2">
+                <div class="flex items-center gap-2 mr-2 bg-gray-900 px-3 py-1.5 rounded shadow-inner border border-gray-800 text-gray-300">
+                    <i data-lucide="user" class="w-4 h-4 text-emerald-500"></i>
+                    <span class="text-sm font-bold">{{ loggedInUser }}</span>
+                </div>
+                <div class="relative">
+                    <button @click="showAdminMenu = !showAdminMenu" class="bg-gray-800 hover:bg-gray-700 text-amber-500 px-3 py-1.5 rounded flex items-center gap-1.5 text-sm font-bold shadow transition-all border border-gray-700">
+                        <i data-lucide="settings" class="w-4 h-4"></i> System <i data-lucide="chevron-down" class="w-3 h-3"></i>
+                    </button>
+                    <div v-if="showAdminMenu" class="absolute right-0 mt-2 w-48 bg-gray-900 border border-gray-800 rounded-xl shadow-2xl z-50 py-2 overflow-hidden" @click.outside="showAdminMenu = false">
+                        <button v-if="isSuperAdmin" @click="activeTab = 'Logs'; showAdminMenu = false" class="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-emerald-600 hover:text-white transition-colors flex items-center gap-2">
+                            <i data-lucide="activity" class="w-4 h-4 text-emerald-500"></i> View Logs
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- WORKSPACE NAVIGATION -->
+        <div class="bg-gray-950 px-4 md:px-6 py-2.5 flex items-center justify-between shrink-0 z-30 shadow-sm border-b border-gray-800">
+            <div class="flex items-center gap-4">
+                <div class="text-[10px] uppercase font-bold text-gray-500 tracking-widest hidden md:block">Current Workspace</div>
+                <div class="relative">
+                    <button @click="showWorkspaceMenu = !showWorkspaceMenu" class="bg-gray-900 border border-emerald-500/30 hover:border-emerald-500 text-white px-4 py-1.5 rounded-lg flex items-center gap-3 text-sm font-extrabold shadow-lg transition-all min-w-[200px] group">
+                        <div class="bg-emerald-500/10 p-1 rounded group-hover:bg-emerald-500/20 transition-colors">
+                            <i :data-lucide="activeWorkspaceInfo?.icon" class="w-4 h-4 text-emerald-500"></i>
+                        </div>
+                        <span class="flex-1 text-left">{{ activeWorkspaceInfo?.label || activeWorkspaceInfo?.name }}</span>
+                        <i data-lucide="chevron-down" class="w-4 h-4 text-gray-500 group-hover:text-emerald-500 transition-colors"></i>
+                    </button>
+                    <div v-if="showWorkspaceMenu" class="absolute left-0 mt-2 w-72 bg-gray-950 border border-gray-800 rounded-xl shadow-2xl z-50 py-3 overflow-hidden" @click.outside="showWorkspaceMenu = false">
+                        <div v-for="group in ['Workbook', 'Identity']" :key="group">
+                            <div class="px-4 py-1 text-[10px] uppercase font-black text-gray-600 tracking-[0.2em] mb-1 flex items-center gap-2">
+                                {{ group }}
+                                <div class="h-px bg-gray-800 flex-1"></div>
+                            </div>
+                            <button v-for="tab in workspaceTabs.filter(t => t.group === group)" :key="tab.name" 
+                                @click="selectWorkspace(tab)" 
+                                :class="activeTab === tab.name ? 'bg-emerald-600/10 text-emerald-400' : 'text-gray-400 hover:bg-gray-900 hover:text-white'"
+                                class="w-full text-left px-4 py-2.5 text-sm font-bold transition-all flex items-center gap-3 relative overflow-hidden">
+                                <div v-if="activeTab === tab.name" class="absolute left-0 top-0 bottom-0 w-1 bg-emerald-500"></div>
+                                <i :data-lucide="tab?.icon" class="w-4 h-4" :class="activeTab === tab.name ? 'text-emerald-500' : 'text-gray-500'"></i>
+                                {{ tab.label || tab.name }}
+                                <span v-if="tab.name === 'Sales' && filteredTreesSalesData.length > 0" class="ml-auto bg-amber-500 text-gray-950 text-[10px] px-1.5 py-0.5 rounded-full font-black">{{ filteredTreesSalesData.length }}</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- SHARED GLOBAL FILTERS -->
+        <div v-if="activeTab !== 'Logs'" class="bg-gray-100 px-4 md:px-6 pt-4 pb-2 flex flex-col lg:flex-row justify-between items-center shrink-0 gap-3 z-10 border-b border-gray-200">
+            <div class="flex items-center bg-white rounded-xl shadow-sm border border-gray-300 p-1 w-full lg:flex-1 overflow-hidden relative group">
+                <div id="monthScrollContainer" class="flex overflow-x-auto no-scrollbar gap-1 px-4 w-full scroll-smooth">
+                    <button @click="activeMonth = 'All'" :class="activeMonth === 'All' ? 'bg-gray-900 text-emerald-500 font-bold shadow' : 'text-gray-600 hover:bg-gray-100 font-medium'" class="px-4 py-1.5 rounded-lg text-sm transition-all whitespace-nowrap">All Year</button>
+                    <div class="w-px bg-gray-300 mx-1 shrink-0"></div>
+                    <button v-for="month in calendarMonths" :key="month" @click="activeMonth = month" 
+                        :class="activeMonth === month ? 'bg-gray-900 text-emerald-500 font-bold shadow' : 'text-gray-600 hover:bg-gray-100 font-medium'" 
+                        class="px-4 py-1.5 rounded-lg text-sm transition-all whitespace-nowrap lg:flex-1 text-center">
+                        {{ month }}
+                    </button>
+                </div>
+            </div>
+            <div class="relative w-full lg:w-80 shrink-0">
+                <i data-lucide="search" class="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
+                <input type="text" v-model="searchQueryInput" placeholder="Search brands, types, records..." class="w-full bg-white border border-gray-300 rounded-xl py-2 pl-10 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 shadow-sm transition-shadow">
+            </div>
+        </div>
+
+        <!-- MAIN WORKSPACE CONTENT -->
+        <main class="flex-1 overflow-hidden flex flex-col">
+            <!-- TAB: MASTER LEDGER -->
+            <div v-if="activeTab === 'Ledger'" class="flex-1 flex flex-col p-4 md:p-6 bg-gray-100 overflow-hidden">
+                <div class="flex flex-col lg:flex-row justify-between items-start lg:items-end mb-4 shrink-0 gap-4">
+                    <div>
+                        <h2 class="text-xl font-bold text-gray-900 leading-tight">Master Ledger (Standalone)</h2>
+                        <p class="text-sm text-gray-500 mt-1">Unified financial workspace. All processing happens in RAM.</p>
+                    </div>
+                </div>
+                <div class="flex flex-col lg:flex-row gap-6 flex-1 min-h-0 overflow-hidden">
+                    <div class="bg-white rounded-xl border border-gray-300 shadow-sm flex-1 flex flex-col min-h-0 overflow-hidden">
+                        <div class="overflow-auto flex-1 relative">
+                            <table class="excel-table min-w-max">
+                                <thead class="sticky top-0 z-20 shadow-sm bg-gray-50 text-gray-900">
+                                    <tr>
+                                        <th>Vendor</th>
+                                        <th>Store</th>
+                                        <th class="text-right">Generated</th>
+                                        <th class="text-right">Recovered</th>
+                                        <th class="text-right">Outstanding</th>
+                                        <th class="text-right bg-amber-50/30">Variance</th>
+                                        <th class="text-center">Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr v-for="(item, idx) in masterLedgerData" :key="item.vendor + '_' + item.site + '_' + idx" @click="selectedLedgerVendor = item" 
+                                        :class="{'bg-emerald-50/50 ring-1 ring-inset ring-emerald-500': selectedLedgerVendor?.vendor === item.vendor}" 
+                                        class="hover:bg-gray-50 cursor-pointer transition-all">
+                                        <td class="font-bold text-gray-900">{{ item.vendor }}</td>
+                                        <td class="text-gray-600">{{ item.site }}</td>
+                                        <td class="text-right font-medium">{{ formatCurrency(item.generated) }}</td>
+                                        <td class="text-right font-medium text-emerald-600">{{ formatCurrency(item.recovered) }}</td>
+                                        <td class="text-right font-extrabold" :class="item.outstanding > 0 ? 'text-red-600' : 'text-gray-400'">{{ formatCurrency(item.outstanding) }}</td>
+                                        <td class="text-right font-bold bg-amber-50/30" :class="item.variance !== 0 ? 'text-amber-600' : 'text-emerald-600'">
+                                            {{ item.variance !== 0 ? formatCurrency(item.variance) : '-' }}
+                                        </td>
+                                        <td class="text-center">
+                                            <span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase" :class="item.outstanding <= 0 ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'">
+                                                {{ item.outstanding <= 0 ? 'Settled' : 'Active' }}
+                                            </span>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                                <tfoot class="bg-gray-900 text-white font-bold sticky bottom-0 shadow-[0_-2px_4px_rgba(0,0,0,0.1)]">
+                                    <tr>
+                                        <td colspan="2" class="text-right uppercase tracking-wider text-xs text-gray-400 pr-4 py-3">Total Ledger Balance:</td>
+                                        <td class="text-right text-emerald-400">{{ formatCurrency(ledgerTotals.generated) }}</td>
+                                        <td class="text-right text-emerald-400">{{ formatCurrency(ledgerTotals.recovered) }}</td>
+                                        <td class="text-right text-amber-400">{{ formatCurrency(ledgerTotals.outstanding) }}</td>
+                                        <td class="text-right text-amber-400 bg-black/20">{{ formatCurrency(ledgerTotals.variance) }}</td>
+                                        <td colspan="1"></td>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB: RECOVERY (Sage Log) -->
+            <div v-if="activeTab === 'Recovery'" class="flex-1 flex flex-col p-4 md:p-6 bg-gray-100 overflow-hidden">
+                <div class="mb-4">
+                    <h2 class="text-xl font-bold text-gray-900 leading-tight">Recovery Log</h2>
+                    <p class="text-sm text-gray-500 mt-1">Vendor collections and memo tracking.</p>
+                </div>
+                <div class="bg-white rounded-xl border border-gray-300 shadow-sm flex-1 flex flex-col min-h-0 overflow-hidden">
+                    <div class="overflow-auto flex-1">
+                        <table class="excel-table relative min-w-max">
+                            <thead class="sticky top-0 z-10 shadow-sm bg-gray-50">
+                                <tr>
+                                    <th>Date Received</th>
+                                    <th>Vendor</th>
+                                    <th>Reference Number</th>
+                                    <th class="text-right">Amount</th>
+                                    <th class="text-center">Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr v-for="(recovery, idx) in masterLedgerData.filter(i => i.recovered > 0)" :key="idx" class="hover:bg-gray-50">
+                                    <td>{{ recovery.recoveryEvents[0]?.date || '-' }}</td>
+                                    <td class="font-bold text-gray-900">{{ recovery.vendor }}</td>
+                                    <td class="font-mono text-gray-600">{{ recovery.recoveryEvents[0]?.ref || '-' }}</td>
+                                    <td class="text-right font-bold text-emerald-600">{{ formatCurrency(recovery.recovered) }}</td>
+                                    <td class="text-center"><span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-emerald-100 text-emerald-800">Matched</span></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB: BRAND REPORTS -->
+            <div v-if="activeTab === 'Reports'" class="flex-1 flex flex-col p-4 md:p-6 bg-gray-100 overflow-y-auto">
+                <div class="mb-4">
+                    <h2 class="text-xl font-bold text-gray-900">Monthly Brand Reports</h2>
+                    <p class="text-sm text-gray-500">Generate audit statements from local memory.</p>
+                </div>
+                <div v-if="monthlyReportSummaries.length === 0" class="text-center py-16 bg-white rounded-xl border border-gray-200 shadow-sm text-gray-500 font-bold">
+                    No report entries found. Fast load data below.
+                </div>
+                <div v-else class="space-y-6">
+                    <div v-for="monthGroup in monthlyReportSummaries" :key="monthGroup.month" class="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+                                                <div class="bg-gradient-to-r from-gray-950 to-gray-800 text-white px-6 py-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                            <div>
+                                <h3 class="text-xl font-bold tracking-wide flex items-center gap-2 text-emerald-500">
+                                    <i data-lucide="calendar" class="w-5 h-5 text-emerald-500"></i>
+                                    {{ monthGroup.month }}
+                                </h3>
+                                <p class="text-xs text-gray-300 mt-0.5">{{ monthGroup.brandList.length }} Brands • {{ monthGroup.count }} Total Entries</p>
+                            </div>
+                            <div class="flex items-center gap-3">
+                                <span class="text-lg font-extrabold text-emerald-400 bg-white/10 px-3 py-1 rounded-lg border border-white/10">{{ formatCurrency(monthGroup.total) }}</span>
+                                <button @click="downloadMonthlyReport(monthGroup)" class="bg-emerald-600 text-white hover:bg-emerald-500 px-3 py-1.5 rounded-lg font-bold text-xs shadow transition-colors flex items-center gap-1.5">
+                                    <i data-lucide="download" class="w-3.5 h-3.5"></i> Full Month CSV
+                                </button>
+                            </div>
+                        </div>
+                        <div class="p-4 sm:p-6 grid grid-cols-1 lg:grid-cols-2 gap-4">
+                            <div v-for="brand in monthGroup.brandList" :key="brand.vendor" class="bg-gray-50 border border-gray-200 rounded-xl p-4 flex flex-col justify-between hover:border-emerald-300 transition-all shadow-sm">
+                                <div class="flex justify-between items-start mb-3 border-b border-gray-200 pb-3">
+                                    <div>
+                                        <h4 class="font-bold text-gray-900 text-base">{{ brand.vendor }}</h4>
+                                        <p class="text-xs text-gray-500 font-mono mt-0.5">{{ brand.email || 'No email mapped' }}</p>
+                                    </div>
+                                                                        <div class="text-right">
+                                        <div class="text-lg font-extrabold text-gray-900">{{ formatCurrency(brand.total) }}</div>
+                                        <div class="text-[10px] text-gray-400 font-bold uppercase tracking-wider">{{ brand.credits.length }} Credits</div>
+                                    </div>
+                                </div>
+                                <div class="mb-4 text-xs text-gray-600 space-y-1 max-h-32 overflow-y-auto pr-1">
+                                    <div v-for="c in brand.credits" :key="c.id" class="flex justify-between bg-white px-2 py-1.5 rounded border border-gray-100">
+                                        <span class="truncate pr-2 font-medium">{{ c.creditType || 'Promo' }}</span>
+                                        <span class="font-bold text-gray-900 whitespace-nowrap">{{ formatCurrency(c.amount) }}</span>
+                                    </div>
+                                </div>
+                                <div class="space-y-2">
+                                    <button @click="draftEmail(brand)" class="w-full py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-lg transition-colors flex items-center justify-center gap-2 shadow">
+                                        <i data-lucide="mail" class="w-4 h-4"></i> Draft Email
+                                    </button>
+                                    <button @click="downloadMonthlyReport(brand)" class="w-full px-3 py-2 bg-white border border-gray-300 hover:bg-gray-100 text-gray-700 rounded-lg font-bold flex justify-center items-center gap-1.5 text-xs transition-colors shadow-sm">
+                                        <i data-lucide="file-spreadsheet" class="w-3.5 h-3.5 text-amber-500"></i> Download Statement CSV
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- STANDALONE LOCAL ETL PROCESSING PANEL (STAYS VISIBLE OR BOTTOM) -->
+            <div id="local-etl-panel" class="bg-slate-900 border border-slate-700 text-white p-5 rounded-xl my-6 shadow-xl mx-4 mt-auto">
+                <div class="flex items-center justify-between mb-4 border-b border-slate-700 pb-3">
+                    <h3 class="text-base font-bold flex items-center gap-2 text-indigo-400">
+                        <i data-lucide="cpu" class="w-5 h-5"></i> Local In-Memory ETL Processor
+                    </h3>
+                    <span class="text-xs bg-indigo-900/60 text-indigo-300 border border-indigo-500/30 px-2.5 py-1 rounded-full font-mono">Standalone Mode</span>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                    <div class="bg-slate-800 p-3.5 rounded-lg border border-slate-700">
+                        <label class="block text-xs font-semibold text-slate-300 mb-2">1. Master Workbook (.xlsx)</label>
+                        <input type="file" @change="handleLocalWbUpload" accept=".xlsx, .xls" class="text-xs text-slate-400 file:mr-2 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-slate-700 file:text-white hover:file:bg-slate-600 cursor-pointer w-full" />
+                        <div class="text-[11px] text-slate-400 mt-2 font-mono">{{ localWbStatus }}</div>
+                    </div>
+                    <div class="bg-slate-800 p-3.5 rounded-lg border border-slate-700">
+                        <label class="block text-xs font-semibold text-slate-300 mb-2">2. Treez POS Sales (.csv)</label>
+                        <input type="file" @change="handleLocalTreezUpload" accept=".csv" class="text-xs text-slate-400 file:mr-2 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-slate-700 file:text-white hover:file:bg-slate-600 cursor-pointer w-full" />
+                        <div class="text-[11px] text-slate-400 mt-2 font-mono">{{ localTreezStatus }}</div>
+                    </div>
+                    <div class="bg-slate-800 p-3.5 rounded-lg border border-slate-700">
+                        <label class="block text-xs font-semibold text-slate-300 mb-2">3. Sage 4545 GL (.csv)</label>
+                        <input type="file" @change="handleLocalSageUpload" accept=".csv" class="text-xs text-slate-400 file:mr-2 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-slate-700 file:text-white hover:file:bg-slate-600 cursor-pointer w-full" />
+                        <div class="text-[11px] text-slate-400 mt-2 font-mono">{{ localSageStatus }}</div>
+                    </div>
+                </div>
+                <div class="flex flex-wrap items-center gap-3">
+                    <button :disabled="isGlobalLoading" @click="handleLocalSyncMemory" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white rounded-lg font-bold text-xs shadow-md transition-all flex items-center gap-2">
+                        <i data-lucide="refresh-cw" class="w-3.5 h-3.5" :class="{'animate-spin': isGlobalLoading}"></i> Sync Data to Workbook (RAM)
+                    </button>
+                    <button @click="handleLocalExportWb" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-bold text-xs shadow-md transition-all flex items-center gap-2">
+                        <i data-lucide="download" class="w-3.5 h-3.5"></i> Export Updated Master Workbook
+                    </button>
+                    <div class="text-xs text-slate-300 font-mono ml-auto">{{ localSyncSummary }}</div>
+                </div>
+            </div>
+        </main>
+    </div>
+</div>
+
+<script type="module">
+/* 
+======================================================
+STANDALONE TOOL - ARCHITECTURE INDEX
+======================================================
+Search for the [TAG] to jump to the exact module.
+[MOD_STATE]    - Global State & Reactive Variables
+[MOD_PARSER]   - Intake Parsers & Normalization Utils
+[MOD_ENGINE]   - Core Audit & Filtering Engine
+[MOD_EXPORT]   - CSV, PDF & Workbook Sync Generation
+[MOD_UI]       - Vue Component Initialization & UI
+====================================================== 
+*/
+
+    // --- INTEGRATED SERVICES ---
+
+    const csvService = {
+        parseCSVText: (text) => (typeof text !== 'string') ? [] : text.split(/\r?\n/).filter(r => r.trim() !== ''),
+        parseCSVRow: (str) => {
+            const result = [];
+            let cell = '';
+            let inQuotes = false;
+            for (let i = 0; i < str.length; i++) {
+                const char = str[i];
+                if (char === '"') { inQuotes = !inQuotes; } 
+                else if (char === ',' && !inQuotes) { result.push(cell.trim()); cell = ''; } 
+                else { cell += char; }
+            }
+            result.push(cell.trim());
+            return result;
+        },
+        csvEscape: (value) => `"${String(value ?? '').replace(/"/g, '""')}"`,
+        cleanCurrency: (val) => parseFloat(String(val || 0).replace(/[^0-9.-]+/g, "")) || 0
+    };
+
+    const auditService = {
+        parseExcelDate: (value) => {
+            if (!value || value === 'N/A') return null;
+            if (typeof value === 'number') return new Date(Math.round((value - 25569) * 86400 * 1000));
+            const d = new Date(value);
+            return isNaN(d.getTime()) ? null : d;
+        },
+        generateAuditStatementCSV: (params) => {
+            const { brandVendor, targetSite, activeMonth, ledgerEvents, csvEscape } = params;
+            const csvRows = [];
+            const targetBrand = (brandVendor || '').toUpperCase();
+            const ytdEvents = ledgerEvents.filter(ev => (ev.brand || ev.vendor || '').toUpperCase() === targetBrand && ev.site === targetSite);
+            
+            csvRows.push(['Period', 'Location', 'Brand', 'Generated', 'Applied', 'Balance'].join(','));
+            const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+            let totalGen = 0, totalApp = 0;
+            
+            months.forEach(m => {
+                const mEvents = ytdEvents.filter(e => (e.isolation_month || e.month || '').toUpperCase() === m.toUpperCase());
+                const gen = mEvents.filter(e => e.type === 'GENERATED').reduce((s, e) => s + e.amount, 0);
+                const app = mEvents.filter(e => e.type === 'RECOVERY').reduce((s, e) => s + e.amount, 0);
+                totalGen += gen; totalApp += app;
+                csvRows.push([csvEscape(m), csvEscape(targetSite), csvEscape(brandVendor), gen.toFixed(2), app.toFixed(2), (totalGen - totalApp).toFixed(2)].join(','));
+            });
+            return csvRows.join('\r\n');
+        }
+    };
+
+    const emailService = {
+        buildMailtoUrl: (toEmails, ccEmails, subject, body) => {
+            const cleanEmails = String(toEmails || '').split(/[,;\s]+/).map(e => e.trim()).filter(Boolean).join(',');
+            let url = `mailto:${cleanEmails}?`;
+            if (ccEmails) url += `cc=${encodeURIComponent(ccEmails)}&`;
+            url += `subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+            return url;
+        }
+    };
+
+    const localWorkbookState = {
+        rawWorkbook: null,
+        workbookData: null,
+        treezData: [],
+        sageData: [],
+        lastSyncStats: null
+    };
+
+    const workbookService = {
+        ingestMasterWorkbookFile: async (file) => {
+            const buffer = await file.arrayBuffer();
+            const workbook = XLSX.read(buffer, { type: 'array' });
+            localWorkbookState.rawWorkbook = workbook;
+            const parsed = {};
+            workbook.SheetNames.forEach(sheetName => {
+                parsed[sheetName] = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { header: 1 });
+            });
+            localWorkbookState.workbookData = parsed;
+            return { sheets: workbook.SheetNames, totalSheets: workbook.SheetNames.length };
+        },
+        ingestTreezPOSCSV: async (file, activeMonth) => {
+            const text = await file.text();
+            return new Promise((resolve) => {
+                Papa.parse(text, {
+                    header: true,
+                    complete: (res) => {
+                        const cleaned = res.data.map((row, idx) => {
+                            const amt = csvService.cleanCurrency(row['Vendor Credit Owed'] || row.owed || 0);
+                            return {
+                                id: `treez_${idx}`,
+                                brand: row['Product Brand'] || row.Brand || row.brand || '',
+                                site: row['Store Name'] || row.site || '',
+                                owedAmt: amt, amount: amt,
+                                type: 'GENERATED',
+                                month: activeMonth, isolation_month: activeMonth
+                            };
+                        });
+                        localWorkbookState.treezData = cleaned;
+                        resolve(cleaned);
+                    }
+                });
+            });
+        },
+        ingestSageGLCSV: async (file) => {
+            const text = await file.text();
+            return new Promise((resolve) => {
+                Papa.parse(text, {
+                    header: true,
+                    complete: (res) => {
+                        localWorkbookState.sageData = res.data.map(r => ({
+                            ...r,
+                            type: 'RECOVERY',
+                            amount: csvService.cleanCurrency(r['Credit'] || r.amount || 0)
+                        }));
+                        resolve(localWorkbookState.sageData);
+                    }
+                });
+            });
+        },
+        syncDataToWorkbook: (monthName) => {
+            if (!localWorkbookState.rawWorkbook) throw new Error("Workbook not loaded.");
+            const posTotals = {};
+            localWorkbookState.treezData.forEach(row => {
+                const b = row.brand.toUpperCase();
+                if (!posTotals[b]) posTotals[b] = { redding: 0, redBluff: 0 };
+                const s = row.site.toUpperCase();
+                if (s.includes('BLUFF') || s.includes('RB')) posTotals[b].redBluff += row.amount;
+                else posTotals[b].redding += row.amount;
+            });
+            // Simplified sync for demo
+            return { updatedBrands: Object.keys(posTotals).length };
+        }
+    };
+
+    // ==========================================
+    // [MOD_UI] - Vue Component Initialization & UI
+    // ==========================================
+    // --- MAIN VUE APP ---
+    const { createApp, ref, computed, nextTick, onMounted } = Vue;
+
+    createApp({
+        setup() {
+            const isManagerUnlocked = ref(true); // Default to true to bypass login
+            const showWorkspaceMenu = ref(false);
+            const showAdminMenu = ref(false);
+            const loggedInUser = ref('');
+            const emailInput = ref('');
+            const passwordInput = ref('admin'); // Default for standalone
+            const authError = ref('');
+            const activeSite = ref('Red Bluff');
+            const activeTab = ref('Ledger');
+            const activeMonth = ref('October');
+            const masterWorkbook = ref({ data: {}, summary: {} });
+            const activeWorkbookSheet = ref('Board Recon - Red Bluff');
+            const calendarMonths = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+            
+            const isProcessing = ref(false);
+            const isGlobalLoading = ref(false);
+            const progressPercent = ref(0);
+            const progressMessage = ref('');
+            const progressDetails = ref('');
+            const progressETA = ref('');
+
+            const localWbStatus = ref('Not loaded');
+            const localTreezStatus = ref('Not loaded');
+            const localSageStatus = ref('Not loaded');
+            const localSyncSummary = ref('');
+
+            const emailMapping = {
+                "21st AMENDMENT": "kala@medbev.com",
+                "21ST AMENDMENT": "kala@medbev.com",
+                "3 Bros": "kristina@hyroad.co",
+                "3 BROS": "kristina@hyroad.co",
+                "710 Labs": "jybarra@710labs.com",
+                "710 LABS": "jybarra@710labs.com",
+                "A Golden State": "jimmy.beene@vantagepointdistro.com",
+                "A GOLDEN STATE": "jimmy.beene@vantagepointdistro.com",
+                "ABX": "abeardon@cannacraft.com",
+                "Alien Labs": "zack.tehaney@connectedca.com",
+                "ALIEN LABS": "zack.tehaney@connectedca.com",
+                "Alive & Well": "shane@wearealiveandwell.com",
+                "ALIVE & WELL": "shane@wearealiveandwell.com",
+                "Almora": "dustin.aldrich@mammoth.org",
+                "ALMORA": "dustin.aldrich@mammoth.org",
+                "Astronauts": "jenny.knippschild@traditional.com",
+                "ASTRONAUTS": "jenny.knippschild@traditional.com",
+                "Auntie Aloha": "kristina@hyroad.co",
+                "AUNTIE ALOHA": "kristina@hyroad.co",
+                "AUTUMN BRANDS": "katie.wheatley@kivaconfections.com",
+                "AXIOM HASH": "mekhal.axiom710@gmail.com",
+                "Bang! 4 Buck": "jc@cacbteam.com",
+                "BANG 4 BUCK": "jc@cacbteam.com",
+                "Bangers": "sales@bangersca.com",
+                "BANGERS": "sales@bangersca.com",
+                "Bear Labs": "jen@bigoilco.com",
+                "BEAR LABS": "jen@bigoilco.com",
+                "Big Chief": "bill@bigchiefextracts.com",
+                "BIG CHIEF": "bill@bigchiefextracts.com",
+                "Big Pete's": "katie.wheatley@kivaconfections.com",
+                "BIG PETE'S": "katie.wheatley@kivaconfections.com",
+                "Big Tree": "devin@ck-distro.com",
+                "BIG TREE": "devin@ck-distro.com",
+                "Birdies": "kristina@hyroad.co",
+                "BIRDIES": "kristina@hyroad.co",
+                "Biscotti": "renee.j@natura.io",
+                "Blem": "sam@cali-lotus.com",
+                "BLEM": "sam@cali-lotus.com",
+                "Bloom": "ashley@thebloombrand.com",
+                "BLOOM": "ashley@thebloombrand.com",
+                "Boutiq": "brett@sherbinskis.com",
+                "Buddies": "jessicap@buddiesbrand.com",
+                "BUDDIES": "jessicap@buddiesbrand.com",
+                "Burrs Place": "adam@burrsplace.com",
+                "BURR'S PLACE": "adam@burrsplace.com",
+                "Cabo": "a.lowdercannabiscontractor@gmail.com",
+                "CABO": "a.lowdercannabiscontractor@gmail.com",
+                "Cake": "taylor@cakehitsdifferent.com",
+                "CAKE": "taylor@cakehitsdifferent.com",
+                "CAM": "brian@camdispensary.com",
+                "Camino": "julia.bechtold@kivaconfections.com",
+                "CAMINO": "julia.bechtold@kivaconfections.com",
+                "CAPULATOR": "MIKEB@FLDISTRO.COM",
+                "Care By Design": "abeardon@cannacraft.com",
+                "CARE BY DESIGN": "abeardon@cannacraft.com",
+                "Casa Flor": "chzmo427@gmail.com",
+                "CASA FLOR": "chzmo427@gmail.com",
+                "Casual": "bryce@cleanlinemanagement.com",
+                "Caviar Gold": "johnnym@caviargold.com",
+                "CAVIAR GOLD": "johnnym@caviargold.com",
+                "CBX": "michelletin@cannabiotix.com",
+                "CES": "jen@bigoilco.com",
+                "Cizi": "casey@wolfdistro.com",
+                "CIZI": "casey@wolfdistro.com",
+                "CLARKIES": "buyclarkies@gmail.com",
+                "CLARKIE'S": "buyclarkies@gmail.com",
+                "Claybourne": "austin.meserole@claybourneco.com",
+                "CLAYBOURNE": "austin.meserole@claybourneco.com",
+                "ClayBourne": "austin.meserole@claybourneco.com",
+                "CLSICS": "katie.wheatley@kivaconfections.com",
+                "Coastal Sun": "lorenzo@legacysales.co",
+                "COASTAL SUN": "lorenzo@legacysales.co",
+                "Coldfire": "cory@coldfireextracts.com",
+                "COLDFIRE": "cory@coldfireextracts.com",
+                "Connected": "zack.tehaney@connectedca.com",
+                "CONNECTED": "zack.tehaney@connectedca.com",
+                "Crystal Clear": "doug.helfman@gmail.com",
+                "CRYSTAL CLEAR": "doug.helfman@gmail.com",
+                "Dabwoods": "bill@dabwoods.com",
+                "DABWOODS": "bill@dabwoods.com",
+                "Decibel Gardens": "distribution@decibelgardens.com",
+                "DECIBEL GARDENS": "distribution@decibelgardens.com",
+                "Delighted": "MIKEB@FLDISTRO.COM",
+                "DELIGHTED": "MIKEB@FLDISTRO.COM",
+                "Dime Bag": "helbacha@statehouse.co",
+                "DIME BAG": "helbacha@statehouse.co",
+                "Dime Industries": "kimberly.t@dime.industries",
+                "DIME INDUSTRIES": "kimberly.t@dime.industries",
+                "DOLLAR DOSE": "jason@dollardose.com",
+                "Dompen": "stefan@gardenhousebrands.com",
+                "DOMPEN": "stefan@gardenhousebrands.com",
+                "DomPen": "stefan@gardenhousebrands.com",
+                "Dr. Norm's": "riley@punchedibles.com",
+                "DR NORM'S": "riley@punchedibles.com",
+                "Drops": "Tierzah.Overbay@dropscandies.com",
+                "DROPS": "Tierzah.Overbay@dropscandies.com",
+                "DUNKZ": "stephanie@goldenstatemj.com",
+                "Dunzo": "stephanie@goldenstatemj.com",
+                "DUNZO": "stephanie@goldenstatemj.com",
+                "Duffys": "brian@upnorthhumboldt.com",
+                "DUFFY$": "brian@upnorthhumboldt.com",
+                "EIGHTH BROTHER": "eighthbrothersales@gmail.com",
+                "Ember Valley": "MIKEB@FLDISTRO.COM",
+                "EMBER VALLEY": "MIKEB@FLDISTRO.COM",
+                "Emerald Bay Extracts": "leif@emeraldbayextracts.com",
+                "EMERALD BAY EXTRACTS": "leif@emeraldbayextracts.com",
+                "Emerald Sky": "katie.wheatley@kivaconfections.com",
+                "EMERALD SKY": "katie.wheatley@kivaconfections.com",
+                "Errl Hill": "errlhill.harry@gmail.com",
+                "ERRL HILL": "errlhill.harry@gmail.com",
+                "Evidence": "stephanie@oceangrownextracts.com",
+                "EVIDENCE": "stephanie@oceangrownextracts.com",
+                "Fig Farms": "brian@upnorthhumboldt.com",
+                "FIG FARMS": "brian@upnorthhumboldt.com",
+                "Flavorade": "bryce@cleanlinemanagement.com",
+                "FLAVORADE": "bryce@cleanlinemanagement.com",
+                "Froot": "orders@frootbrand.com",
+                "FROOT": "orders@frootbrand.com",
+                "Fuzzies": "helbacha@statehouse.co",
+                "FUZZIES": "helbacha@statehouse.co",
+                "Geek THCX": "ginaalvarezrep@gmail.com",
+                "Gelato": "marion@flavrhouse.com",
+                "GELATO": "marion@flavrhouse.com",
+                "GLASS HOUSE FARM": "ibarragan@glasshousegroup.com",
+                "Globs": "Dylan@getglobs.com",
+                "GLOBS": "Dylan@getglobs.com",
+                "Gold Drop": "virginia@petalfast.com",
+                "GOLD DROP": "virginia@petalfast.com",
+                "GOLDMINE": "charles@findbreez.com",
+                "Gramlin": "mamato@statelydistro.com",
+                "GRAMLIN": "mamato@statelydistro.com",
+                "Green line": "bills@gogreenline.com",
+                "GREENLINE": "bills@gogreenline.com",
+                "Greenline": "bills@gogreenline.com",
+                "Halara": "brian@upnorthhumboldt.com",
+                "HALARA": "brian@upnorthhumboldt.com",
+                "Halfpipe": "chastity@greenbrierhldgs.com",
+                "HALFPIPE": "chastity@greenbrierhldgs.com",
+                "Happy Fruit": "neil.bellavia@petalfast.com",
+                "HAPPY FRUIT": "neil.bellavia@petalfast.com",
+                "Hard Eighth": "orders@frootbrand.com",
+                "HARD EIGHTH": "orders@frootbrand.com",
+                "Hashtag": "kristina@hyroad.co",
+                "#HASHTAG": "kristina@hyroad.co",
+                "#Hashtag": "kristina@hyroad.co",
+                "Have Hash": "brian@upnorthhumboldt.com",
+                "HAVE HASH": "brian@upnorthhumboldt.com",
+                "Heady Heads ": "lorenzo@legacysales.co",
+                "HEADY HEADS ": "lorenzo@legacysales.co",
+                "Heavy Hitters": "dustin.aldrich@mammoth.org",
+                "HEAVY HITTERS": "dustin.aldrich@mammoth.org",
+                "Heirbloom": "michelletin@cannabiotix.com",
+                "HEIRBLOOM": "michelletin@cannabiotix.com",
+                "Henry's": "mamato@statelydistro.com",
+                "HENRY'S": "mamato@statelydistro.com",
+                "High 90s": "dustin@high90s.com",
+                "HIGH 90'S": "dustin@high90s.com",
+                "High 90's": "dustin@high90s.com",
+                "HIGHATUS": "michelletin@cannabiotix.com",
+                "Himalaya": "marco.m@himalayavapor.com",
+                "HIMALAYA": "marco.m@himalayavapor.com",
+                "HHCO": "ashly@highesthealth.com",
+                "Humboldt Terp Council": "abeardon@cannacraft.com",
+                "HUMBOLDT TERP COUNCIL": "abeardon@cannacraft.com",
+                "Humo": "virginia@petalfast.com",
+                "HUMO": "virginia@petalfast.com",
+                "Hush": "virginia@petalfast.com",
+                "HUSH": "virginia@petalfast.com",
+                "ICED": "renee.j@natura.io",
+                "Jeeter": "dbaer@jeeter.com",
+                "JEETER": "dbaer@jeeter.com",
+                "JEFFERSON SOUL ": "robert@jefferson-soul.com",
+                "J SOUL ": "robert@jefferson-soul.com",
+                "Joost": "sheila@theholdingcrew.com",
+                "JOOST": "sheila@theholdingcrew.com",
+                "Kanha": "jessicad@sunderstorm.com",
+                "KANHA": "jessicad@sunderstorm.com",
+                "KEEF": "katie.wheatley@kivaconfections.com",
+                "Keef": "katie.wheatley@kivaconfections.com",
+                "King's Garden": "gillian@humblecs.us",
+                "KING'S GARDEN": "gillian@humblecs.us",
+                "Kingchew": "helbacha@statehouse.co",
+                "KINGCHEW": "helbacha@statehouse.co",
+                "Kingpen": "helbacha@statehouse.co",
+                "KINGPEN": "helbacha@statehouse.co",
+                "Kingroll": "helbacha@statehouse.co",
+                "KINGROLL": "helbacha@statehouse.co",
+                "KingRoll": "helbacha@statehouse.co",
+                "Kingston Royal": "stephanie@goldenstatemj.com",
+                "KINGSTON ROYAL": "stephanie@goldenstatemj.com",
+                "Kiva": "katie.wheatley@kivaconfections.com",
+                "KIVA": "katie.wheatley@kivaconfections.com",
+                "KOA": "stefan@gardenhousebrands.com",
+                "Korova": "john@budtechnology.com",
+                "KOROVA": "john@budtechnology.com",
+                "Kush Face ": "kushfacex@gmail.com",
+                "KUSH FACE": "kushfacex@gmail.com",
+                "KWIK EASE": "kala@medbev.com",
+                "Locals Only  ": "ryan.ca.cannabis@gmail.com",
+                "Lavinia ": "ashley@thebloombrand.com",
+                "Level": "katie.wheatley@kivaconfections.com",
+                "LEVEL": "katie.wheatley@kivaconfections.com",
+                "Life Is Not Grape": "katie.wheatley@kivaconfections.com",
+                "LIFE IS NOT GRAPE": "katie.wheatley@kivaconfections.com",
+                "Lift Tickets": "dustin.aldrich@mammoth.org",
+                "LIFT TICKETS": "dustin.aldrich@mammoth.org",
+                "LIFT TICKETS ": "dustin.aldrich@mammoth.org",
+                "Lime ": "giovanti@lvlup.la",
+                "LIME ": "giovanti@lvlup.la",
+                "Liquid Flower": "liz@liquidflower.com",
+                "LIQUID FLOWER": "liz@liquidflower.com",
+                "LIQUID LOUD": "matt.s@smokiez.com",
+                "LMFAO": "dre@goldenstatemj.com",
+                "Locals Only Concentrates": "gillian@humblecs.us",
+                "LOCALS ONLY": "gillian@humblecs.us",
+                "Lolo": "lorenzo.goodwin@norcalcann.com",
+                "LOLO": "lorenzo.goodwin@norcalcann.com",
+                "Lost Farm": "katie.wheatley@kivaconfections.com",
+                "LOST FARM": "katie.wheatley@kivaconfections.com",
+                "LOUD AND CLEAR": "abeardon@cannacraft.com",
+                "Loudpack": "helbacha@statehouse.co",
+                "LOUDPACK": "helbacha@statehouse.co",
+                "LOYALTY VAPES": "jessicap@buddiesbrand.com",
+                "LOYALTY": "jessicap@buddiesbrand.com",
+                "LUCKY": "orders@frootbrand.com",
+                "LUMPY'S ": "amesh@lumpysflowers.com",
+                "Lumpy's": "amesh@lumpysflowers.com",
+                "Manzanita Naturals": "kala@medbev.com",
+                "MANZANITA NATURALS": "kala@medbev.com",
+                "Marmas": "doug.helfman@gmail.com",
+                "MARMAS": "doug.helfman@gmail.com",
+                "Martians": "jenny.knippschild@traditional.com",
+                "MARTIANS": "jenny.knippschild@traditional.com",
+                "Mary Jones": "kristina@hyroad.co",
+                "MARY JONES": "kristina@hyroad.co",
+                "Mary's Medicinals": "allie.greenstone@bellrockbrands.com",
+                "MARY'S MEDICINALS": "allie.greenstone@bellrockbrands.com",
+                "Maven": "waylon@mavenmvn.com",
+                "MAVEN": "waylon@mavenmvn.com",
+                "Micro Bar": "lorenzo@legacysales.co",
+                "MICROBAR": "lorenzo@legacysales.co",
+                "Micro Greenz": "virginia@petalfast.com",
+                "MICRO GREENZ": "virginia@petalfast.com",
+                "Midsfactory": "klent@illaguerrilla.com",
+                "MIDSFACTORY": "klent@illaguerrilla.com",
+                "Moca": "matt@mocahumboldt.com",
+                "MOCA": "matt@mocahumboldt.com",
+                "Moon Valley": "kristina@hyroad.co",
+                "MMON VALLEY": "kristina@hyroad.co",
+                "Mountain Man Melts": "joey@mountainmanmelts.com",
+                "Mr. Zips": "dave@goheadwaters.com",
+                "MR ZIPS": "dave@goheadwaters.com",
+                "Mr Zips": "dave@goheadwaters.com",
+                "Muha Meds": "benji@muhameds.com",
+                "MUHA MEDS": "benji@muhameds.com",
+                "NAMELESS GENETICS": "coryk@originalsca.com",
+                "NAMELESS": "coryk@originalsca.com",
+                "Nameless": "coryk@originalsca.com",
+                "Nasha": "katie.wheatley@kivaconfections.com",
+                "NASHA": "katie.wheatley@kivaconfections.com",
+                "Noah's Premium": "orders@frootbrand.com",
+                "NOAH'S PREMIUM": "orders@frootbrand.com",
+                "Northern Harvest": "matt@northernharvests.com",
+                "NORTHERN HARVEST": "matt@northernharvests.com",
+                "Not Your Father's": "amesh@goldenstatemj.com",
+                "NOT YOUR FATHER'S": "amesh@goldenstatemj.com",
+                "Oakfruitland": "jared@oakfruitland.com",
+                "OAKFRUITLAND": "jared@oakfruitland.com",
+                "OakFruitLand": "jared@oakfruitland.com",
+                "ORIGINALS": "coryk@originalsca.com",
+                "Pabst Labs": "stephanie@goldenstatemj.com",
+                "PABST": "stephanie@goldenstatemj.com",
+                "Pabst": "stephanie@goldenstatemj.com",
+                "Pacific Stone": "Jenny@pacstone.com",
+                "PACIFIC STONE": "Jenny@pacstone.com",
+                "Papa & Barkley": "dustin.aldrich@mammoth.org",
+                "PAPA & BARKLEY": "dustin.aldrich@mammoth.org",
+                "Papa's Herb": "kara@papasherb.com",
+                "PAPA'S HERB": "kara@papasherb.com",
+                "Papa's Select": "jenny@mammoth.org",
+                "PAPA'S SELECT": "jenny@mammoth.org",
+                "Petra": "katie.wheatley@kivaconfections.com",
+                "PETRA": "katie.wheatley@kivaconfections.com",
+                "PHASES": "jimmy.beene@vantagepointdistro.com",
+                "Phire": "sensei@humblecs.com",
+                "PHIRE": "sensei@humblecs.com",
+                "Pistil Whip": "ginaalvarezrep@gmail.com",
+                "PISTIL WHIP": "ginaalvarezrep@gmail.com",
+                "PlugPlay": "jordan.gehr@plugplay.com",
+                "PLUGPLAY": "jordan.gehr@plugplay.com",
+                "PLUS": "ibarragan@glasshousegroup.com",
+                "Plus": "ibarragan@glasshousegroup.com",
+                "POPPY'S": "orders@frootbrand.com",
+                "Potters": "ali@potters.co",
+                "POTTER'S": "ali@potters.co",
+                "Preffered Gardens": "jasmine@preferredgardens.com",
+                "PREFERRED": "jasmine@preferredgardens.com",
+                "Presidential": "dylan@presidentialcannabisca.com",
+                "PRESIDENTIAL": "dylan@presidentialcannabisca.com",
+                "Pretty Dope": "tiffany@werlegends.com",
+                "PRETTY DOPE": "tiffany@werlegends.com",
+                "PROOF": "caia@proofextracts.com",
+                "Puff": "aaronv@lbsdistribution.com",
+                "PUFF": "aaronv@lbsdistribution.com",
+                "PUNCH EDIBLES": "riley@punchedibles.com",
+                "PUNCH": "riley@punchedibles.com",
+                "Pure Beauty ": "dustin.aldrich@mammoth.org",
+                "QUICKIES": "z.powers@grasshoppers-brand.com",
+                "QUICKIE'S": "z.powers@grasshoppers-brand.com",
+                "Quiet kings": "joel@greenvibe.biz",
+                "QUIET KINGS": "joel@greenvibe.biz",
+                "Raw Garden": "benp@rawgarden.farm",
+                "RAW GARDEN": "benp@rawgarden.farm",
+                "RED EYE": "arron.harvey@enlighten.llc",
+                "REZ BOYS ": "arron.harvey@enlighten.llc",
+                "Revelry": "dave@revelrysupply.com",
+                "REVELRY": "dave@revelrysupply.com",
+                "RONIN ROSIN": "ashleyrussian1983@gmail.com",
+                "Rosin Tech ": "rob@rosintechlabs.com",
+                "ROSIN TECH": "rob@rosintechlabs.com",
+                "Rove": "skye@rovebrand.com",
+                "ROVE": "skye@rovebrand.com",
+                "SAIDA": "katie.wheatley@kivaconfections.com",
+                "Sattva ": "neil.bellavia@petalfast.com",
+                "Sauce": "matthew.watt@sauceessentials.com",
+                "SAUCE": "matthew.watt@sauceessentials.com",
+                "Seed Junky": "wayne@timelessrefinery.com",
+                "SEED JUNKY": "wayne@timelessrefinery.com",
+                "SELFIES": "kristina@hyroad.co",
+                "Shaman": "glenn@hummingbirdverde.co",
+                "SHAMAN": "glenn@hummingbirdverde.co",
+                "Shasta Hash Co": "shelia@theholdingcrew.com",
+                "SHASTA CO": "shelia@theholdingcrew.com",
+                "Shasta Co": "shelia@theholdingcrew.com",
+                "Sherbinskis": "brett@sherbinskis.com",
+                "SHERBINSKIS": "brett@sherbinskis.com",
+                "SIPS": "mimi@sipelixirs.com",
+                "SLUGGERS": "renee.j@natura.io",
+                "Sluggers": "renee.j@natura.io",
+                "Smackers ": "mimi@enjoysmackers.com",
+                "SMOKEN PROMISES": "zack.tehaney@connectedca.com",
+                "Smokiez": "matt.s@smokiez.com",
+                "SMOKIEZ": "matt.s@smokiez.com",
+                "SOLIS": "katie.wheatley@kivaconfections.com",
+                "SPACE GEM": "amber@spacegemcandy.com",
+                "SPARKIEZ": "orders@frootbrand.com",
+                "St. Ides": "amesh@goldenstatemj.com",
+                "ST IDES": "amesh@goldenstatemj.com",
+                "St Ides": "amesh@goldenstatemj.com",
+                "Sticky": "devin@ck-distro.com",
+                "STICKY": "devin@ck-distro.com",
+                "Stiiizy": "sebastien.briaire@stiiizy.com",
+                "STIIIZY": "sebastien.briaire@stiiizy.com",
+                "SUNSET CONNECT": "katie.wheatley@kivaconfections.com",
+                "Sunsmoke": "kristina@hyroad.co",
+                "SUNSMOKE": "kristina@hyroad.co",
+                "Surplus": "dustin.aldrich@mammoth.org",
+                "SURPLUS": "dustin.aldrich@mammoth.org",
+                "Talking Trees ": "craig@highgradedistribution.com",
+                "Telos Hash Co": "matt@telosfarms.com",
+                "TELOS HASH CO": "matt@telosfarms.com",
+                "Tempo": "riley@punchedibles.com",
+                "TEMPO": "riley@punchedibles.com",
+                "terp mansion": "jaime@terpmansion.com",
+                "TERP MANSION": "jaime@terpmansion.com",
+                "Terra": "katie.wheatley@kivaconfections.com",
+                "TERRA": "katie.wheatley@kivaconfections.com",
+                "THC Design": "kristina@hyroad.co",
+                "THC DESIGN": "kristina@hyroad.co",
+                "THE FIZZ": "kala@medbev.com",
+                "The Plant": "orders@frootbrand.com",
+                "THE PLANT": "orders@frootbrand.com",
+                "TIMELESS": "katie.wheatley@kivaconfections.com",
+                "Timeless": "katie.wheatley@kivaconfections.com",
+                "Time Machine ": "Jenny@pacstone.com",
+                "Traditional": "brendan.gerber@traditional.com",
+                "TRADITIONAL": "brendan.gerber@traditional.com",
+                "Turn": "mwright@turn.me",
+                "TURN": "mwright@turn.me",
+                "TUTTI": "renee.j@natura.io",
+                "Tyson 2.0": "jordank@northernemeralds.com",
+                "TYSON 2.0": "jordank@northernemeralds.com",
+                "Uncle Arnie's": "alexis@unclearnies.com",
+                "UNCLE ARNIE'S": "alexis@unclearnies.com",
+                "Upnorth": "brian@upnorthhumboldt.com",
+                "UPNORTH": "brian@upnorthhumboldt.com",
+                "UpNorth": "brian@upnorthhumboldt.com",
+                "URSA": "cesar@bearhumboldt.com",
+                "VetCBD": "virginia@petalfast.com",
+                "VETCBD": "virginia@petalfast.com",
+                "Vuze": "bryce@cleanlinemanagement.com",
+                "VUZE": "bryce@cleanlinemanagement.com",
+                "Wave Rider": "joel@greenvibe.biz",
+                "West Coast Cure": "jesse@wcc.com",
+                "WEST COAST CURE": "jesse@wcc.com",
+                "West Coast Treez": "aaronv@lbsdistribution.com",
+                "WEST COAST TREEZ": "aaronv@lbsdistribution.com",
+                "White Label": "arron.harvey@enlighten.llc",
+                "WHITE LABEL": "arron.harvey@enlighten.llc",
+                "WILLOW CREEKSIDE FARMS": "brian@upnorthhumboldt.com",
+                "Whoa": "ashley@thebloombrand.com",
+                "WHOA": "ashley@thebloombrand.com",
+                "Wizard Trees ": "joanna@wizardtrees.com",
+                "Woodwide": "joe@woodwidehighcraft.com",
+                "WOODWIDE": "joe@woodwidehighcraft.com",
+                "WoodWide": "joe@woodwidehighcraft.com",
+                "Wvy": "jen@bigoilco.com",
+                "WVY": "jen@bigoilco.com",
+                "Wyld": "sarahc@nwconfections.com",
+                "WYLD": "sarahc@nwconfections.com",
+                "Xotic Flavorz": "virginia@petalfast.com",
+                "XOTIC FLAVORZ": "virginia@petalfast.com",
+                "Yummi Karma": "tiffany@werlegends.com",
+                "YUMMI KARMA": "tiffany@werlegends.com",
+                "2 Dixie": "liz.christensen@bellrockbrands.com",
+                "3C Farms": "mamato@statelydistro.com",
+                "American Weed Co.": "virginia@petalfast.com",
+                "Atomic City": "joey.brown@traditional.com",
+                "Axiom Hash": "mekhal.axiom710@gmail.com",
+                "Baggie Buds": "justin@flavrhouse.com",
+                "Beezle": "liz.christensen@bellrockbrands.com",
+                "Big Red's": "dre@goldenstatemj.com",
+                "Blue's Beach": "mamato@statelydistro.com",
+                "Bodega": "scott.v@sulodistro.com",
+                "Bulk": "justin@flavrhouse.com",
+                "Caliva": "mamato@statelydistro.com",
+                "Claybourne Co.": "lauren.marshall@claybourneco.com",
+                "Community Cannabis": "jordan@kalyaextracts.com",
+                "Cronja": "mamato@statelydistro.com",
+                "Cru": "schan@falconbrands.com",
+                "Cruisers": "mamato@statelydistro.com",
+                "Dizzies": "travis@elevateholdings.com",
+                "Glass House Farms": "ajacoby@glasshousegroup.com",
+                "Gold Flora": "mamato@statelydistro.com",
+                "Green Dragon": "ldegraffenreidt@greendragondistro.com",
+                "Grizzly Peak": "garren@grizzlypeakfarms.com",
+                "Habit": "mamato@statelydistro.com",
+                "Heavenly Sweet": "bill@crownog.com",
+                "High Garden": "schan@falconbrands.com",
+                "Huxleys": "travis@elevateholdings.com",
+                "Illa Guerilla": "klent@illaguerrilla.com",
+                "Jetfuel": "mamato@statelydistro.com",
+                "Jetpacks": "schan@falconbrands.com",
+                "LA Kush": "brenton@lakush.com",
+                "Laughing Gas": "dean@laughinggas.co",
+                "Leisuretown": "mamato@statelydistro.com",
+                "Lil Ray's": "bmashore@rayslemonade.com",
+                "Liquid Joint": "mamato@statelydistro.com",
+                "Littles": "schan@falconbrands.com",
+                "Mirayo by Santana": "mamato@statelydistro.com",
+                "Monogram": "mamato@statelydistro.com",
+                "Moon Valley Cannabis": "kristina@hyroad.co",
+                "Reefers by Sublime": "gillian@humblecs.us",
+                "Roll Bleezy": "mamato@statelydistro.com",
+                "Sword & Stoned": "mamato@statelydistro.com",
+                "Tabs": "mamato@statelydistro.com",
+                "Top Shelf Cultivation": "gillian@humblecs.us",
+                "Yada Yada": "virginia@petalfast.com",
+                "Zips": "schan@falconbrands.com",
+                "Zombi": "michelle.parieva@kivaconfections.com",
+                "Arcata Fire": "arcata.rep@email.com",
+                "Bbrand": "jessicap@buddiesbrand.com"
+            };
+
+            const treesSalesData = ref([]);
+            const ledgerEventsList = ref([]);
+            const searchQueryInput = ref('');
+
+            const formatCurrency = (val) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(val || 0);
+
+            const handleLogin = () => {
+                isManagerUnlocked.value = true;
+                loggedInUser.value = emailInput.value || 'Local User';
+                nextTick(() => lucide.createIcons());
+            };
+
+            const handleLocalWbUpload = async (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                isGlobalLoading.value = true;
+                try {
+                    const res = await workbookService.ingestMasterWorkbookFile(file);
+                    localWbStatus.value = `Loaded (${res.totalSheets} sheets)`;
+                    masterWorkbook.value = {
+                        data: localWorkbookState.workbookData,
+                        summary: res
+                    };
+                } catch (err) {
+                    alert(err.message);
+                } finally { isGlobalLoading.value = false; }
+            };
+
+                        const handleLocalTreezUpload = async (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                isProcessing.value = true;
+                progressMessage.value = 'Parsing Treez...';
+                try {
+                    const text = await file.text();
+                    const activeMonthLocal = activeMonth.value;
+                    const rows = await new Promise((resolve) => {
+                        Papa.parse(text, {
+                            header: true,
+                            skipEmptyLines: true,
+                            complete: (res) => {
+                                const cleaned = res.data.map((row, idx) => {
+                                    const amt = parseFloat(String(row['Vendor Credit Owed'] || row.owed || row.discountAmount || 0).replace(/[^0-9.-]+/g, '')) || 0;
+                                    const dateClosed = row['Date Closed'] || row.date || '';
+                                    const parsedMonth = detectMonthFromDate(dateClosed) || activeMonthLocal;
+                                    return {
+                                        id: `treez_${idx}`,
+                                        brand: row['Product Brand'] || row.Brand || row.brand || '',
+                                        site: row['Store Name'] || row.site || row.Location || '',
+                                        owedAmt: amt, amount: amt, owed: amt,
+                                        type: 'GENERATED',
+                                        month: parsedMonth, 
+                                        isolation_month: parsedMonth,
+                                        dateClosed: dateClosed,
+                                        discountTitle: row['Discount Title'] || row.discountTitle || row.promoType || 'Promo',
+                                        productName: row['Product Name'] || row.productName || '',
+                                        unitsSold: row['Units Sold'] || row.unitsSold || 1,
+                                        raw: row
+                                    };
+                                });
+                                if (typeof localWorkbookState !== 'undefined') {
+                                    localWorkbookState.treezData = cleaned;
+                                }
+                                resolve(cleaned);
+                            }
+                        });
+                    });
+                    localTreezStatus.value = `Loaded (${rows.length} rows)`;
+                    treesSalesData.value = rows;
+                } catch (err) {
+                    alert(err.message);
+                } finally { isProcessing.value = false; }
+            };
+
+            const handleLocalSageUpload = async (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                isGlobalLoading.value = true;
+                try {
+                    const rows = await workbookService.ingestSageGLCSV(file);
+                    localSageStatus.value = `Loaded (${rows.length} rows)`;
+                } finally { isGlobalLoading.value = false; }
+            };
+
+            // ==========================================
+            // [MOD_PARSER] - Intake Parsers & Normalization Utils
+            // ==========================================
+            // --- NORMALIZATION UTILITIES ---
+            function detectMonthFromDate(dateStr) {
+                if (!dateStr) return '';
+                const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+                const cleanStr = String(dateStr).trim().split(' ')[0];
+                const parsedDate = new Date(cleanStr);
+                if (!isNaN(parsedDate.getTime())) {
+                    return months[parsedDate.getUTCMonth()];
+                }
+                if (cleanStr.includes('-')) {
+                    const parts = cleanStr.split('-');
+                    const val = parts[0].length === 4 ? parseInt(parts[1], 10) : parseInt(parts[0], 10);
+                    if (val >= 1 && val <= 12) return months[val - 1];
+                }
+                if (cleanStr.includes('/')) {
+                    const val = parseInt(cleanStr.split('/')[0], 10);
+                    if (val >= 1 && val <= 12) return months[val - 1];
+                }
+                return '';
+            }
+
+            function detectSiteFromName(rawSite) {
+                if (!rawSite) return '';
+                const safeSite = String(rawSite).toUpperCase().trim();
+                if (safeSite.includes('RED BLUFF') || safeSite.includes('BLUFF') || safeSite.includes('E12') || safeSite.includes('RB')) return 'Red Bluff';
+                if (safeSite.includes('REDDING') || safeSite.includes('E11') || safeSite.includes('RD')) return 'Redding';
+                return '';
+            }
+
+            const getStandardizedBrandName = (name) => {
+                if (!name) return '';
+                const clean = String(name).trim();
+                const mappingRows = masterWorkbook.value.data["Brand_Mapping"] || [];
+                const match = mappingRows.find(r => 
+                    String(r["Master Workbook Legacy Name"] || '').trim().toLowerCase() === clean.toLowerCase()
+                );
+                return match ? String(match["Standardized POS Name (CSV)"] || '').trim() : clean;
+            };
+
+            // ==========================================
+            // [MOD_STATE] - Global State & Reactive Variables
+            // ==========================================
+            // --- BRAND DIRECTORY STATE ---
+            const masterBrands = ref(
+                Object.keys(emailMapping).map((vendor, index) => ({
+                    id: `brand_${index}`,
+                    vendor: vendor,
+                    rep: '',
+                    email: emailMapping[vendor],
+                    treesName: vendor,
+                    distributor: ''
+                }))
+            );
+            const selectedBrands = ref([]);
+            
+            const allBrandsSelected = computed(() => {
+                return masterBrands.value.length > 0 && selectedBrands.value.length === masterBrands.value.length;
+            });
+            
+            const toggleAllBrands = () => {
+                if (allBrandsSelected.value) selectedBrands.value = [];
+                else selectedBrands.value = masterBrands.value.map(b => b.id);
+            };
+
+            const deleteSelectedBrands = () => {
+                if (selectedBrands.value.length === 0) return;
+                if (confirm(`Are you sure you want to delete these ${selectedBrands.value.length} brands?`)) {
+                    masterBrands.value = masterBrands.value.filter(b => !selectedBrands.value.includes(b.id));
+                    selectedBrands.value = [];
+                }
+            };
+
+            const updateBrandField = (brandId, fieldName, event) => {
+                const brand = masterBrands.value.find(b => b.id === brandId);
+                if (brand) {
+                    brand[fieldName] = event.target.value;
+                }
+            };
+
+            const exportVendorsAndBrandsCSV = () => {
+                if (masterBrands.value.length === 0) return alert("No brands to export");
+                let csvContent = "Brand,Rep,Email,TREES Name,Distributor\n";
+                masterBrands.value.forEach(b => {
+                    csvContent += `"${b.vendor}","${b.rep}","${b.email}","${b.treesName}","${b.distributor}"\n`;
+                });
+                const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement("a"); link.setAttribute("href", url); link.setAttribute("download", `Brand_Directory_${new Date().getFullYear()}.csv`);
+                document.body.appendChild(link); link.click(); document.body.removeChild(link); setTimeout(() => URL.revokeObjectURL(url), 150);
+            };
+
+            // --- WORKBOOK SCHEMA & VIEWER STATE ---
+            const workbookSchema = {
+                "Board Recon - Red Bluff": ["Red Bluff - YTD Promo Reconciliation", "Gross Promos Generated", "Store-Funded deductions", "Net Collectibles", "Sage Collected", "Monthly Outstanding", "YTD balances"],
+                "Board Recon - Redding": ["Redding - YTD Promo Reconciliation", "Gross Promos Generated", "Store-Funded deductions", "Net Collectibles", "Sage Collected", "Monthly Outstanding", "YTD balances"],
+                "YTD Dashboard": ["Month", "Master Tracked", "Treez Valid POS", "Sage Collected"],
+                "Brand_Mapping": ["Master Workbook Legacy Name", "Standardized POS Name (CSV)"],
+                "YTD Running Totals": ["Brand", "Redding", "Red-Bluff", "Running Total Promo Credits", "Combined Brand Total"],
+                "January 2026": ["Brand", "Redding", "Red-Bluff", "Date Requested", "Month promo credits were generated", "Promo Credits", "Date Applied", "Credits Approved", "Credits Rejected", "Treez Total"],
+                "February 2026": ["Brand", "Redding", "Red-Bluff", "Date Requested", "Month promo credits were generated", "Promo Credits", "Date Applied", "Credits Approved", "Credits Rejected", "Treez Total"],
+                "March 2026": ["Brand", "Redding", "Red-Bluff", "Date Requested", "Month promo credits were generated", "Promo Credits", "Date Applied", "Credits Approved", "Credits Rejected", "Treez Total"],
+                "April 2026": ["Brand", "Redding", "Red-Bluff", "Date Requested", "Month promo credits were generated", "Promo Credits", "Date Applied", "Credits Approved", "Credits Rejected", "Treez Total"],
+                "May 2026": ["Brand", "Redding", "Red-Bluff", "Date Requested", "Month promo credits were generated", "Promo Credits", "Date Applied", "Credits Approved", "Credits Rejected", "Treez Total"],
+                "June 2026": ["Brand", "Redding", "Red-Bluff", "Date Requested", "Month promo credits were generated", "Promo Credits", "Date Applied", "Credits Approved", "Credits Rejected", "Treez Total"],
+                "July 2026": ["Brand", "Redding", "Red-Bluff", "Date Requested", "Month promo credits were generated", "Promo Credits", "Date Applied", "Credits Approved", "Credits Rejected", "Treez Total"],
+                "August 2026": ["Brand", "Redding", "Red-Bluff", "Date Requested", "Month promo credits were generated", "Promo Credits", "Date Applied", "Credits Approved", "Credits Rejected", "Treez Total"],
+                "September 2026": ["Brand", "Redding", "Red-Bluff", "Date Requested", "Month promo credits were generated", "Promo Credits", "Date Applied", "Credits Approved", "Credits Rejected", "Treez Total"],
+                "October 2026": ["Brand", "Redding", "Red-Bluff", "Date Requested", "Month promo credits were generated", "Promo Credits", "Date Applied", "Credits Approved", "Credits Rejected", "Treez Total"],
+                "November 2026": ["Brand", "Redding", "Red-Bluff", "Date Requested", "Month promo credits were generated", "Promo Credits", "Date Applied", "Credits Approved", "Credits Rejected", "Treez Total"],
+                "December 2026": ["Brand", "Redding", "Red-Bluff", "Date Requested", "Month promo credits were generated", "Promo Credits", "Date Applied", "Credits Approved", "Credits Rejected", "Treez Total"],
+                "Store Macro Summary": ["Store", "YTD Generated (POS)", "YTD Received (GL)", "Outstanding Balance"],
+                "Redding Store Audit": ["Brand", "Store", "YTD Generated (POS)", "YTD Received (GL)", "Outstanding Balance"],
+                "Red Bluff Store Audit": ["Brand", "Store", "YTD Generated (POS)", "YTD Received (GL)", "Outstanding Balance"],
+                "GL Raw by Store": ["Posted dt.", "Store", "Location", "Memo/Description", "Mapped Brand", "Credit"],
+                "Monthly Vendor Variance Report": ["Brand", "January Generated", "January Collected", "January Left on Table", "February Generated", "February Collected", "February Left on Table", "March Generated", "March Collected", "March Left on Table", "April Generated", "April Collected", "April Left on Table", "May Generated", "May Collected", "May Left on Table", "June Generated", "June Collected", "June Left on Table", "July Generated", "July Collected", "July Left on Table", "August Generated", "August Collected", "August Left on Table", "September Generated", "September Collected", "September Left on Table", "October Generated", "October Collected", "October Left on Table", "November Generated", "November Collected", "November Left on Table", "December Generated", "December Collected", "December Left on Table", "YTD Generated", "YTD Collected", "YTD Left on Table"],
+                "Sheet1": ["Vendor", "Credit Type", "Dates", "Distributor", "Credit amount $$$"]
+            };
+
+            const activeWorkbookHeaders = computed(() => {
+                const rows = masterWorkbook.value?.data?.[activeWorkbookSheet.value] || [];
+                if (rows.length === 0) return workbookSchema[activeWorkbookSheet.value] || [];
+                const keys = new Set();
+                rows.slice(0, 10).forEach(row => {
+                    Object.keys(row).forEach(k => { if (k !== '__rowNum__' && !k.startsWith('EMPTY')) keys.add(k); });
+                });
+                return Array.from(keys);
+            });
+
+            // --- PHASE 3: AUDIT & REPORTING VIEWS ---
+
+            // 1. Definitive Brand Metrics (Cross-reference logic)
+            const definitiveBrandMetrics = computed(() => {
+                const metrics = {};
+                const workbookData = masterWorkbook.value?.data;
+                if (!workbookData) return metrics;
+
+                const sheetsToScan = Object.keys(workbookData).filter(s => s.includes('2026') || s.includes('YTD'));
+                
+                sheetsToScan.forEach(sheetName => {
+                    const rows = workbookData[sheetName] || [];
+                    rows.forEach(row => {
+                        const vendor = getStandardizedBrandName(row["Brand"] || row[0]);
+                        if (!vendor || vendor.toLowerCase().includes('total')) return;
+
+                        if (!metrics[vendor]) {
+                            metrics[vendor] = { generated: 0, applied: 0, outstanding: 0, promos: [] };
+                        }
+
+                        // Just a simplistic accumulator for the standalone version based on raw row fields
+                        const rowKeys = Object.keys(row);
+                        const redBluffKey = rowKeys.find(k => k.trim().toLowerCase().includes('red') && k.trim().toLowerCase().includes('bluff'));
+                        const reddingKey = rowKeys.find(k => k.trim().toLowerCase() === 'redding');
+                        const appliedKey = rowKeys.find(k => k.toLowerCase().includes('approved') || k.toLowerCase().includes('applied') || k.toLowerCase().includes('collected'));
+                        
+                        const rbAmt = parseFloat(String(row[redBluffKey] || 0).replace(/[^0-9.-]+/g, '')) || 0;
+                        const rdAmt = parseFloat(String(row[reddingKey] || 0).replace(/[^0-9.-]+/g, '')) || 0;
+                        const appliedAmt = parseFloat(String(row[appliedKey] || 0).replace(/[^0-9.-]+/g, '')) || 0;
+
+                        if (rbAmt > 0 || rdAmt > 0) {
+                            metrics[vendor].generated += (rbAmt + rdAmt);
+                            metrics[vendor].applied += appliedAmt;
+                        }
+                    });
+                });
+
+                Object.keys(metrics).forEach(v => {
+                    metrics[v].outstanding = metrics[v].generated - metrics[v].applied;
+                });
+                
+                return metrics;
+            });
+
+            // 2. Brand Audit Data
+            const auditRange = ref({ start: '', end: '' });
+            const brandAuditData = computed(() => {
+                const metrics = definitiveBrandMetrics.value;
+                const results = [];
+                
+                // Merge with our local masterBrands list
+                masterBrands.value.forEach(brand => {
+                    const m = metrics[getStandardizedBrandName(brand.vendor)] || { generated: 0, applied: 0, outstanding: 0 };
+                    
+                    results.push({
+                        vendor: brand.vendor,
+                        rep: brand.rep || '-',
+                        generated: m.generated,
+                        collected: m.applied,
+                        outstanding: m.outstanding
+                    });
+                });
+
+                // Add vendors found in metrics but missing from the master list
+                Object.keys(metrics).forEach(vendor => {
+                    if (!results.find(r => r.vendor === vendor)) {
+                        results.push({
+                            vendor: vendor,
+                            rep: '-',
+                            generated: metrics[vendor].generated,
+                            collected: metrics[vendor].applied,
+                            outstanding: metrics[vendor].outstanding
+                        });
+                    }
+                });
+
+                return results.sort((a, b) => b.outstanding - a.outstanding);
+            });
+
+            // 3. Sage Quarterly Audit Data
+            const sageAuditData = computed(() => {
+                const results = {};
+                
+                // Get Generated from POS (Treez)
+                inMemoryLedgerEvents.value.forEach(sale => {
+                    const targetIsBluff = (activeSite.value || '').toUpperCase().includes('BLUFF');
+                    const saleSite = detectSiteFromName(sale.site || sale.detectedSite || sale['Store Name'] || '');
+                    
+                    if (activeSite.value !== 'All' && saleSite !== activeSite.value) return;
+                    if (activeMonth.value !== 'All' && sale.month !== activeMonth.value) return;
+
+                    const vendor = getStandardizedBrandName(sale.brand || sale['Product Brand']);
+                    if (!vendor) return;
+
+                    if (!results[vendor]) results[vendor] = { brand: vendor, totalGenerated: 0, totalApplied: 0 };
+                    results[vendor].totalGenerated += Number(sale.amount ?? sale.owed ?? sale.creditOwed ?? 0);
+                });
+
+                // Get Applied from GL (Sage)
+                localWorkbookState.sageData.forEach(gl => {
+                    const targetIsBluff = (activeSite.value || '').toUpperCase().includes('BLUFF');
+                    const glSite = detectSiteFromName(gl.Store || gl.site || '');
+                    
+                    if (activeSite.value !== 'All' && glSite !== activeSite.value) return;
+                    // Note: GL usually doesn't map perfectly to month without date parsing, keeping simple for audit
+                    
+                    const vendor = getStandardizedBrandName(gl['Mapped Brand'] || gl.brand);
+                    if (!vendor) return;
+
+                    if (!results[vendor]) results[vendor] = { brand: vendor, totalGenerated: 0, totalApplied: 0 };
+                    results[vendor].totalApplied += Number(gl.amount ?? gl.Credit ?? 0);
+                });
+
+                return Object.values(results).sort((a, b) => (b.totalGenerated - b.totalApplied) - (a.totalGenerated - a.totalApplied));
+            });
+
+            // 4. Monthly Report Summaries
+            const monthlyReportSummaries = computed(() => {
+                const results = [];
+                const targetMonth = activeMonth.value;
+                const monthsToProcess = targetMonth === 'All' ? calendarMonths : [targetMonth];
+
+                monthsToProcess.forEach(month => {
+                    const brandMap = {};
+                    let monthTotal = 0;
+
+                                        // Aggregate POS Data (Treez)
+                    inMemoryLedgerEvents.value.forEach(sale => {
+                        if (sale.type !== 'GENERATED') return;
+                        if (sale.isolation_month !== month) return;
+                        
+                        if (activeSite.value !== 'All' && sale.site !== activeSite.value) return;
+
+                        const promoTitle = sale.discountTitle;
+                        if (!globalPromoFilters.value.includes(promoTitle)) return; // Excluded by filter
+
+                        const vendor = getStandardizedBrandName(sale.brand);
+                        if (!vendor) return;
+
+                        if (!brandMap[vendor]) {
+                            const email = masterBrands.value.find(b => b.vendor === vendor)?.email || '';
+                            brandMap[vendor] = { vendor, email, total: 0, credits: [] };
+                        }
+
+                        const amt = sale.amount;
+                        brandMap[vendor].total += amt;
+                        brandMap[vendor].credits.push({
+                            id: sale.id,
+                            creditType: promoTitle,
+                            amount: amt
+                        });
+                        
+                        monthTotal += amt;
+                    });
+
+                    // Aggregate GL Recoveries (Sage) to offset/show applied if needed (Simplified for standalone)
+                    
+                    const brandList = Object.values(brandMap).sort((a, b) => b.total - a.total);
+                    
+                    if (brandList.length > 0) {
+                        results.push({
+                            month,
+                            total: monthTotal,
+                            count: brandList.reduce((acc, b) => acc + b.credits.length, 0),
+                            brandList
+                        });
+                    }
+                });
+
+                return results;
+            });
+
+            // ==========================================
+            // [MOD_ENGINE] - Core Audit & Filtering Engine
+            // ==========================================
+            // --- PHASE 2: ENTITY EXTRACTION & GLOBAL FILTERING ---
+
+            // 1. Extract Promo Credits from the Workbook
+            const promoCredits = computed(() => {
+                const allCredits = [];
+                if (!masterWorkbook.value || !masterWorkbook.value.data) return [];
+                Object.keys(masterWorkbook.value.data).forEach(sheetName => {
+                    if (sheetName.includes('2026')) {
+                        const monthName = sheetName.split(' ')[0];
+                        const rows = masterWorkbook.value.data[sheetName] || [];
+                        rows.forEach((row, idx) => {
+                            const vendor = row["Brand"] || row[0];
+                            if (!vendor || vendor === "Brand" || vendor.toLowerCase().includes('total')) return;
+                            ["Redding", "Red-Bluff"].forEach(siteKey => {
+                                const siteName = siteKey === "Red-Bluff" ? "Red Bluff" : "Redding";
+                                let rawAmt = 0;
+                                const rowKeys = Object.keys(row);
+                                const exactKey = rowKeys.find(k => k.trim().toLowerCase() === siteName.toLowerCase() || k.trim().toLowerCase() === siteKey.toLowerCase());
+                                
+                                if (exactKey) {
+                                    const val = String(row[exactKey]).trim().toLowerCase();
+                                    if (val === 'x') {
+                                        const promoKey = rowKeys.find(k => k.toLowerCase().includes('promo credits'));
+                                        rawAmt = row[promoKey] || 0;
+                                    } else {
+                                        rawAmt = row[exactKey];
+                                    }
+                                } else if (siteKey === "Redding" && row["Redding"] !== undefined) {
+                                    rawAmt = row["Redding"];
+                                } else if (siteKey === "Red-Bluff" && row["Red-Bluff"] !== undefined) {
+                                    rawAmt = row["Red-Bluff"];
+                                }
+                                
+                                const amt = parseFloat(String(rawAmt || 0).replace(/[^0-9.-]+/g,"")) || 0;
+                                if (amt > 0) {
+                                    const approvedKey = rowKeys.find(k => k.toLowerCase().includes('approved') || k.toLowerCase().includes('applied') || k.toLowerCase().includes('collected'));
+                                    const approvedAmt = parseFloat(String(row[approvedKey] || row["Credits Approved"] || 0).replace(/[^0-9.-]+/g,"")) || 0;
+                                    const dateKey = rowKeys.find(k => k.toLowerCase().includes('date') && (k.toLowerCase().includes('applied') || k.toLowerCase().includes('received')));
+                                    const isApplied = (approvedAmt > 0) || (!!row[dateKey] && row[dateKey] !== 'N/A') || (!!row["Date Applied"] && row["Date Applied"] !== 'N/A');
+                                    
+                                    allCredits.push({
+                                        id: `${sheetName}-${idx}-${siteKey}`, 
+                                        site: siteName,
+                                        trackingMonth: monthName,
+                                        vendor: vendor,
+                                        amount: amt,
+                                        creditType: row["Promo Credits"] || 'Promo',
+                                        dateRequested: row["Date Requested"] || '',
+                                        dateReceived: row[dateKey] || row["Date Applied"] || '',
+                                        status: isApplied ? "Applied" : "Pending",
+                                        archived: false,
+                                        distributor: 'Workbook Sync', 
+                                        workbookRef: { sheet: sheetName, rowIdx: idx }
+                                    });
+                                }
+                            });
+                        });
+                    }
+                });
+                return allCredits;
+            });
+
+            // 2. Filtered Credits for the Tracker Tab
+            const filteredCredits = computed(() => {
+                let base = promoCredits.value.filter(c => c.site === activeSite.value && !c.isVarianceOnly);
+                if (activeMonth.value !== 'All') {
+                    base = base.filter(c => c.trackingMonth === activeMonth.value);
+                }
+                if (searchQueryInput.value) {
+                    const q = searchQueryInput.value.toLowerCase();
+                    base = base.filter(c => 
+                        (c.vendor && c.vendor.toLowerCase().includes(q)) ||
+                        (c.distributor && c.distributor.toLowerCase().includes(q))
+                    );
+                }
+                return base.sort((a, b) => (a.vendor || '').localeCompare(b.vendor || ''));
+            });
+
+            const totalPending = computed(() => filteredCredits.value.filter(c => c.status === 'Pending').reduce((sum, c) => sum + (parseFloat(c.amount) || 0), 0));
+            const totalApplied = computed(() => filteredCredits.value.filter(c => c.status === 'Applied').reduce((sum, c) => sum + (parseFloat(c.amount) || 0), 0));
+
+            const filteredTreesSalesData = computed(() => {
+                let base = treesSalesData.value; 
+                if (activeMonth.value !== 'All') base = base.filter(sale => sale.month === activeMonth.value);
+                if (searchQueryInput.value) {
+                    const q = searchQueryInput.value.toLowerCase();
+                    base = base.filter(sale => (sale.brand || '').toLowerCase().includes(q) || (sale.productName || '').toLowerCase().includes(q) || (sale.discountTitle || '').toLowerCase().includes(q));
+                }
+                return base; // Sorting done by date in UI if needed
+            });
+
+            const displayTreesSalesData = computed(() => filteredTreesSalesData.value.slice(0, 100));
+            const unsyncedSalesCount = computed(() => filteredTreesSalesData.value.filter(s => s.status === 'Unsynced').length);
+
+            // 3. Global Promo Engine
+            const allAvailablePromos = computed(() => {
+                const rawRecords = treesSalesData.value || [];
+                const targetIsBluff = (activeSite.value || '').toUpperCase().includes('BLUFF');
+                const targetMonth = activeMonth.value;
+                const promos = rawRecords.filter(e => {
+                    const s = (e.site || e.detectedSite || e['Store Name'] || e.Location || '').toUpperCase();
+                    const isBluff = (str) => str.includes('BLUFF') || str.includes('RB') || str.includes('E12');
+                    const isRedding = (str) => (str.includes('REDDING') || str.includes('RD') || str.includes('E11')) && !str.includes('BLUFF');
+                    const siteMatch = activeSite.value === 'All' || (targetIsBluff ? isBluff(s) : isRedding(s));
+                    
+                    const monthName = e.month || detectMonthFromDate(e.dateClosed || e['Date Closed'] || e.date || '');
+                    const monthMatch = targetMonth === 'All' || monthName === targetMonth;
+                    
+                    return siteMatch && monthMatch;
+                }).map(e => e.discountTitle || e['Discount Title'] || e.promoType || e.Discount_Title).filter(Boolean);
+                return [...new Set(promos)].sort();
+            });
+
+            const globalPromoFilters = ref([]);
+            
+            // Watch changes and auto-exclude internal promotions
+            Vue.watch(allAvailablePromos, (newPromos) => {
+                const storeFundedRegex = /EMPLOYEE|FIRST TIME|FTP|SENIOR|VETERAN|STATE MEDICAL|STORE CREDIT/i;
+                globalPromoFilters.value = newPromos.filter(promo => !storeFundedRegex.test(promo));
+            }, { immediate: true });
+
+            const toggleGlobalPromo = (promoTitle) => {
+                const idx = globalPromoFilters.value.indexOf(promoTitle);
+                if (idx > -1) {
+                    globalPromoFilters.value.splice(idx, 1); 
+                } else {
+                    globalPromoFilters.value.push(promoTitle); 
+                }
+            };
+
+            const setAllGlobalPromos = (selectAll) => {
+                if (selectAll) {
+                    globalPromoFilters.value = [...allAvailablePromos.value];
+                } else {
+                    globalPromoFilters.value = [];
+                }
+            };
+
+            const getFilteredBrandTotal = (brand) => {
+                const rawRecords = treesSalesData.value || [];
+                const brandName = (brand.name || brand.vendor || '').toUpperCase();
+                const cleanTarget = brandName.replace(/[^A-Z0-9]/g, '');
+                const targetIsBluff = (activeSite.value || '').toUpperCase().includes('BLUFF');
+                const targetMonth = activeMonth.value;
+                const selected = globalPromoFilters.value;
+
+                const brandRecords = rawRecords.filter(e => {
+                    const b = (e.brand || e['Product Brand'] || e.vendor || '').toUpperCase();
+                    const cleanB = b.replace(/[^A-Z0-9]/g, '');
+                    const s = (e.site || e.detectedSite || e['Store Name'] || '').toUpperCase();
+                    const promo = e.discountTitle || e['Discount Title'] || e.promoType || '';
+                    const brandMatch = cleanB === cleanTarget || cleanB.includes(cleanTarget) || cleanTarget.includes(cleanB);
+                    
+                    const isBluff = (str) => str.includes('BLUFF') || str.includes('RB') || str.includes('E12');
+                    const isRedding = (str) => (str.includes('REDDING') || str.includes('RD') || str.includes('E11')) && !str.includes('BLUFF');
+                    const siteMatch = activeSite.value === 'All' || (targetIsBluff ? isBluff(s) : isRedding(s));
+                    
+                    const monthName = e.month || detectMonthFromDate(e.dateClosed || e['Date Closed'] || e.date || '');
+                    const monthMatch = targetMonth === 'All' || monthName === targetMonth;
+                    
+                    const promoMatch = selected.includes(promo);
+                    return brandMatch && siteMatch && monthMatch && promoMatch;
+                });
+
+                if (brandRecords.length === 0) {
+                    if (selected && selected.length > 0) return Number(brand.total || 0);
+                    return 0;
+                }
+
+                return brandRecords.reduce((sum, e) => {
+                    const val = Number(e.amount ?? e.owed ?? e.creditOwed ?? e.Vendor_Credit_Owed ?? 0);
+                    return sum + val;
+                }, 0);
+            };
+
+            const masterLedgerData = computed(() => {
+                const map = {};
+                const allEvents = [...treesSalesData.value, ...localWorkbookState.sageData.map(s => ({
+                    brand: s['Mapped Brand'] || s.brand || 'Unmapped',
+                    site: s.Store || s.site || '',
+                    amount: s.amount,
+                    type: 'RECOVERY',
+                    isolation_month: activeMonth.value
+                }))];
+
+                allEvents.forEach(e => {
+                    const b = e.brand || 'Unknown';
+                    if (!map[b]) map[b] = { vendor: b, site: activeSite.value, generated: 0, recovered: 0, outstanding: 0, variance: 0, recoveryEvents: [] };
+                    if (e.type === 'GENERATED') map[b].generated += e.amount;
+                    if (e.type === 'RECOVERY') {
+                        map[b].recovered += e.amount;
+                        map[b].recoveryEvents.push({ date: e.date || 'N/A', ref: e.memo || 'GL', amount: e.amount });
+                    }
+                });
+
+                return Object.values(map).map(v => {
+                    v.outstanding = v.generated - v.recovered;
+                    return v;
+                }).sort((a, b) => b.outstanding - a.outstanding);
+            });
+
+            const ledgerTotals = computed(() => {
+                return masterLedgerData.value.reduce((acc, curr) => {
+                    acc.generated += curr.generated;
+                    acc.recovered += curr.recovered;
+                    acc.outstanding += curr.outstanding;
+                    return acc;
+                }, { generated: 0, recovered: 0, outstanding: 0, variance: 0 });
+            });
+
+            // ==========================================
+            // [MOD_EXPORT] - CSV, PDF & Workbook Sync Genera
