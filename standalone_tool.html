@@ -430,16 +430,79 @@ Search for the [TAG] to jump to the exact module.
         return match ? String(match["Standardized POS Name (CSV)"] || '').trim() : clean;
     };
 
-    const DISTRIBUTOR_ALIASES = {
-        'NABI': 'STIIIZY',
-        'NABIFIVE': 'STIIIZY'
+        const escapeRegExp = (str) => String(str).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const hasWordMatch = (text, keyword) => {
+        if (!text || !keyword) return false;
+        const regex = new RegExp(`\\b${escapeRegExp(keyword.toUpperCase().trim())}\\b`, 'i');
+        return regex.test(text);
     };
     
+    const MULTI_BRAND_DISTRIBUTORS = [
+        {
+            name: 'Nabifive LLC (Nabis)',
+            distributorPatterns: ['NABIFIVE LLC', 'NABIFIVE', 'NABIS'],
+            poolLabel: 'Nabifive LLC (Unallocated Pool)',
+            childBrands: [
+                { patterns: ['OBER SLUGGERS', 'SLUGGERS'], brand: 'Sluggers' },
+                { patterns: ['HEADY HEADS'], brand: 'Heady Heads' },
+                { patterns: ['RAW GARDEN'], brand: 'Raw Garden' },
+                { patterns: ['FARM CUT'], brand: 'Farm Cut' },
+                { patterns: ['HALFPIPE'], brand: 'Halfpipe' },
+                { patterns: ['SMOKIEZ'], brand: 'Smokiez' },
+                { patterns: ['STIIIZY'], brand: 'STIIIZY' },
+                { patterns: ['DOMPEN'], brand: 'Dompen' },
+                { patterns: ['MAVEN'], brand: 'Maven' },
+                { patterns: ['SAUCE'], brand: 'Sauce' },
+                { patterns: ['PUFF'], brand: 'Puff' },
+                { patterns: ['ICED'], brand: 'Iced' },
+                { patterns: ['CIZI'], brand: 'CIZI' },
+                { patterns: ['KOA'], brand: 'KOA' },
+                { patterns: ['WCT'], brand: 'WCT' }
+            ]
+        },
+        {
+            name: 'Kiva Sales & Services',
+            distributorPatterns: ['KIVA SALES & SERVICES', 'KIVA SALES'],
+            poolLabel: 'Kiva Sales & Services (Unallocated Pool)',
+            childBrands: [
+                { patterns: ["UNCLE ARNIE'S", "UNCLE ARNIES"], brand: "Uncle Arnie's" },
+                { patterns: ["BIG PETE'S", "BIG PETES"], brand: "Big Pete's" },
+                { patterns: ['TIME MACHINE'], brand: 'Time Machine' },
+                { patterns: ['EMERALD SKY'], brand: 'Emerald Sky' },
+                { patterns: ['CLSICS'], brand: 'CLSICS' },
+                { patterns: ['KEEF'], brand: 'Keef' },
+                { patterns: ['KIVA'], brand: 'Kiva' }
+            ]
+        }
+    ];
+
+    const DIRECT_AND_SPECIALIZED_DISTRIBUTORS = [
+        { patterns: ['EMERALD BAY EXTRACTS'], brand: 'Emerald Bay Extracts' },
+        { patterns: ['UPNORTH DISTRIBUTION', 'GLOBS LIVE RESIN', 'UPNORTH'], brand: 'UpNorth' },
+        { patterns: ['CLEANLINE MANAGEMENT LLC', 'CLEANLINE MANAGEMENT', 'VUZE'], brand: 'Vuze' },
+        { patterns: ['FLUIDS MANUFACTURING INC', 'FLUIDS MANUFACTURING', 'FARM'], brand: 'Farm' },
+        { patterns: ['PCG INDUSTRIES, INC', 'PCG INDUSTRIES', 'PURPLE CITY'], brand: 'Purple City' },
+        { patterns: ['GF DISTRIBUTION LLC', 'GF DISTRIBUTION', 'GRAMLIN'], brand: 'Gramlin' },
+        { patterns: ['KORBEN LABS LLC', 'KORBEN LABS'], brand: 'Korben Labs' },
+        { patterns: ['MELI LBC INC', 'MELI LBC', 'PISTIL WHIP'], brand: 'Pistil Whip' },
+        { patterns: ['BUD TECHNOLOGY', 'DIME'], brand: 'Dime' },
+        { patterns: ['ERRL HILL LLC', 'ERRL HILL'], brand: 'Errl Hill' },
+        { patterns: ['OAKFRUITLAND'], brand: 'Oakfruitland' }
+    ];
+
     const resolveBrandFromSageMemo = (rawMemo, workbookData = null, brandDirectory = []) => {
         if (!rawMemo) return 'Unmapped';
         const upperMemo = String(rawMemo).toUpperCase().trim();
         
-        // 1. Check Brand_Mapping sheet in Master Workbook (substring match across legacy/vendor/distributor columns)
+        // Strip distributor headers before child-brand keyword checks so "KIVA SALES & SERVICES" doesn't falsely match "Kiva"
+        let strippedMemo = upperMemo;
+        for (const dist of MULTI_BRAND_DISTRIBUTORS) {
+            for (const dp of dist.distributorPatterns) {
+                strippedMemo = strippedMemo.replace(new RegExp(`\\b${escapeRegExp(dp)}\\b`, 'gi'), ' ');
+            }
+        }
+        
+        // 1. Check explicit Brand_Mapping sheet in Master Workbook (word-boundary match)
         const mappingRows = (workbookData && workbookData["Brand_Mapping"]) ? workbookData["Brand_Mapping"] : [];
         for (const row of mappingRows) {
             const stdName = String(row["Standardized POS Name (CSV)"] || '').trim();
@@ -447,7 +510,6 @@ Search for the [TAG] to jump to the exact module.
             
             const candidates = [
                 row["Master Workbook Legacy Name"],
-                row["Distributor"],
                 row["Vendor"],
                 row["Alias"],
                 stdName
@@ -455,29 +517,46 @@ Search for the [TAG] to jump to the exact module.
             
             for (const cand of candidates) {
                 const cleanCand = String(cand).toUpperCase().trim();
-                if (cleanCand.length >= 3 && upperMemo.includes(cleanCand)) {
+                if (cleanCand.length >= 3 && hasWordMatch(strippedMemo, cleanCand)) {
                     return stdName;
                 }
             }
         }
         
-        // 2. Check Brand Directory (masterBrands) for vendor or distributor match
+        // 2. Check specific child brands of Multi-Brand Distributors (longest-first ordering prevents "Farm Cut" -> "Farm")
+        for (const dist of MULTI_BRAND_DISTRIBUTORS) {
+            for (const entry of dist.childBrands) {
+                for (const pattern of entry.patterns) {
+                    if (hasWordMatch(strippedMemo, pattern)) {
+                        return getStandardizedBrandName(entry.brand, workbookData);
+                    }
+                }
+            }
+        }
+        
+        // 3. Check 1:1 Specialized Distributors & Direct-to-Brand Invoices
+        for (const entry of DIRECT_AND_SPECIALIZED_DISTRIBUTORS) {
+            for (const pattern of entry.patterns) {
+                if (hasWordMatch(upperMemo, pattern)) {
+                    return getStandardizedBrandName(entry.brand, workbookData);
+                }
+            }
+        }
+        
+        // 4. Check Brand Directory (masterBrands) for user-added vendor matches
         for (const entry of (brandDirectory || [])) {
             const vendorName = String(entry.vendor || '').trim();
-            const distName = String(entry.distributor || entry.parentCompany || '').toUpperCase().trim();
-            
-            if (distName.length >= 3 && upperMemo.includes(distName)) {
-                return getStandardizedBrandName(vendorName, workbookData);
-            }
-            if (vendorName.length >= 3 && upperMemo.includes(vendorName.toUpperCase())) {
+            if (vendorName.length >= 3 && hasWordMatch(strippedMemo, vendorName)) {
                 return getStandardizedBrandName(vendorName, workbookData);
             }
         }
         
-        // 3. Check explicit distributor alias map
-        for (const [distKey, mappedBrand] of Object.entries(DISTRIBUTOR_ALIASES)) {
-            if (upperMemo.includes(distKey)) {
-                return getStandardizedBrandName(mappedBrand, workbookData);
+        // 5. Fallback to Multi-Brand Distributor Unallocated Pool if invoice only names the distributor
+        for (const dist of MULTI_BRAND_DISTRIBUTORS) {
+            for (const dp of dist.distributorPatterns) {
+                if (hasWordMatch(upperMemo, dp)) {
+                    return dist.poolLabel;
+                }
             }
         }
         
@@ -584,7 +663,7 @@ Search for the [TAG] to jump to the exact module.
                 });
             });
         },
-                                ingestSageGLCSV: async (file) => {
+                                        ingestSageGLCSV: async (file) => {
             const text = await file.text();
             return new Promise((resolve) => {
                 Papa.parse(text, {
@@ -593,21 +672,33 @@ Search for the [TAG] to jump to the exact module.
                     complete: (res) => {
                         const cleaned = res.data
                             .map((r, idx) => {
-                                const memo = r['Memo/Description'] || '';
-                                const amt = csvService.cleanCurrency(r['Credit'] || 0);
+                                const postedDt = String(r['Posted dt.'] || '').trim();
+                                const lowerDt = postedDt.toLowerCase();
+                                if (!postedDt || lowerDt.includes('balance forward') || lowerDt.includes('total')) {
+                                    return null;
+                                }
+                                const detectedMonth = detectMonthFromDate(postedDt);
+                                if (!detectedMonth) return null;
+                                const memo = String(r['Memo/Description'] || '').trim();
+                                const docNum = String(r['Doc'] || '').trim();
+                                const creditAmt = csvService.cleanCurrency(r['Credit'] || 0);
+                                const debitAmt = csvService.cleanCurrency(r['Debit'] || 0);
+                                const netAmt = creditAmt - debitAmt;
+                                if (netAmt === 0) return null;
                                 return {
                                     id: `sage_${idx}`,
                                     ...r,
                                     type: 'RECOVERY',
-                                    amount: amt,
-                                    site: detectSiteFromName(r['Location'] || ''),
-                                    date: r['Posted dt.'] || '',
+                                    amount: netAmt,
+                                    site: detectSiteFromName(r['Location'] || memo),
+                                    date: postedDt,
+                                    doc: docNum,
                                     memo: memo,
                                     brand: r['Mapped Brand'] || memo,
-                                    isolation_month: detectMonthFromDate(r['Posted dt.']) || 'Unknown'
+                                    isolation_month: detectedMonth
                                 };
                             })
-                            .filter(r => r.amount > 0);
+                            .filter(Boolean);
                         localWorkbookState.sageData = cleaned;
                         resolve(cleaned);
                     }
@@ -1260,11 +1351,14 @@ return !title.includes('CUSTOM PRICE ADJUSTMENT');
                             }
                         });
                     });
-                    localTreezStatus.value = `Loaded (${rows.length} rows)`;
+                                        localTreezStatus.value = `Loaded (${rows.length} rows)`;
                     treesSalesData.value = rows;
                 } catch (err) {
                     alert(err.message);
-                } finally { isProcessing.value = false; }
+                } finally { 
+                    isProcessing.value = false;
+                    e.target.value = '';
+                }
             };
 
                         const handleLocalSageUpload = async (e) => {
@@ -1272,10 +1366,13 @@ return !title.includes('CUSTOM PRICE ADJUSTMENT');
                 if (!file) return;
                 isGlobalLoading.value = true;
                 try {
-                    const rows = await workbookService.ingestSageGLCSV(file);
+                                        const rows = await workbookService.ingestSageGLCSV(file);
                     localSageStatus.value = `Loaded (${rows.length} rows)`;
                     ledgerEventsList.value = rows;
-                } finally { isGlobalLoading.value = false; }
+                } finally { 
+                    isGlobalLoading.value = false;
+                    e.target.value = '';
+                }
             };
 
                         // ==========================================
@@ -1836,24 +1933,62 @@ if (targetVendor !== 'All' && eBrand !== targetVendor) return;
 if (e.type === 'GENERATED') monthGen += (Number(e.amount) || 0);
 if (e.type === 'RECOVERY') monthApp += (Number(e.amount) || 0);
 });
-// 2. Pull from Historical Master Workbook (Additive YTD tracking)
+// 2. Pull from Historical Master Workbook ("Collected" / "Applied" / "Recovered" columns)
 if (masterWorkbook.value && masterWorkbook.value.data) {
-const sheetName = `${m} 2026`;
-const historicalRows = masterWorkbook.value.data[sheetName] || [];
-historicalRows.forEach(row => {
-const rowBrand = getStandardizedBrandName(row["Brand"] || row[0], masterWorkbook.value?.data);
-if (targetVendor !== 'All' && rowBrand !== targetVendor) return;
-// Add historical POS (Generated)
-if (targetSite === 'Redding' || targetSite === 'All') monthGen += (Number(row["Redding"] || row[1]) || 0);
-if (targetSite === 'Red Bluff' || targetSite === 'All') monthGen += (Number(row["Red-Bluff"] || row[2]) || 0);
-// Add historical Sage (Applied / Recovered)
-const keys = Object.keys(row);
-const appKey = keys.find(k => k.toLowerCase().includes('applied') || k.toLowerCase().includes('recovered'));
-if (appKey) {
-monthApp += (Number(row[appKey]) || 0);
-} else if (row[4] !== undefined && !isNaN(Number(row[4]))) { 
-monthApp += (Number(row[4]) || 0); // Fallback to 5th column if standard report
+const monthShort = m.slice(0, 3).toLowerCase();
+const monthFull = m.toLowerCase();
+Object.entries(masterWorkbook.value.data).forEach(([sheetName, rows]) => {
+if (!Array.isArray(rows) || rows.length === 0) return;
+const sLower = sheetName.toLowerCase();
+if (sLower.includes('mapping') || sLower.includes('directory') || sLower.includes('brand_list')) return;
+const sheetSite = detectSiteFromName(sheetName);
+if (targetSite !== 'All' && sheetSite && sheetSite !== targetSite) return;
+const isMonthSheet = sLower.includes(monthFull) || new RegExp(`\\b${monthShort}\\b`, 'i').test(sLower);
+const isGeneric2026Sheet = sLower.includes('2026') || sLower.includes('ytd') || sLower.includes('summary') || sLower.includes('master') || sLower.includes('collected');
+if (!isMonthSheet && !isGeneric2026Sheet) return;
+rows.forEach(row => {
+const rawRowBrand = row["Brand"] || row["Vendor"] || row["Product Brand"] || row[0];
+const rowBrand = getStandardizedBrandName(rawRowBrand, masterWorkbook.value?.data);
+if (!rowBrand || rowBrand.toLowerCase().includes('total')) return;
+if (targetVendor !== 'All' && rowBrand.toLowerCase() !== targetVendor.toLowerCase()) return;
+const rowSiteRaw = row["Location"] || row["Store"] || row["Site"] || '';
+const rowSite = detectSiteFromName(rowSiteRaw);
+if (targetSite !== 'All' && rowSite && rowSite !== targetSite) return;
+if (!isMonthSheet) {
+const rowPeriod = String(row["Period"] || row["Month"] || '').toLowerCase();
+if (rowPeriod) {
+if (!rowPeriod.includes(monthFull) && !rowPeriod.includes(monthShort)) return;
+} else {
+// Handle matrix/summary sheets where months are column headers (e.g. "Oct Collected", "October")
+const monthCols = Object.keys(row).filter(k => {
+const kl = k.toLowerCase();
+const matchesMonth = kl.includes(monthFull) || new RegExp(`\\b${monthShort}\\b`, 'i').test(kl);
+const matchesCredit = kl.includes('collected') || kl.includes('applied') || kl.includes('recovered') || sLower.includes('collected') || sLower.includes('applied');
+return matchesMonth && matchesCredit;
+});
+if (monthCols.length === 0) return;
+monthCols.forEach(mc => {
+const colSite = detectSiteFromName(mc);
+if (targetSite !== 'All' && colSite && colSite !== targetSite) return;
+const val = csvService.cleanCurrency(row[mc]);
+if (!isNaN(val) && val !== 0) monthApp += val;
+});
+return;
 }
+}
+// Extract Collected / Applied credits from monthly or period-filtered rows
+Object.keys(row).forEach(k => {
+const kl = k.toLowerCase();
+const isCreditCol = kl.includes('collected') || kl.includes('applied') || kl.includes('recovered');
+if (!isCreditCol) return;
+const colSite = detectSiteFromName(k);
+if (targetSite !== 'All' && colSite && colSite !== targetSite) return;
+const val = csvService.cleanCurrency(row[k]);
+if (!isNaN(val) && val !== 0) {
+monthApp += val;
+}
+});
+});
 });
 }
 const remaining = monthGen - monthApp;
@@ -1871,6 +2006,24 @@ if (ytdRemaining > 0) ytdStatus = 'Outstanding';
 if (ytdRemaining < 0) ytdStatus = 'Pending';
 if (ytdGenerated > 0 && ytdRemaining === 0) ytdStatus = 'Resolved';
 csvContent += `"YTD Total","${targetSite}","${targetVendor}","${ytdGenerated.toFixed(2)}","${ytdApplied.toFixed(2)}","${ytdRemaining.toFixed(2)}","${ytdStatus}"\n`;
+if (isSingleBrand) {
+const parentDist = MULTI_BRAND_DISTRIBUTORS.find(d =>
+d.childBrands.some(cb => getStandardizedBrandName(cb.brand, masterWorkbook.value?.data).toUpperCase() === targetVendor.toUpperCase())
+);
+if (parentDist) {
+const unallocatedPoolTotal = inMemoryLedgerEvents.value
+.filter(e => {
+if (e.type !== 'RECOVERY') return false;
+const eSite = detectSiteFromName(e.site || e.Store || '');
+if (targetSite !== 'All' && eSite !== targetSite) return false;
+return resolveBrandFromSageMemo(e.memo || e.brand, masterWorkbook.value?.data, masterBrands.value) === parentDist.poolLabel;
+})
+.reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
+if (unallocatedPoolTotal > 0) {
+csvContent += `"Note","${targetSite}","${targetVendor}","0.00","${unallocatedPoolTotal.toFixed(2)}","0.00","Unallocated ${parentDist.name} GL pool held separately (not double-counted)"\n`;
+}
+}
+}
 csvContent += "\n--- SECTION 2: ITEMIZED ACTIVITY GROUPED BY PROMOTION ---\n\n";
 // SECTION 2: ITEMIZED (Uses activeMonth filter)
 const rawSales = inMemoryLedgerEvents.value.filter(sale => {
