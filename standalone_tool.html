@@ -1428,59 +1428,49 @@ Search for the [TAG] to jump to the exact module.
 
             // 4. Monthly Report Summaries
             const monthlyReportSummaries = computed(() => {
-                const results = [];
-                const targetMonth = activeMonth.value;
-                const monthsToProcess = targetMonth === 'All' ? calendarMonths : [targetMonth];
-
-                monthsToProcess.forEach(month => {
-                    const brandMap = {};
-                    let monthTotal = 0;
-
-                                        // Aggregate POS Data (Treez)
-                    inMemoryLedgerEvents.value.forEach(sale => {
-                        if (sale.type !== 'GENERATED') return;
-                        if (sale.isolation_month !== month) return;
-                        
-                        if (activeSite.value !== 'All' && sale.site !== activeSite.value) return;
-
-                                                const promoTitle = sale.discountTitle;
-                        if (!globalPromoFilters.value.includes(promoTitle)) return; // Excluded by filter
-
-                        const vendor = getStandardizedBrandName(sale.brand, masterWorkbook.value?.data);
-                        if (!vendor) return;
-
-                        if (!brandMap[vendor]) {
-                            const email = masterBrands.value.find(b => b.vendor === vendor)?.email || '';
-                            brandMap[vendor] = { vendor, email, total: 0, credits: [] };
-                        }
-
-                        const amt = sale.amount;
-                        brandMap[vendor].total += amt;
-                        brandMap[vendor].credits.push({
-                            id: sale.id,
-                            creditType: promoTitle,
-                            amount: amt
-                        });
-                        
-                        monthTotal += amt;
-                    });
-
-                    // Aggregate GL Recoveries (Sage) to offset/show applied if needed (Simplified for standalone)
-                    
-                    const brandList = Object.values(brandMap).sort((a, b) => b.total - a.total);
-                    
-                    if (brandList.length > 0) {
-                        results.push({
-                            month,
-                            total: monthTotal,
-                            count: brandList.reduce((acc, b) => acc + b.credits.length, 0),
-                            brandList
-                        });
-                    }
-                });
-
-                return results;
-            });
+const results = [];
+const targetMonth = activeMonth.value;
+const monthsToProcess = targetMonth === 'All' ? calendarMonths : [targetMonth];
+monthsToProcess.forEach(month => {
+const brandMap = {};
+let monthTotal = 0;
+inMemoryLedgerEvents.value.forEach(sale => {
+if (sale.type !== 'GENERATED') return;
+if (sale.isolation_month !== month) return;
+// Safely resolve the site name
+const saleSite = detectSiteFromName(sale.site || '');
+if (activeSite.value !== 'All' && saleSite !== activeSite.value) return;
+const promoTitle = sale.discountTitle || 'Promo';
+if (!globalPromoFilters.value.includes(promoTitle)) return; // Excluded by filter
+// Safely resolve the standardized brand
+const rawBrand = sale.brand || 'Unmapped';
+const vendor = getStandardizedBrandName(rawBrand, masterWorkbook.value?.data) || rawBrand;
+if (!vendor) return;
+if (!brandMap[vendor]) {
+const email = masterBrands.value.find(b => b.vendor === vendor)?.email || '';
+brandMap[vendor] = { vendor, email, total: 0, credits: [] };
+}
+const amt = Number(sale.amount) || 0;
+brandMap[vendor].total += amt;
+brandMap[vendor].credits.push({
+id: sale.id,
+creditType: promoTitle,
+amount: amt
+});
+monthTotal += amt;
+});
+const brandList = Object.values(brandMap).sort((a, b) => b.total - a.total);
+if (brandList.length > 0) {
+results.push({
+month,
+total: monthTotal,
+count: brandList.reduce((acc, b) => acc + b.credits.length, 0),
+brandList
+});
+}
+});
+return results;
+});
 
             // ==========================================
             // [MOD_ENGINE] - Core Audit & Filtering Engine
