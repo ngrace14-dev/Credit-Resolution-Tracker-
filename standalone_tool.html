@@ -10,7 +10,7 @@
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
-    <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf.plugin.autotable.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Carlito:wght@400;700&display=swap" rel="stylesheet">
@@ -178,9 +178,13 @@
                     </button>
                 </div>
             </div>
-            <div class="relative w-full lg:w-80 shrink-0">
-                <i data-lucide="search" class="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
-                <input type="text" v-model="searchQueryInput" placeholder="Search brands, types, records..." class="w-full bg-white border border-gray-300 rounded-xl py-2 pl-10 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 shadow-sm transition-shadow">
+            <!-- Brand Reports Search Filter (Only visible when on Brand Reports tab) -->
+            <div v-if="activeTab === 'Reports'" class="relative w-full lg:w-80 shrink-0">
+                <i data-lucide="search" class="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-emerald-600"></i>
+                <input type="text" v-model="brandReportSearch" placeholder="Filter brand reports..." class="w-full bg-white border border-emerald-400 rounded-xl py-2 pl-10 pr-9 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 shadow-sm transition-shadow">
+                <button v-if="brandReportSearch" @click="brandReportSearch = ''" class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                    <i data-lucide="x-circle" class="w-4 h-4"></i>
+                </button>
             </div>
         </div>
 
@@ -309,8 +313,11 @@ No report entries found. Fast load data below.
 <div v-for="brand in monthGroup.brandList" :key="brand.vendor" class="bg-gray-50 border border-gray-200 rounded-xl p-4 flex flex-col justify-between hover:border-emerald-300 transition-all shadow-sm">
 <div class="flex justify-between items-start mb-3 border-b border-gray-200 pb-3">
 <div>
-<h4 class="font-bold text-gray-900 text-base">{{ brand.vendor }}</h4>
-<p class="text-xs text-gray-500 font-mono mt-0.5">{{ brand.email || 'No email mapped' }}</p>
+<div class="flex items-center gap-2">
+    <h4 class="font-bold text-gray-900 text-base">{{ brand.vendor }}</h4>
+    <span v-if="isDimeBrand(brand.vendor)" class="text-[10px] bg-blue-100 text-blue-700 font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">JotForm Required</span>
+</div>
+<p class="text-xs text-gray-500 font-mono mt-0.5">{{ isDimeBrand(brand.vendor) ? 'Portal Submission (No Email)' : (brand.email || 'No email mapped') }}</p>
 </div>
 <div class="text-right">
 <div class="text-lg font-extrabold text-gray-900">{{ formatCurrency(brand.total) }}</div>
@@ -323,7 +330,15 @@ No report entries found. Fast load data below.
 <span class="font-bold text-gray-900 whitespace-nowrap">{{ formatCurrency(c.amount) }}</span>
 </div>
 </div>
-<div class="space-y-2">
+<div v-if="isDimeBrand(brand.vendor)" class="space-y-2">
+<a href="https://form.jotform.com/252994629916172" target="_blank" rel="noopener noreferrer" class="w-full py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs rounded-lg transition-colors flex items-center justify-center gap-2 shadow">
+<i data-lucide="external-link" class="w-4 h-4"></i> Open Dime JotForm Portal
+</a>
+<button @click="downloadDimeReport(brand)" class="w-full px-3 py-2 bg-white border border-blue-300 hover:bg-blue-50 text-blue-800 rounded-lg font-bold flex justify-center items-center gap-1.5 text-xs transition-colors shadow-sm">
+<i data-lucide="file-spreadsheet" class="w-3.5 h-3.5 text-blue-600"></i> Download Dime-Compliant POS CSV
+</button>
+</div>
+<div v-else class="space-y-2">
 <button @click="draftEmail(brand)" class="w-full py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-lg transition-colors flex items-center justify-center gap-2 shadow">
 <i data-lucide="mail" class="w-4 h-4"></i> Draft Report Email
 </button>
@@ -407,14 +422,323 @@ No statement entries found. Fast load data below.
 </div>
 </div>
 
-            <!-- STANDALONE LOCAL ETL PROCESSING PANEL (STAYS VISIBLE OR BOTTOM) -->
-            <div id="local-etl-panel" class="bg-slate-900 border border-slate-700 text-white p-5 rounded-xl my-6 shadow-xl mx-4 mt-auto">
-                <div class="flex items-center justify-between mb-4 border-b border-slate-700 pb-3">
-                    <h3 class="text-base font-bold flex items-center gap-2 text-indigo-400">
-                        <i data-lucide="cpu" class="w-5 h-5"></i> Local In-Memory ETL Processor
-                    </h3>
-                    <span class="text-xs bg-indigo-900/60 text-indigo-300 border border-indigo-500/30 px-2.5 py-1 rounded-full font-mono">Standalone Mode</span>
+            <!-- TAB: MASTER WORKBOOK (v9 ENGINE) -->
+            <div v-if="activeTab === 'MasterWorkbook'" class="flex-1 flex flex-col p-4 md:p-6 bg-gray-100 overflow-hidden">
+                <!-- Header & Actions -->
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-3 shrink-0">
+                    <div>
+                        <h2 class="text-xl font-bold text-gray-900 flex items-center gap-2">
+                            <i data-lucide="table" class="w-5 h-5 text-emerald-600"></i> Master Workbook (v9 Engine)
+                        </h2>
+                        <p class="text-xs text-gray-500 mt-0.5">Automated 4-layer architecture: Treez POS + Sage GL + Brand Map = Dynamic v9 Master Workbook.</p>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <button @click="exportV9MasterWorkbook" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-bold text-xs shadow transition-all flex items-center gap-1.5">
+                            <i data-lucide="download" class="w-4 h-4"></i> Export v9 Workbook (.xlsx)
+                        </button>
+                    </div>
                 </div>
+
+                <!-- Excel Sheet Tab Bar -->
+                <div class="flex overflow-x-auto no-scrollbar scroll-smooth gap-1 border-b border-gray-300 bg-white rounded-t-xl px-3 pt-2 shrink-0">
+                    <button v-for="sheet in v9SheetsList" :key="sheet.name"
+                        @click="activeV9Sheet = sheet.name"
+                        :class="activeV9Sheet === sheet.name ? 'border-b-2 border-emerald-600 text-emerald-700 font-extrabold bg-emerald-50/50' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'"
+                        class="px-3.5 py-2 text-xs font-bold whitespace-nowrap transition-all rounded-t-lg flex items-center gap-1.5">
+                        <i :data-lucide="sheet.icon" class="w-3.5 h-3.5"></i>
+                        {{ sheet.label }}
+                    </button>
+                </div>
+
+                <!-- Sheet Content Container -->
+                <div class="flex-1 min-h-0 bg-white rounded-b-xl border border-t-0 border-gray-300 shadow-sm overflow-hidden flex flex-col p-4">
+                    <!-- 1. YTD DASHBOARD -->
+                    <div v-if="activeV9Sheet === 'YTD Dashboard'" class="flex-1 flex flex-col lg:flex-row gap-6 min-h-0 overflow-hidden">
+                        <div class="w-full lg:w-1/2 flex flex-col border border-gray-200 rounded-xl overflow-hidden shadow-sm">
+                            <div class="bg-gray-50 px-4 py-2.5 border-b border-gray-200 font-bold text-xs text-gray-700 uppercase tracking-wider flex justify-between items-center">
+                                <span>Monthly Reconciliation Summary</span>
+                                <span class="text-[10px] text-gray-500 font-normal">Auto-aggregated</span>
+                            </div>
+                            <div class="flex-1 overflow-auto">
+                                <table class="w-full text-left text-xs border-collapse">
+                                    <thead class="sticky top-0 bg-gray-100 border-b border-gray-300 text-gray-700 font-bold">
+                                        <tr>
+                                            <th class="py-2 px-3 border-r">Month</th>
+                                            <th class="py-2 px-3 text-right border-r">Master Tracked</th>
+                                            <th class="py-2 px-3 text-right border-r">Treez Valid POS</th>
+                                            <th class="py-2 px-3 text-right">Sage Collected</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-gray-200 font-mono text-[11px]">
+                                        <tr v-for="row in v9DashboardData.rows" :key="row.month" class="hover:bg-gray-50">
+                                            <td class="py-2 px-3 font-sans font-bold text-gray-900 border-r">{{ row.month }}</td>
+                                            <td class="py-2 px-3 text-right border-r">{{ formatCurrency(row.masterTracked) }}</td>
+                                            <td class="py-2 px-3 text-right text-red-700 border-r">{{ formatCurrency(row.treezPos) }}</td>
+                                            <td class="py-2 px-3 text-right text-emerald-700">{{ formatCurrency(row.sageCollected) }}</td>
+                                        </tr>
+                                        <tr class="bg-gray-100 font-bold text-gray-900 border-t-2 border-gray-400">
+                                            <td class="py-2 px-3 font-sans border-r">TOTAL</td>
+                                            <td class="py-2 px-3 text-right border-r">{{ formatCurrency(v9DashboardData.totals.masterTracked) }}</td>
+                                            <td class="py-2 px-3 text-right text-red-700 border-r">{{ formatCurrency(v9DashboardData.totals.treezPos) }}</td>
+                                            <td class="py-2 px-3 text-right text-emerald-700">{{ formatCurrency(v9DashboardData.totals.sageCollected) }}</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        <div class="w-full lg:w-1/2 flex flex-col border border-gray-200 rounded-xl p-4 bg-white shadow-sm">
+                            <div class="flex-1 w-full relative min-h-[300px]">
+                                <canvas ref="chartV9Canvas"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- 2. YTD RUNNING TOTALS (Screenshot 2) -->
+                    <div v-if="activeV9Sheet === 'YTD Running Totals'" class="flex-1 flex flex-col min-h-0 overflow-hidden">
+                        <div class="flex items-center justify-between mb-3 shrink-0">
+                            <span class="text-xs font-bold text-gray-700">Year-to-Date Store Breakdown by Brand</span>
+                            <span class="text-xs text-gray-500 font-mono">{{ v9RunningTotals.length }} Brand Rows</span>
+                        </div>
+                        <div class="flex-1 overflow-auto border border-gray-200 rounded-xl">
+                            <table class="w-full text-left text-xs border-collapse">
+                                <thead class="sticky top-0 bg-gray-100 border-b border-gray-300 text-gray-700 font-bold">
+                                    <tr>
+                                        <th class="py-2 px-3 border-r">Brand</th>
+                                        <th class="py-2 px-3 text-center border-r w-20">Redding</th>
+                                        <th class="py-2 px-3 text-center border-r w-24">Red-Bluff</th>
+                                        <th class="py-2 px-3 text-right border-r">Running Total Promo Credits</th>
+                                        <th class="py-2 px-3 text-right">Combined Brand Total</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-gray-200 font-mono text-[11px]">
+                                    <tr v-for="(row, idx) in v9RunningTotals" :key="idx" class="hover:bg-gray-50">
+                                        <td class="py-1.5 px-3 font-sans font-medium text-gray-900 border-r">{{ row.brand }}</td>
+                                        <td class="py-1.5 px-3 text-center border-r font-bold text-gray-700">{{ row.redding }}</td>
+                                        <td class="py-1.5 px-3 text-center border-r font-bold text-gray-700">{{ row.redBluff }}</td>
+                                        <td class="py-1.5 px-3 text-right border-r">{{ formatCurrency(row.runningTotal) }}</td>
+                                        <td class="py-1.5 px-3 text-right font-bold text-gray-900">{{ formatCurrency(row.combinedTotal) }}</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- 3. MONTHLY TRACKING (Screenshot 3) -->
+                    <div v-if="activeV9Sheet === 'Monthly Tracking'" class="flex-1 flex flex-col min-h-0 overflow-hidden">
+                        <div class="flex overflow-x-auto no-scrollbar gap-1 mb-3 shrink-0 bg-gray-100 p-1.5 rounded-lg border border-gray-200">
+                            <button v-for="m in calendarMonths" :key="m"
+                                @click="activeV9Month = `${m} 2026`"
+                                :class="activeV9Month === `${m} 2026` ? 'bg-white text-emerald-700 font-bold shadow-sm' : 'text-gray-600 hover:text-gray-900'"
+                                class="px-2.5 py-1 text-xs rounded transition-all whitespace-nowrap">
+                                {{ m }}
+                            </button>
+                        </div>
+                        <div class="flex-1 overflow-auto border border-gray-200 rounded-xl">
+                            <table class="w-full text-left text-xs border-collapse">
+                                <thead class="sticky top-0 bg-gray-100 border-b border-gray-300 text-gray-700 font-bold">
+                                    <tr>
+                                        <th class="py-2 px-3 border-r">Brand</th>
+                                        <th class="py-2 px-3 text-center border-r w-16">Redding</th>
+                                        <th class="py-2 px-3 text-center border-r w-20">Red-Bluff</th>
+                                        <th class="py-2 px-3 text-right border-r">Promo Credits</th>
+                                        <th class="py-2 px-3 text-center border-r">Date Requested</th>
+                                        <th class="py-2 px-3 text-center border-r">Date Applied</th>
+                                        <th class="py-2 px-3 text-right border-r">Credits Approved</th>
+                                        <th class="py-2 px-3 text-right border-r">Credits Rejected</th>
+                                        <th class="py-2 px-3 text-right border-r">Treez Total</th>
+                                        <th class="py-2 px-3 text-center">Month Generated</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-gray-200 font-mono text-[11px]">
+                                    <tr v-for="(row, idx) in v9MonthlyData" :key="idx" class="hover:bg-gray-50">
+                                        <td class="py-1.5 px-3 font-sans font-medium text-gray-900 border-r">{{ row.brand }}</td>
+                                        <td class="py-1.5 px-3 text-center border-r font-bold text-gray-700">{{ row.redding }}</td>
+                                        <td class="py-1.5 px-3 text-center border-r font-bold text-gray-700">{{ row.redBluff }}</td>
+                                        <td class="py-1.5 px-3 text-right border-r" :class="row.promoCredits > 0 ? 'text-gray-900 font-bold' : 'text-gray-400'">{{ row.promoCredits > 0 ? formatCurrency(row.promoCredits) : '0 /' }}</td>
+                                        <td class="py-1.5 px-3 text-center border-r text-gray-600">{{ row.dateRequested }}</td>
+                                        <td class="py-1.5 px-3 text-center border-r text-gray-400">{{ row.dateApplied || '-' }}</td>
+                                        <td class="py-1.5 px-3 text-right border-r text-gray-400">{{ row.creditsApproved ? formatCurrency(row.creditsApproved) : '-' }}</td>
+                                        <td class="py-1.5 px-3 text-right border-r text-gray-400">{{ row.creditsRejected ? formatCurrency(row.creditsRejected) : '-' }}</td>
+                                        <td class="py-1.5 px-3 text-right border-r font-bold text-gray-800">{{ typeof row.treezTotal === 'number' ? formatCurrency(row.treezTotal) : row.treezTotal }}</td>
+                                        <td class="py-1.5 px-3 text-center text-gray-600">{{ row.generatedMonth }}</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+
+                    <!-- 4. STORE AUDITS (Screenshot 4) -->
+                    <div v-if="activeV9Sheet === 'Store Audits'" class="flex-1 flex flex-col min-h-0 overflow-hidden">
+                        <div class="flex items-center gap-2 mb-3 shrink-0">
+                            <button v-for="storeAudit in v9StoreAuditsList" :key="storeAudit"
+                                @click="activeV9StoreAudit = storeAudit"
+                                :class="activeV9StoreAudit === storeAudit ? 'bg-emerald-600 text-white font-bold' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'"
+                                class="px-3 py-1.5 text-xs rounded-lg transition-all font-medium">
+                                {{ storeAudit }}
+                            </button>
+                        </div>
+                        <div v-if="activeV9StoreAudit === 'Store Macro Summary'" class="flex-1 overflow-auto border border-gray-200 rounded-xl">
+                            <table class="w-full text-left text-xs border-collapse">
+                                <thead class="sticky top-0 bg-gray-100 border-b border-gray-300 text-gray-700 font-bold">
+                                    <tr>
+                                        <th class="py-2.5 px-4 border-r">Store</th>
+                                        <th class="py-2.5 px-4 text-right border-r">YTD Generated (POS)</th>
+                                        <th class="py-2.5 px-4 text-right border-r">YTD Received (GL)</th>
+                                        <th class="py-2.5 px-4 text-right">Outstanding Balance</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-gray-200 font-mono text-xs">
+                                    <tr v-for="m in v9MacroSummary" :key="m.store" class="hover:bg-gray-50">
+                                        <td class="py-3 px-4 font-sans font-bold text-gray-900 border-r">{{ m.store }}</td>
+                                        <td class="py-3 px-4 text-right border-r">{{ formatCurrency(m.ytdGenerated) }}</td>
+                                        <td class="py-3 px-4 text-right text-emerald-700 border-r">{{ formatCurrency(m.ytdReceived) }}</td>
+                                        <td class="py-3 px-4 text-right font-extrabold" :class="m.balance > 0 ? 'text-red-600' : 'text-gray-900'">{{ formatCurrency(m.balance) }}</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <div v-else class="flex-1 overflow-auto border border-gray-200 rounded-xl">
+                            <table class="w-full text-left text-xs border-collapse">
+                                <thead class="sticky top-0 bg-gray-100 border-b border-gray-300 text-gray-700 font-bold">
+                                    <tr>
+                                        <th class="py-2 px-3 border-r">Brand</th>
+                                        <th class="py-2 px-3 border-r w-28">Store</th>
+                                        <th class="py-2 px-3 text-right border-r">YTD Generated (POS)</th>
+                                        <th class="py-2 px-3 text-right border-r">YTD Received (GL)</th>
+                                        <th class="py-2 px-3 text-right">Outstanding Balance</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-gray-200 font-mono text-[11px]">
+                                    <tr v-for="row in v9StoreAuditData" :key="row.brand" class="hover:bg-gray-50">
+                                        <td class="py-1.5 px-3 font-sans font-medium text-gray-900 border-r">{{ row.brand }}</td>
+                                        <td class="py-1.5 px-3 font-sans text-gray-600 border-r">{{ row.store }}</td>
+                                        <td class="py-1.5 px-3 text-right border-r text-gray-800">{{ formatCurrency(row.ytdGenerated) }}</td>
+                                        <td class="py-1.5 px-3 text-right border-r text-emerald-700 font-bold">{{ row.ytdReceived > 0 ? formatCurrency(row.ytdReceived) : '0' }}</td>
+                                        <td class="py-1.5 px-3 text-right font-extrabold" :class="row.balance > 0 ? 'text-red-600' : 'text-gray-700'">{{ formatCurrency(row.balance) }}</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <!-- 5. BRAND MAPPING (Tab 3) -->
+                    <div v-if="activeV9Sheet === 'Brand_Mapping'" class="flex-1 flex flex-col min-h-0 overflow-hidden">
+                        <div class="mb-3 text-xs text-gray-500">
+                            Two-column lookup table translating Sage accounting vendor names to POS consumer brand names.
+                        </div>
+                        <div class="flex-1 overflow-auto border border-gray-200 rounded-xl">
+                            <table class="w-full text-left text-xs border-collapse">
+                                <thead class="sticky top-0 bg-gray-100 border-b border-gray-300 text-gray-700 font-bold">
+                                    <tr>
+                                        <th class="py-2 px-4 border-r">Master Workbook Legacy Name (Sage)</th>
+                                        <th class="py-2 px-4">Standardized POS Name (Treez CSV)</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-gray-200 text-xs font-mono">
+                                    <tr v-for="(pair, idx) in v9BrandMapping" :key="idx" class="hover:bg-gray-50">
+                                        <td class="py-2 px-4 font-sans font-medium text-gray-900 border-r">{{ pair.legacy }}</td>
+                                        <td class="py-2 px-4 font-sans text-emerald-700 font-bold">{{ pair.standardized }}</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- 6. RAW POS (Tab 1) -->
+                    <div v-if="activeV9Sheet === 'Raw POS (Treez)'" class="flex-1 flex flex-col min-h-0 overflow-hidden">
+                        <div class="mb-3 flex justify-between items-center text-xs text-gray-500">
+                            <span>Tab 1 Raw POS Intake Feed</span>
+                            <span class="font-mono font-bold">{{ treesSalesData.length }} records</span>
+                        </div>
+                        <div class="flex-1 overflow-auto border border-gray-200 rounded-xl">
+                            <table class="w-full text-left text-xs border-collapse">
+                                <thead class="sticky top-0 bg-gray-100 border-b border-gray-300 text-gray-700 font-bold">
+                                    <tr>
+                                        <th class="py-2 px-3 border-r">Date Closed</th>
+                                        <th class="py-2 px-3 border-r">Store Name</th>
+                                        <th class="py-2 px-3 border-r">Product Brand</th>
+                                        <th class="py-2 px-3 border-r">Product Name</th>
+                                        <th class="py-2 px-3 border-r">Discount Title</th>
+                                        <th class="py-2 px-3 text-right">Vendor Credit Owed</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-gray-200 text-[11px] font-mono">
+                                    <tr v-for="s in treesSalesData.slice(0, 150)" :key="s.id" class="hover:bg-gray-50">
+                                        <td class="py-1 px-3 border-r text-gray-600">{{ s.dateClosed || s.date || '-' }}</td>
+                                        <td class="py-1 px-3 border-r font-sans text-gray-900">{{ s.site || '-' }}</td>
+                                        <td class="py-1 px-3 border-r font-sans font-medium text-emerald-700">{{ s.brand || '-' }}</td>
+                                        <td class="py-1 px-3 border-r font-sans text-gray-700 truncate max-w-xs">{{ s.productName || '-' }}</td>
+                                        <td class="py-1 px-3 border-r font-sans text-gray-600">{{ s.discountTitle || '-' }}</td>
+                                        <td class="py-1 px-3 text-right font-bold text-gray-900">{{ formatCurrency(s.amount || s.owed || 0) }}</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <!-- 7. RAW GL (Tab 2) -->
+                    <div v-if="activeV9Sheet === 'Raw GL (Sage)'" class="flex-1 flex flex-col min-h-0 overflow-hidden">
+                        <div class="mb-3 flex justify-between items-center text-xs text-gray-500">
+                            <span>Tab 2 Raw Sage 4545 GL Ledger Feed</span>
+                            <span class="font-mono font-bold">{{ ledgerEventsList.length }} records</span>
+                        </div>
+                        <div class="flex-1 overflow-auto border border-gray-200 rounded-xl">
+                            <table class="w-full text-left text-xs border-collapse">
+                                <thead class="sticky top-0 bg-gray-100 border-b border-gray-300 text-gray-700 font-bold">
+                                    <tr>
+                                        <th class="py-2 px-3 border-r">Posted dt.</th>
+                                        <th class="py-2 px-3 border-r">Store</th>
+                                        <th class="py-2 px-3 border-r">Memo / Description</th>
+                                        <th class="py-2 px-3 border-r">Mapped Brand</th>
+                                        <th class="py-2 px-3 text-right">Credit Amount</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-gray-200 text-[11px] font-mono">
+                                    <tr v-for="g in ledgerEventsList.slice(0, 150)" :key="g.id" class="hover:bg-gray-50">
+                                        <td class="py-1 px-3 border-r text-gray-600">{{ g.date || g['Posted dt.'] || '-' }}</td>
+                                        <td class="py-1 px-3 border-r font-sans text-gray-900">{{ g.site || g.Location || '-' }}</td>
+                                        <td class="py-1 px-3 border-r font-sans text-gray-600 truncate max-w-xs">{{ g.memo || g['Memo/Description'] || '-' }}</td>
+                                        <td class="py-1 px-3 border-r font-sans font-medium text-emerald-700">{{ g.brand || g['Mapped Brand'] || '-' }}</td>
+                                        <td class="py-1 px-3 text-right font-bold text-emerald-700">{{ formatCurrency(g.amount || g.Credit || 0) }}</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+
+
+            <!-- STANDALONE LOCAL ETL PROCESSING PANEL (COLLAPSIBLE) -->
+            <div id="local-etl-panel" :class="isEtlCollapsed ? 'py-2.5 px-4 my-2' : 'p-5 my-6'" class="bg-slate-900 border border-slate-700 text-white rounded-xl shadow-xl mx-4 mt-auto transition-all duration-200">
+                <div class="flex items-center justify-between cursor-pointer select-none" :class="isEtlCollapsed ? 'mb-0 pb-0' : 'mb-4 border-b border-slate-700 pb-3'" @click="isEtlCollapsed = !isEtlCollapsed">
+                    <div class="flex items-center gap-3">
+                        <h3 class="text-base font-bold flex items-center gap-2 text-indigo-400">
+                            <i data-lucide="cpu" class="w-5 h-5"></i> Local In-Memory ETL Processor
+                        </h3>
+                        <span class="text-xs bg-indigo-900/60 text-indigo-300 border border-indigo-500/30 px-2.5 py-0.5 rounded-full font-mono">Standalone Mode</span>
+                    </div>
+
+                    <div class="flex items-center gap-3">
+                        <!-- Quick summary when collapsed -->
+                        <div v-if="isEtlCollapsed" class="hidden sm:flex items-center gap-2 text-xs font-mono text-slate-400">
+                            <span :class="localWbStatus !== 'Not loaded' ? 'text-emerald-400' : 'text-slate-500'">WB: {{ localWbStatus !== 'Not loaded' ? 'Loaded' : 'None' }}</span>
+                            <span class="text-slate-600">•</span>
+                            <span :class="localTreezStatus !== 'Not loaded' ? 'text-emerald-400' : 'text-slate-500'">Treez: {{ localTreezStatus !== 'Not loaded' ? 'Loaded' : 'None' }}</span>
+                            <span class="text-slate-600">•</span>
+                            <span :class="localSageStatus !== 'Not loaded' ? 'text-emerald-400' : 'text-slate-500'">Sage: {{ localSageStatus !== 'Not loaded' ? 'Loaded' : 'None' }}</span>
+                        </div>
+
+                        <!-- Collapse / Expand toggle button -->
+                        <button type="button" @click.stop="isEtlCollapsed = !isEtlCollapsed" class="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-semibold text-slate-300 hover:text-white transition-all shadow-sm" :title="isEtlCollapsed ? 'Expand ETL Panel' : 'Collapse ETL Panel'">
+                            <span>{{ isEtlCollapsed ? 'Expand' : 'Collapse' }}</span>
+                            <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 transition-transform duration-200" :class="{'rotate-180': isEtlCollapsed}" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+
+                <div v-show="!isEtlCollapsed">
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                     <div class="bg-slate-800 p-3.5 rounded-lg border border-slate-700">
                         <label class="block text-xs font-semibold text-slate-300 mb-2">1. Master Workbook (.xlsx)</label>
@@ -440,6 +764,7 @@ No statement entries found. Fast load data below.
                         <i data-lucide="download" class="w-3.5 h-3.5"></i> Export Updated Master Workbook
                     </button>
                     <div class="text-xs text-slate-300 font-mono ml-auto">{{ localSyncSummary }}</div>
+                </div>
                 </div>
             </div>
         </main>
@@ -825,10 +1150,11 @@ return candidateFields
     };
 
     const emailService = {
-        buildMailtoUrl: (toEmails, ccEmails, subject, body) => {
+        buildMailtoUrl: (toEmails, ccEmails = 'accounting@rredco.com', subject, body) => {
             const cleanEmails = String(toEmails || '').split(/[,;\s]+/).map(e => e.trim()).filter(Boolean).join(',');
             let url = `mailto:${cleanEmails}?`;
-            if (ccEmails) url += `cc=${encodeURIComponent(ccEmails)}&`;
+            const finalCc = ccEmails || 'accounting@rredco.com';
+            if (finalCc) url += `cc=${encodeURIComponent(finalCc)}&`;
             url += `subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
             return url;
         }
@@ -1028,6 +1354,7 @@ resolve(cleaned);
                 { name: 'Recovery', label: 'Recovery Log', icon: 'undo-2', group: 'Workbook' },
                 { name: 'Reports', label: 'Brand Reports', icon: 'file-bar-chart', group: 'Workbook' },
                 { name: 'Statements', label: 'Brand Statements', icon: 'file-spreadsheet', group: 'Workbook' },
+                { name: 'MasterWorkbook', label: 'Master Workbook (v9)', icon: 'table', group: 'Workbook' },
                 { name: 'Directory', label: 'Brand Directory', icon: 'users', group: 'Identity' }
             ];
 
@@ -1038,6 +1365,7 @@ resolve(cleaned);
             const selectWorkspace = (tab) => {
                 activeTab.value = tab.name;
                 showWorkspaceMenu.value = false;
+                nextTick(() => { if (window.lucide) lucide.createIcons(); });
             };
 
             const isProcessing = ref(false);
@@ -1047,6 +1375,7 @@ resolve(cleaned);
             const progressDetails = ref('');
             const progressETA = ref('');
 
+            const isEtlCollapsed = ref(false);
             const localWbStatus = ref('Not loaded');
             const localTreezStatus = ref('Not loaded');
             const localSageStatus = ref('Not loaded');
@@ -1055,8 +1384,9 @@ resolve(cleaned);
             const emailMapping = {
                 "21st AMENDMENT": "kala@medbev.com",
                 "21ST AMENDMENT": "kala@medbev.com",
-                "3 Bros": "kristina@hyroad.co",
-                "3 BROS": "kristina@hyroad.co",
+                "3 Bros": "dave@hyroad.co",
+                "3 BROS": "dave@hyroad.co",
+                "3BROS": "dave@hyroad.co",
                 "710 Labs": "jybarra@710labs.com",
                 "710 LABS": "jybarra@710labs.com",
                 "A Golden State": "jimmy.beene@vantagepointdistro.com",
@@ -1088,7 +1418,7 @@ resolve(cleaned);
                 "BIG TREE": "devin@ck-distro.com",
                 "Birdies": "kristina@hyroad.co",
                 "BIRDIES": "kristina@hyroad.co",
-                "Biscotti": "renee.j@natura.io",
+                "Biscotti": "orders@natura.io",
                 "Blem": "sam@cali-lotus.com",
                 "BLEM": "sam@cali-lotus.com",
                 "Bloom": "ashley@thebloombrand.com",
@@ -1110,7 +1440,7 @@ resolve(cleaned);
                 "CARE BY DESIGN": "abeardon@cannacraft.com",
                 "Casa Flor": "chzmo427@gmail.com",
                 "CASA FLOR": "chzmo427@gmail.com",
-                "Casual": "bryce@cleanlinemanagement.com",
+                "Casual": "Accounting@cleanlinemanagement.com",
                 "Caviar Gold": "johnnym@caviargold.com",
                 "CAVIAR GOLD": "johnnym@caviargold.com",
                 "CBX": "michelletin@cannabiotix.com",
@@ -1167,8 +1497,8 @@ resolve(cleaned);
                 "EVIDENCE": "stephanie@oceangrownextracts.com",
                 "Fig Farms": "brian@upnorthhumboldt.com",
                 "FIG FARMS": "brian@upnorthhumboldt.com",
-                "Flavorade": "bryce@cleanlinemanagement.com",
-                "FLAVORADE": "bryce@cleanlinemanagement.com",
+                "Flavorade": "Accounting@cleanlinemanagement.com",
+                "FLAVORADE": "Accounting@cleanlinemanagement.com",
                 "Froot": "orders@frootbrand.com",
                 "FROOT": "orders@frootbrand.com",
                 "Fuzzies": "helbacha@statehouse.co",
@@ -1221,7 +1551,7 @@ resolve(cleaned);
                 "HUMO": "virginia@petalfast.com",
                 "Hush": "virginia@petalfast.com",
                 "HUSH": "virginia@petalfast.com",
-                "ICED": "renee.j@natura.io",
+                "ICED": "orders@natura.io",
                 "Jeeter": "dbaer@jeeter.com",
                 "JEETER": "dbaer@jeeter.com",
                 "JEFFERSON SOUL ": "robert@jefferson-soul.com",
@@ -1371,8 +1701,9 @@ resolve(cleaned);
                 "Revelry": "dave@revelrysupply.com",
                 "REVELRY": "dave@revelrysupply.com",
                 "RONIN ROSIN": "ashleyrussian1983@gmail.com",
-                "Rosin Tech ": "rob@rosintechlabs.com",
-                "ROSIN TECH": "rob@rosintechlabs.com",
+                "Rosin Tech": "rob@rosintechlabs.com, michael@rosintelabs.com",
+                "Rosin Tech ": "rob@rosintechlabs.com, michael@rosintelabs.com",
+                "ROSIN TECH": "rob@rosintechlabs.com, michael@rosintelabs.com",
                 "Rove": "skye@rovebrand.com",
                 "ROVE": "skye@rovebrand.com",
                 "SAIDA": "katie.wheatley@kivaconfections.com",
@@ -1390,8 +1721,8 @@ resolve(cleaned);
                 "Sherbinskis": "brett@sherbinskis.com",
                 "SHERBINSKIS": "brett@sherbinskis.com",
                 "SIPS": "mimi@sipelixirs.com",
-                "SLUGGERS": "renee.j@natura.io",
-                "Sluggers": "renee.j@natura.io",
+                "SLUGGERS": "orders@natura.io",
+                "Sluggers": "orders@natura.io",
                 "Smackers ": "mimi@enjoysmackers.com",
                 "SMOKEN PROMISES": "zack.tehaney@connectedca.com",
                 "Smokiez": "matt.s@smokiez.com",
@@ -1432,7 +1763,7 @@ resolve(cleaned);
                 "TRADITIONAL": "brendan.gerber@traditional.com",
                 "Turn": "mwright@turn.me",
                 "TURN": "mwright@turn.me",
-                "TUTTI": "renee.j@natura.io",
+                "TUTTI": "orders@natura.io",
                 "Tyson 2.0": "jordank@northernemeralds.com",
                 "TYSON 2.0": "jordank@northernemeralds.com",
                 "Uncle Arnie's": "alexis@unclearnies.com",
@@ -1443,8 +1774,8 @@ resolve(cleaned);
                 "URSA": "cesar@bearhumboldt.com",
                 "VetCBD": "virginia@petalfast.com",
                 "VETCBD": "virginia@petalfast.com",
-                "Vuze": "bryce@cleanlinemanagement.com",
-                "VUZE": "bryce@cleanlinemanagement.com",
+                "Vuze": "Accounting@cleanlinemanagement.com",
+                "VUZE": "Accounting@cleanlinemanagement.com",
                 "Wave Rider": "joel@greenvibe.biz",
                 "West Coast Cure": "jesse@wcc.com",
                 "WEST COAST CURE": "jesse@wcc.com",
@@ -1521,6 +1852,7 @@ resolve(cleaned);
 const ledgerEventsList = ref([]);
 const selectedLedgerVendor = ref(null);
 const searchQueryInput = ref('');
+const brandReportSearch = ref('');
 
             const unifiedRecoveryEvents = computed(() => {
 const results = [];
@@ -1915,6 +2247,20 @@ e.target.value = '';
                 return Object.values(results).sort((a, b) => (b.totalGenerated - b.totalApplied) - (a.totalGenerated - a.totalApplied));
             });
 
+            // Exclusion check for brands with front-loaded invoice credits (no credit reports needed)
+            const isExcludedReportBrand = (name) => {
+                if (!name) return false;
+                const clean = String(name).trim().toLowerCase().replace(/^#+/, '').trim();
+                return clean === 'bloom' || clean === 'the bloom brand' || clean === 'hashtag';
+            };
+
+            // Check for Dime Industries (requires external JotForm portal submission)
+            const isDimeBrand = (vendor) => {
+                if (!vendor) return false;
+                const v = String(vendor).trim().toLowerCase();
+                return v === 'dime industries' || v === 'dime';
+            };
+
             // 4. Monthly Report Summaries
             const monthlyReportSummaries = computed(() => {
 const results = [];
@@ -1935,6 +2281,7 @@ if (globalPromoFilters.value.length > 0 && !globalPromoFilters.value.includes(pr
 const rawBrand = sale.brand || 'Unmapped';
 const vendor = resolveToTreezBrandName(rawBrand, masterWorkbook.value?.data, treesSalesData.value) || rawBrand;
 if (!vendor) return;
+if (isExcludedReportBrand(rawBrand) || isExcludedReportBrand(vendor)) return;
 if (!brandMap[vendor]) {
 const vendorLower = vendor.toLowerCase();
 const email = masterBrands.value.find(b => {
@@ -1952,11 +2299,16 @@ amount: amt
 });
 monthTotal += amt;
 });
-const brandList = Object.values(brandMap).sort((a, b) => b.total - a.total);
+let brandList = Object.values(brandMap).sort((a, b) => b.total - a.total);
+if (brandReportSearch.value && brandReportSearch.value.trim()) {
+    const q = brandReportSearch.value.trim().toLowerCase();
+    brandList = brandList.filter(b => (b.vendor && b.vendor.toLowerCase().includes(q)) || (b.email && b.email.toLowerCase().includes(q)));
+}
 if (brandList.length > 0) {
+const groupTotal = brandList.reduce((acc, b) => acc + b.total, 0);
 results.push({
 month,
-total: monthTotal,
+total: groupTotal,
 count: brandList.reduce((acc, b) => acc + b.credits.length, 0),
 brandList
 });
@@ -1980,10 +2332,12 @@ if (e.type === 'GENERATED') {
 const promoTitle = e.discountTitle || 'Promo';
 if (globalPromoFilters.value.length > 0 && !globalPromoFilters.value.includes(promoTitle)) return;
 const b = resolveToTreezBrandName(e.brand || 'Unmapped', masterWorkbook.value?.data, treesSalesData.value) || 'Unmapped';
+if (isExcludedReportBrand(e.brand) || isExcludedReportBrand(b)) return;
 ytdGenByBrand[b] = (ytdGenByBrand[b] || 0) + amt;
 }
 if (e.type === 'RECOVERY') {
 const b = resolveToTreezBrandName(e.brand || 'Unmapped', masterWorkbook.value?.data, treesSalesData.value) || 'Unmapped';
+if (isExcludedReportBrand(e.brand) || isExcludedReportBrand(b)) return;
 ytdAppByBrand[b] = (ytdAppByBrand[b] || 0) + amt;
 }
 });
@@ -2000,6 +2354,7 @@ if (globalPromoFilters.value.length > 0 && !globalPromoFilters.value.includes(pr
 const rawBrand = sale.brand || 'Unmapped';
 const vendor = resolveToTreezBrandName(rawBrand, masterWorkbook.value?.data, treesSalesData.value) || rawBrand;
 if (!vendor) return;
+if (isExcludedReportBrand(rawBrand) || isExcludedReportBrand(vendor)) return;
 if (!brandMap[vendor]) {
 const vendorLower = vendor.toLowerCase();
 const email = masterBrands.value.find(b => {
@@ -2308,8 +2663,252 @@ return v;
             Vue.watch(activeTab, (newTab) => { if(newTab === 'Ledger') nextTick(() => renderChart()); });
             onMounted(() => { renderChart(); });
 
+            // ==========================================
+            // [MOD_V9_ENGINE] - Master Workbook v9 Architecture
+            // ==========================================
+            const activeV9Sheet = ref('YTD Dashboard');
+            const activeV9Month = ref('May 2026');
+            const activeV9StoreAudit = ref('Red Bluff Store Audit');
+            const v9StoreAuditsList = ['Red Bluff Store Audit', 'Redding Store Audit', 'Store Macro Summary'];
+
+            const v9SheetsList = [
+                { name: 'YTD Dashboard', label: 'YTD Dashboard', icon: 'layout-dashboard' },
+                { name: 'YTD Running Totals', label: 'YTD Running Totals', icon: 'list-ordered' },
+                { name: 'Monthly Tracking', label: '12 Monthly Sheets', icon: 'calendar' },
+                { name: 'Store Audits', label: 'Store Audits', icon: 'building-2' },
+                { name: 'Brand_Mapping', label: 'Brand Mapping (Tab 3)', icon: 'network' },
+                { name: 'Raw POS (Treez)', label: 'Raw POS (Tab 1)', icon: 'file-text' },
+                { name: 'Raw GL (Sage)', label: 'Raw GL (Tab 2)', icon: 'receipt' }
+            ];
+
+            const v9DashboardData = computed(() => {
+                const monthShorts = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                const rows = [];
+                let totMaster = 0, totPos = 0, totSage = 0;
+
+                calendarMonths.forEach((fullMonth, idx) => {
+                    const shortName = monthShorts[idx];
+                    const posSales = (treesSalesData.value || []).filter(s => {
+                        const m = s.isolation_month || s.month || detectMonthFromDate(s.dateClosed || s.date || '');
+                        if (m !== fullMonth) return false;
+                        if (activeSite.value !== 'All' && detectSiteFromName(s.site || '') !== activeSite.value) return false;
+                        return true;
+                    });
+                    const posTotal = posSales.reduce((sum, s) => sum + (Number(s.amount || s.owed || s.owedAmt || 0)), 0);
+
+                    const sageRows = (ledgerEventsList.value || []).filter(g => {
+                        const m = g.isolation_month || detectMonthFromDate(g.date || g['Posted dt.'] || '');
+                        if (m !== fullMonth) return false;
+                        if (activeSite.value !== 'All' && detectSiteFromName(g.site || g.Location || g.Store || '') !== activeSite.value) return false;
+                        return true;
+                    });
+                    const sageTotal = sageRows.reduce((sum, g) => sum + (Number(g.amount || g.Credit || 0)), 0);
+
+                    let masterTotal = posTotal;
+                    const wbRows = masterWorkbook.value?.data?.[`${fullMonth} 2026`] || [];
+                    if (wbRows.length > 0) {
+                        masterTotal = wbRows.reduce((sum, r) => {
+                            const v = r['Brand'] || r[0];
+                            if (!v || String(v).toLowerCase().includes('total')) return sum;
+                            let amt = 0;
+                            if (activeSite.value === 'All') amt = (Number(r['Redding']) || 0) + (Number(r['Red-Bluff']) || 0);
+                            else if (activeSite.value === 'Redding') amt = Number(r['Redding']) || 0;
+                            else amt = Number(r['Red-Bluff']) || 0;
+                            return sum + amt;
+                        }, 0);
+                    }
+
+                    rows.push({ month: shortName, fullMonth, masterTracked: masterTotal, treezPos: posTotal, sageCollected: sageTotal });
+                    totMaster += masterTotal;
+                    totPos += posTotal;
+                    totSage += sageTotal;
+                });
+
+                return { rows, totals: { masterTracked: totMaster, treezPos: totPos, sageCollected: totSage } };
+            });
+            const chartV9Canvas = ref(null);
+            let chartV9Instance = null;
+
+            const renderV9Chart = () => {
+                if (!chartV9Canvas.value) return;
+                if (chartV9Instance) chartV9Instance.destroy();
+                const d = v9DashboardData.value;
+                chartV9Instance = new Chart(chartV9Canvas.value, {
+                    type: 'bar',
+                    data: {
+                        labels: d.rows.map(r => r.month),
+                        datasets: [
+                            { label: 'Master Tracked', data: d.rows.map(r => r.masterTracked), backgroundColor: '#3b82f6', borderRadius: 3 },
+                            { label: 'Treez Valid POS', data: d.rows.map(r => r.treezPos), backgroundColor: '#dc2626', borderRadius: 3 },
+                            { label: 'Sage Collected', data: d.rows.map(r => r.sageCollected), backgroundColor: '#84cc16', borderRadius: 3 }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            title: { display: true, text: 'YTD Promo Credit Reconciliation', font: { size: 15, weight: 'bold' } },
+                            legend: { position: 'right' },
+                            tooltip: { callbacks: { label: (ctx) => `${ctx.dataset.label}: ${formatCurrency(ctx.raw)}` } }
+                        },
+                        scales: { y: { ticks: { callback: (val) => formatCurrency(val) } } }
+                    }
+                });
+            };
+
+            Vue.watch([activeTab, activeV9Sheet, () => v9DashboardData.value], ([newTab, newSheet]) => {
+                if (newTab === 'MasterWorkbook' && newSheet === 'YTD Dashboard') {
+                    nextTick(() => renderV9Chart());
+                }
+                nextTick(() => { if (window.lucide) lucide.createIcons(); });
+            }, { deep: true });
+
+            const v9RunningTotals = computed(() => {
+                const allBrands = new Set();
+                (treesSalesData.value || []).forEach(s => {
+                    const b = resolveToTreezBrandName(s.brand, masterWorkbook.value?.data, treesSalesData.value);
+                    if (b) allBrands.add(b);
+                });
+                masterBrands.value.forEach(b => { if (b.vendor) allBrands.add(b.vendor); });
+                const sorted = Array.from(allBrands).filter(b => b && !b.toLowerCase().includes('total')).sort((a,b) => a.localeCompare(b));
+                const rows = [];
+                sorted.forEach(brand => {
+                    const rGen = (treesSalesData.value || []).filter(s => {
+                        const b = resolveToTreezBrandName(s.brand, masterWorkbook.value?.data, treesSalesData.value);
+                        return b.toLowerCase() === brand.toLowerCase() && detectSiteFromName(s.site || '') === 'Redding';
+                    }).reduce((sum, s) => sum + (Number(s.amount || s.owed || 0)), 0);
+
+                    const rbGen = (treesSalesData.value || []).filter(s => {
+                        const b = resolveToTreezBrandName(s.brand, masterWorkbook.value?.data, treesSalesData.value);
+                        return b.toLowerCase() === brand.toLowerCase() && detectSiteFromName(s.site || '') === 'Red Bluff';
+                    }).reduce((sum, s) => sum + (Number(s.amount || s.owed || 0)), 0);
+
+                    const comb = rGen + rbGen;
+                    rows.push({ brand, site: 'Redding', redding: 'x', redBluff: '', runningTotal: rGen, combinedTotal: comb });
+                    rows.push({ brand, site: 'Red Bluff', redding: '', redBluff: 'x', runningTotal: rbGen, combinedTotal: comb });
+                });
+                return rows;
+            });
+
+            const v9MonthlyData = computed(() => {
+                const targetMonth = activeV9Month.value.split(' ')[0] || 'May';
+                const allBrands = new Set();
+                (treesSalesData.value || []).forEach(s => {
+                    const b = resolveToTreezBrandName(s.brand, masterWorkbook.value?.data, treesSalesData.value);
+                    if (b) allBrands.add(b);
+                });
+                masterBrands.value.forEach(b => { if (b.vendor) allBrands.add(b.vendor); });
+                const sorted = Array.from(allBrands).filter(b => b && !b.toLowerCase().includes('total')).sort((a,b) => a.localeCompare(b));
+                const rows = [];
+                sorted.forEach(brand => {
+                    const rSales = (treesSalesData.value || []).filter(s => {
+                        const b = resolveToTreezBrandName(s.brand, masterWorkbook.value?.data, treesSalesData.value);
+                        const m = s.isolation_month || s.month || detectMonthFromDate(s.dateClosed || s.date || '');
+                        return b.toLowerCase() === brand.toLowerCase() && detectSiteFromName(s.site || '') === 'Redding' && m === targetMonth;
+                    });
+                    const rAmt = rSales.reduce((sum, s) => sum + (Number(s.amount || s.owed || 0)), 0);
+
+                    const rbSales = (treesSalesData.value || []).filter(s => {
+                        const b = resolveToTreezBrandName(s.brand, masterWorkbook.value?.data, treesSalesData.value);
+                        const m = s.isolation_month || s.month || detectMonthFromDate(s.dateClosed || s.date || '');
+                        return b.toLowerCase() === brand.toLowerCase() && detectSiteFromName(s.site || '') === 'Red Bluff' && m === targetMonth;
+                    });
+                    const rbAmt = rbSales.reduce((sum, s) => sum + (Number(s.amount || s.owed || 0)), 0);
+
+                    rows.push({
+                        brand, redding: 'x', redBluff: '', promoCredits: rAmt,
+                        dateRequested: rAmt > 0 ? '2026-09-16' : '0 /', dateApplied: '',
+                        creditsApproved: '', creditsRejected: '',
+                        treezTotal: rAmt > 0 ? rAmt : '/', generatedMonth: rAmt > 0 ? targetMonth : '/'
+                    });
+                    rows.push({
+                        brand, redding: '', redBluff: 'x', promoCredits: rbAmt,
+                        dateRequested: rbAmt > 0 ? '2026-09-16' : '0 /', dateApplied: '',
+                        creditsApproved: '', creditsRejected: '',
+                        treezTotal: rbAmt > 0 ? rbAmt : '/', generatedMonth: rbAmt > 0 ? targetMonth : '/'
+                    });
+                });
+                return rows;
+            });
+
+
                         // ==========================================
             // [MOD_EXPORT] - CSV, PDF & Workbook Sync Generation
+            const v9StoreAuditData = computed(() => {
+                const isRedding = activeV9StoreAudit.value.includes('Redding');
+                const storeName = isRedding ? 'Redding' : 'Red Bluff';
+                const allBrands = new Set();
+                (treesSalesData.value || []).forEach(s => {
+                    const b = resolveToTreezBrandName(s.brand, masterWorkbook.value?.data, treesSalesData.value);
+                    if (b) allBrands.add(b);
+                });
+                (ledgerEventsList.value || []).forEach(g => {
+                    const b = resolveToTreezBrandName(g.brand || g['Mapped Brand'], masterWorkbook.value?.data, treesSalesData.value);
+                    if (b) allBrands.add(b);
+                });
+                masterBrands.value.forEach(b => { if (b.vendor) allBrands.add(b.vendor); });
+
+                const rows = [];
+                allBrands.forEach(brand => {
+                    if (!brand || brand.toLowerCase().includes('total')) return;
+                    const ytdGen = (treesSalesData.value || []).filter(s => {
+                        const b = resolveToTreezBrandName(s.brand, masterWorkbook.value?.data, treesSalesData.value);
+                        return b.toLowerCase() === brand.toLowerCase() && detectSiteFromName(s.site || '') === storeName;
+                    }).reduce((sum, s) => sum + (Number(s.amount || s.owed || 0)), 0);
+
+                    const ytdRec = (ledgerEventsList.value || []).filter(g => {
+                        const b = resolveToTreezBrandName(g.brand || g['Mapped Brand'], masterWorkbook.value?.data, treesSalesData.value);
+                        return b.toLowerCase() === brand.toLowerCase() && detectSiteFromName(g.site || g.Location || g.Store || '') === storeName;
+                    }).reduce((sum, g) => sum + (Number(g.amount || g.Credit || 0)), 0);
+
+                    if (ytdGen > 0 || ytdRec > 0) {
+                        rows.push({
+                            brand, store: storeName,
+                            ytdGenerated: ytdGen, ytdReceived: ytdRec,
+                            balance: ytdGen - ytdRec
+                        });
+                    }
+                });
+                return rows.sort((a, b) => b.ytdReceived - a.ytdReceived);
+            });
+
+            const v9MacroSummary = computed(() => {
+                return ['Red Bluff', 'Redding'].map(store => {
+                    const ytdGen = (treesSalesData.value || []).filter(s => detectSiteFromName(s.site || '') === store)
+                        .reduce((sum, s) => sum + (Number(s.amount || s.owed || 0)), 0);
+                    const ytdRec = (ledgerEventsList.value || []).filter(g => detectSiteFromName(g.site || g.Location || g.Store || '') === store)
+                        .reduce((sum, g) => sum + (Number(g.amount || g.Credit || 0)), 0);
+                    return { store, ytdGenerated: ytdGen, ytdReceived: ytdRec, balance: ytdGen - ytdRec };
+                });
+            });
+
+            const v9BrandMapping = computed(() => {
+                const defaultPairs = [
+                    { legacy: 'Sunderstorm', standardized: 'Kanha' },
+                    { legacy: 'Sunderstorm Bay LLC', standardized: 'Kanha' },
+                    { legacy: 'Decibel Enterprise Inc', standardized: 'Decibel Gardens' },
+                    { legacy: 'Decibel Enterprise', standardized: 'Decibel Gardens' },
+                    { legacy: 'Bud Technology', standardized: 'Dime' },
+                    { legacy: 'Dime Industries', standardized: 'Dime' },
+                    { legacy: 'Fluids Manufacturing Inc', standardized: 'Farm' },
+                    { legacy: 'PCG Industries, Inc', standardized: 'Purple City' },
+                    { legacy: 'GF Distribution LLC', standardized: 'Gramlin' },
+                    { legacy: 'Korben Labs LLC', standardized: 'Korben Labs' },
+                    { legacy: 'Meli LBC Inc', standardized: 'Pistil Whip' },
+                    { legacy: 'Errl Hill LLC', standardized: 'Errl Hill' },
+                    { legacy: 'Cleanline Management LLC', standardized: 'Vuze' },
+                    { legacy: 'UpNorth Distribution', standardized: 'UpNorth' }
+                ];
+                const wbRows = masterWorkbook.value?.data?.['Brand_Mapping'] || [];
+                if (wbRows.length > 0) {
+                    return wbRows.map(r => ({
+                        legacy: r['Master Workbook Legacy Name'] || r[0] || '',
+                        standardized: r['Standardized POS Name (CSV)'] || r[1] || ''
+                    })).filter(p => p.legacy);
+                }
+                return defaultPairs;
+            });
+
             // ==========================================
             const handleLocalSyncMemory = async () => {
                 if (activeMonth.value === 'All') {
@@ -2337,26 +2936,205 @@ return v;
                     isGlobalLoading.value = false;
                 }
             };
+            // Multi-sheet Master Workbook (v9 Engine) Exporter matching Gemini architecture
+            const exportV9MasterWorkbook = () => {
+                isGlobalLoading.value = true;
+                try {
+                    const wb = XLSX.utils.book_new();
+
+                    // 1. YTD Dashboard
+                    const d = v9DashboardData.value;
+                    const dashData = [
+                        ['Month', 'Master Tracked', 'Treez Valid POS', 'Sage Collected'],
+                        ...d.rows.map(r => [r.month, r.masterTracked, r.treezPos, r.sageCollected]),
+                        ['TOTAL', d.totals.masterTracked, d.totals.treezPos, d.totals.sageCollected]
+                    ];
+                    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(dashData), 'YTD Dashboard');
+
+                    // 2. Brand_Mapping
+                    const mapData = [
+                        ['Master Workbook Legacy Name', 'Standardized POS Name (CSV)'],
+                        ...v9BrandMapping.value.map(p => [p.legacy, p.standardized])
+                    ];
+                    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(mapData), 'Brand_Mapping');
+
+                    // 3. YTD Running Totals
+                    const runData = [
+                        ['Brand', 'Redding', 'Red-Bluff', 'Running Total Promo Credits', 'Combined Brand Total'],
+                        ...v9RunningTotals.value.map(r => [r.brand, r.redding, r.redBluff, r.runningTotal, r.combinedTotal])
+                    ];
+                    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(runData), 'YTD Running Totals');
+
+                    // 4. Monthly Tabs (12 Months)
+                    const oldMonth = activeV9Month.value;
+                    calendarMonths.forEach(m => {
+                        const mData = [
+                            ['Brand', 'Redding', 'Red-Bluff', 'Promo Credits', 'Date Requested', 'Date Applied', 'Credits Approved', 'Credits Rejected', 'Treez Total', 'credits were generated']
+                        ];
+                        activeV9Month.value = `${m} 2026`;
+                        v9MonthlyData.value.forEach(r => {
+                            mData.push([r.brand, r.redding, r.redBluff, r.promoCredits, r.dateRequested, r.dateApplied, r.creditsApproved, r.creditsRejected, r.treezTotal, r.generatedMonth]);
+                        });
+                        XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(mData), `${m} 2026`);
+                    });
+                    activeV9Month.value = oldMonth;
+
+                    // 5. Store Macro Summary
+                    const macroData = [
+                        ['Store', 'YTD Generated (POS)', 'YTD Received (GL)', 'Outstanding Balance'],
+                        ...v9MacroSummary.value.map(r => [r.store, r.ytdGenerated, r.ytdReceived, r.balance])
+                    ];
+                    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(macroData), 'Store Macro Summary');
+
+                    // 6. Redding & Red Bluff Store Audits
+                    const oldAudit = activeV9StoreAudit.value;
+                    ['Redding Store Audit', 'Red Bluff Store Audit'].forEach(storeAuditName => {
+                        const auditData = [
+                            ['Brand', 'Store', 'YTD Generated (POS)', 'YTD Received (GL)', 'Outstanding Balance']
+                        ];
+                        activeV9StoreAudit.value = storeAuditName;
+                        v9StoreAuditData.value.forEach(r => {
+                            auditData.push([r.brand, r.store, r.ytdGenerated, r.ytdReceived, r.balance]);
+                        });
+                        XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(auditData), storeAuditName);
+                    });
+                    activeV9StoreAudit.value = oldAudit;
+
+                    // 7. Raw POS (Treez) - Tab 1
+                    const posData = [
+                        ['Date Closed', 'Store Name', 'Product Brand', 'Product Name', 'Vendor Credit Owed'],
+                        ...(treesSalesData.value || []).map(s => [s.dateClosed || s.date || '', s.site || '', s.brand || '', s.productName || '', s.amount || s.owed || 0])
+                    ];
+                    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(posData), 'Raw POS (Treez)');
+
+                    // 8. Raw GL (Sage) - Tab 2
+                    const glData = [
+                        ['Posted dt.', 'Store', 'Location', 'Memo/Description', 'Mapped Brand', 'Credit'],
+                        ...(ledgerEventsList.value || []).map(g => [g.date || g['Posted dt.'] || '', g.site || g.Store || '', g.site || g.Location || '', g.memo || g['Memo/Description'] || '', g.brand || g['Mapped Brand'] || '', g.amount || g.Credit || 0])
+                    ];
+                    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(glData), 'Raw GL (Sage)');
+
+                    XLSX.writeFile(wb, `Master_Workbook_v9_Engine_${new Date().toISOString().split('T')[0]}.xlsx`);
+                } catch (err) {
+                    alert("Export Error: " + err.message);
+                } finally {
+                    isGlobalLoading.value = false;
+                }
+            };
+
 
             // Pure single-month generated report email (Brand Reports tab)
 const draftEmail = (brand) => {
-const reportMonth = brand.month || activeMonth.value;
-const to = brand.email || '';
-const subject = `Promo Credits Generated - ${reportMonth} 2026 -${brand.vendor}`;
-const body = `Hello Team,\n\nPlease find the promo credits generated for ${reportMonth} 2026.\n\nTotal Promo Credits Generated (${reportMonth}): ${formatCurrency(brand.total)}\nTotal Qualifying Items:${brand.credits.length}\n\nPlease review the attached ${reportMonth} report Excel file and let us know if you have any questions.\n\nBest,\n${loggedInUser.value || 'Accounting'}`;
-window.location.href = emailService.buildMailtoUrl(to, '', subject, body);
+    const reportMonth = brand.month || activeMonth.value;
+    const vendorName = brand.vendor || brand.brand || 'Team';
+    const storeName = activeSite.value === 'Redding' ? 'Sundial Collective – Redding' : (activeSite.value === 'Red Bluff' ? 'Sundial Collective – Red Bluff' : 'Sundial Collective – All Locations');
+    const to = brand.email || '';
+    const cc = 'accounting@rredco.com';
+    const subject = `Promo Credits Generated - ${reportMonth} 2026 - ${vendorName} - ${storeName}`;
+    const body = `Hello ${vendorName} Team,\n\nPlease find the promo credits generated for ${reportMonth} 2026.\n\nTotal Promo Credits Generated (${reportMonth}): ${formatCurrency(brand.total)}\nTotal Qualifying Items: ${brand.credits.length}\n\nPlease review the attached ${reportMonth} report Excel file and let us know if you have any questions.\n\n-Accounting Specialist Nicholas Grace RREDCO`;
+    window.location.href = emailService.buildMailtoUrl(to, cc, subject, body);
 };
 // Full YTD reconciliation statement email (Brand Statements tab)
 const draftStatementEmail = (brand) => {
-const statementMonth = brand.month || activeMonth.value;
-const to = brand.email || '';
-const subject = `Promo Credit Statement (YTD) - ${statementMonth} 2026 -${brand.vendor}`;
-const body = `Hello Team,\n\nPlease find the attached Year-to-Date promo credit statement through ${statementMonth} 2026.\n\n${statementMonth} Credits Generated: ${formatCurrency(brand.total)}\nYTD Credits Generated:${formatCurrency(brand.ytdGenerated)}\nYTD Credits Applied: ${formatCurrency(brand.ytdApplied)}\nYTD Remaining Balance:${formatCurrency(brand.ytdRemaining)}\n\nPlease review the attached YTD Excel statement and let us know if you have any questions.\n\nBest,\n${loggedInUser.value || 'Accounting'}`;
-window.location.href = emailService.buildMailtoUrl(to, '', subject, body);
+    const statementMonth = brand.month || activeMonth.value;
+    const vendorName = brand.vendor || brand.brand || 'Team';
+    const storeName = activeSite.value === 'Redding' ? 'Sundial Collective – Redding' : (activeSite.value === 'Red Bluff' ? 'Sundial Collective – Red Bluff' : 'Sundial Collective – All Locations');
+    const to = brand.email || '';
+    const cc = 'accounting@rredco.com';
+    const subject = `Promo Credit Statement (YTD) - ${statementMonth} 2026 - ${vendorName} - ${storeName}`;
+    const body = `Hello ${vendorName} Team,\n\nPlease find the attached Year-to-Date promo credit statement through ${statementMonth} 2026.\n\n${statementMonth} Credits Generated: ${formatCurrency(brand.total)}\nYTD Credits Generated: ${formatCurrency(brand.ytdGenerated)}\nYTD Credits Applied: ${formatCurrency(brand.ytdApplied)}\nYTD Remaining Balance: ${formatCurrency(brand.ytdRemaining)}\n\nPlease review the attached YTD Excel statement and let us know if you have any questions.\n\n-Accounting Specialist Nicholas Grace RREDCO`;
+    window.location.href = emailService.buildMailtoUrl(to, cc, subject, body);
 };
+// Dedicated Dime Industries POS Export generator meeting JotForm submission requirements
+const downloadDimeReport = (brandOrMonthGroup) => {
+    const targetMonth = (brandOrMonthGroup && brandOrMonthGroup.month) ? brandOrMonthGroup.month : activeMonth.value;
+    const targetSite = activeSite.value;
+
+    const dimeSales = (treesSalesData.value || []).filter(sale => {
+        if (targetMonth !== 'All' && sale.month !== targetMonth && sale.isolation_month !== targetMonth) return false;
+        const sSite = detectSiteFromName(sale.site || (sale.raw && (sale.raw['Store Name'] || sale.raw.Location)) || '');
+        if (targetSite !== 'All' && sSite !== targetSite) return false;
+        const b = resolveToTreezBrandName(sale.brand, masterWorkbook.value?.data, treesSalesData.value);
+        return isDimeBrand(sale.brand) || isDimeBrand(b);
+    });
+
+    if (dimeSales.length === 0) {
+        alert(`No Dime Industries sales records found for ${targetSite} in ${targetMonth}. Please upload the raw Treez POS CSV first.`);
+        return;
+    }
+
+    const headers = [
+        'Transaction ID',
+        'Date & Time of Transaction',
+        'Product Name or SKU',
+        'Quantity Sold',
+        'Unit Price',
+        'Total Before Tax',
+        'Discount / Promo Code',
+        'Discount Amount',
+        'Credit Amount Owed'
+    ];
+
+    const escapeCsv = (val) => `"${String(val ?? '').replace(/"/g, '""')}"`;
+
+    const rows = dimeSales.map(sale => {
+        const raw = sale.raw || {};
+        const ticketId = raw['Ticket Number'] || raw['Ticket ID'] || raw['Transaction ID'] || raw['Order ID'] || raw['Receipt ID'] || raw['Invoice Number'] || raw['Ticket'] || raw['Invoice'] || sale.id || '';
+        
+        let dateStr = raw['Date Closed'] || raw['Transaction Date'] || raw['Date'] || sale.dateClosed || '';
+        let formattedDate = dateStr;
+        if (dateStr) {
+            const d = new Date(dateStr);
+            if (!isNaN(d.getTime())) {
+                const pad = (n) => String(n).padStart(2, '0');
+                formattedDate = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+            }
+        }
+
+        const prod = raw['Product Name'] || raw['SKU'] || sale.productName || 'Dime Product';
+        const qty = parseFloat(raw['Units Sold'] || raw['Qty Sold'] || raw['Quantity'] || sale.unitsSold || 1) || 1;
+        const unitPrice = parseFloat(String(raw['Unit Price'] || raw['Price'] || raw['Retail Price'] || 0).replace(/[^0-9.-]+/g, '')) || 0;
+        let subtotal = parseFloat(String(raw['Total Before Tax'] || raw['Subtotal'] || raw['Gross Sales'] || 0).replace(/[^0-9.-]+/g, ''));
+        if (isNaN(subtotal) || subtotal === 0) {
+            subtotal = qty * unitPrice;
+        }
+
+        const promoCode = raw['Discount Title'] || raw['Promotion'] || raw['Discount Code'] || (sale.amount > 0 ? sale.discountTitle : 'None');
+        const discountAmt = parseFloat(String(raw['Discount Amount'] || raw['Discount'] || 0).replace(/[^0-9.-]+/g, '')) || 0;
+        const creditOwed = Number(sale.owed ?? sale.creditOwed ?? sale.amount ?? (raw['Vendor Credit Owed'] ? parseFloat(String(raw['Vendor Credit Owed']).replace(/[^0-9.-]+/g, '')) : 0)) || 0;
+
+        return [
+            escapeCsv(ticketId),
+            escapeCsv(formattedDate),
+            escapeCsv(prod),
+            qty,
+            unitPrice.toFixed(2),
+            subtotal.toFixed(2),
+            escapeCsv(promoCode),
+            discountAmt.toFixed(2),
+            creditOwed.toFixed(2)
+        ].join(',');
+    });
+
+    const csvContent = [headers.map(escapeCsv).join(','), ...rows].join('\r\n');
+    const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    const safeSite = targetSite.replace(/\s+/g, '_');
+    link.setAttribute("download", `DIME_Industries_POS_Sales_${targetMonth}_${safeSite}_2026.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    setTimeout(() => URL.revokeObjectURL(url), 150);
+};
+
 // Pure single-month generated promo CSV export (Brand Reports tab - NO YTD, NO GL applied/remaining)
 const downloadMonthlyReport = (brandOrMonthGroup) => {
     const isSingleBrand = !!brandOrMonthGroup.vendor;
+    if (isSingleBrand && isDimeBrand(brandOrMonthGroup.vendor)) {
+        return downloadDimeReport(brandOrMonthGroup);
+    }
     const targetVendor = isSingleBrand ? resolveToTreezBrandName(brandOrMonthGroup.vendor, masterWorkbook.value?.data, treesSalesData.value) : 'All';
     const targetMonth = brandOrMonthGroup.month || activeMonth.value;
     const targetSite = activeSite.value;
@@ -2370,6 +3148,7 @@ const downloadMonthlyReport = (brandOrMonthGroup) => {
         if (globalPromoFilters.value.length > 0 && !globalPromoFilters.value.includes(promoTitle)) return false;
         const v = resolveToTreezBrandName(sale.brand || 'Unmapped', masterWorkbook.value?.data, treesSalesData.value);
         if (targetVendor !== 'All' && v !== targetVendor) return false;
+        if (targetVendor === 'All' && (isExcludedReportBrand(sale.brand) || isExcludedReportBrand(v))) return false;
         return true;
     });
 
@@ -2417,6 +3196,7 @@ const downloadMonthlyReport = (brandOrMonthGroup) => {
     });
 
     // Add Grand Total Row
+    const grandTotalRowIndex = wsData.length;
     wsData.push([`Grand Total (${targetMonth})`, '', '', '', '', '', '', grandTotal]);
 
     const ws = XLSX.utils.aoa_to_sheet(wsData);
@@ -2424,6 +3204,18 @@ const downloadMonthlyReport = (brandOrMonthGroup) => {
     for (let r = 1; r < wsData.length; r++) {
         const cell = ws[XLSX.utils.encode_cell({c: 7, r: r})];
         if (cell && typeof cell.v === 'number') cell.z = '"$"#,##0.00';
+    }
+
+    // Bold line (top border) above Grand Total row across all columns A-H
+    for (let c = 0; c < 8; c++) {
+        const cellAddr = XLSX.utils.encode_cell({ c: c, r: grandTotalRowIndex });
+        if (!ws[cellAddr]) {
+            ws[cellAddr] = { t: 's', v: '' };
+        }
+        if (!ws[cellAddr].s) ws[cellAddr].s = {};
+        ws[cellAddr].s.border = {
+            top: { style: 'medium', color: { rgb: '000000' } }
+        };
     }
 
     // Auto-filter settings (Optional, helps users filter columns)
@@ -2486,6 +3278,7 @@ const eSite = detectSiteFromName(e.site || e.Store || '');
 if (targetSite !== 'All' && eSite !== targetSite) return;
 const eBrand = resolveToTreezBrandName(e.brand || e['Mapped Brand'] || 'Unmapped', masterWorkbook.value?.data, treesSalesData.value);
 if (targetVendor !== 'All' && eBrand !== targetVendor) return;
+if (targetVendor === 'All' && (isExcludedReportBrand(e.brand) || isExcludedReportBrand(eBrand))) return;
 monthGenMap[e.isolation_month] += (Number(e.amount) || 0);
 });
 
@@ -2495,6 +3288,7 @@ const eSite = detectSiteFromName(e.site || e.Store || '');
 if (targetSite !== 'All' && eSite !== targetSite) return;
 const eBrand = resolveToTreezBrandName(e.brand || 'Unmapped', masterWorkbook.value?.data, treesSalesData.value);
 if (targetVendor !== 'All' && eBrand !== targetVendor) return;
+if (targetVendor === 'All' && (isExcludedReportBrand(e.brand) || isExcludedReportBrand(eBrand))) return;
 monthAppMap[e.isolation_month] += (Number(e.amount) || 0);
 });
 months.forEach(m => {
@@ -2584,6 +3378,7 @@ wsData.push([promoName, date, month, site, brand, prodName, units, amt]);
 wsData[summaryRowIndex][7] = subtotal;
 });
 
+const grandTotalRowIndex = wsData.length;
 wsData.push([`Grand Total (${targetMonth === 'All' ? 'YTD' : targetMonth})`, '', '', '', '', '', '', grandTotal]);
 
 const ws = XLSX.utils.aoa_to_sheet(wsData);
@@ -2597,6 +3392,18 @@ for (let r = 1; r < wsData.length; r++) {
     // Format Itemized Credit Amount Owed in Section 2 (Col H)
     const cellH = ws[XLSX.utils.encode_cell({c: 7, r: r})];
     if (cellH && typeof cellH.v === 'number') cellH.z = '"$"#,##0.00';
+}
+
+// Bold line (top border) above Grand Total row across all columns A-H
+for (let c = 0; c < 8; c++) {
+    const cellAddr = XLSX.utils.encode_cell({ c: c, r: grandTotalRowIndex });
+    if (!ws[cellAddr]) {
+        ws[cellAddr] = { t: 's', v: '' };
+    }
+    if (!ws[cellAddr].s) ws[cellAddr].s = {};
+    ws[cellAddr].s.border = {
+        top: { style: 'medium', color: { rgb: '000000' } }
+    };
 }
 
 ws['!cols'] = [
@@ -2683,11 +3490,11 @@ doc.save(`Variance_Report_${activeSite.value.replace(/\s+/g, '_')}_${activeMonth
                                 activeMonth, masterWorkbook, activeWorkbookSheet, calendarMonths,
                 workspaceTabs, activeWorkspaceInfo, selectWorkspace,
                 isProcessing, isGlobalLoading, progressPercent, progressMessage,
-                progressDetails, progressETA, localWbStatus, localTreezStatus,
+                progressDetails, progressETA, isEtlCollapsed, localWbStatus, localTreezStatus,
                 localSageStatus, localSyncSummary, treesSalesData, ledgerEventsList,
-                searchQueryInput, inMemoryLedgerEvents, handleLogin, handleLocalWbUpload,
+                searchQueryInput, brandReportSearch, inMemoryLedgerEvents, handleLogin, handleLocalWbUpload,
                                 handleLocalTreezUpload, handleLocalSageUpload, handleLocalSyncMemory,
-                handleLocalExportWb, draftEmail, downloadMonthlyReport,
+                handleLocalExportWb, draftEmail, downloadMonthlyReport, downloadDimeReport, isDimeBrand,
                 brandStatementSummaries, draftStatementEmail, downloadBrandStatement,
                 exportYTDVariancePDF, formatCurrency, masterBrands, selectedBrands,
                 allBrandsSelected, toggleAllBrands, deleteSelectedBrands,
@@ -2697,7 +3504,11 @@ doc.save(`Variance_Report_${activeSite.value.replace(/\s+/g, '_')}_${activeMonth
                 filteredTreesSalesData, displayTreesSalesData, unsyncedSalesCount,
                                 allAvailablePromos, globalPromoFilters, toggleGlobalPromo,
                                 setAllGlobalPromos, getFilteredBrandTotal, masterLedgerData, ledgerTotals,
-chartCanvas, selectedLedgerVendor
+chartCanvas, selectedLedgerVendor,
+                activeV9Sheet, activeV9Month, activeV9StoreAudit, v9StoreAuditsList,
+                v9SheetsList, v9DashboardData, chartV9Canvas, renderV9Chart,
+                v9RunningTotals, v9MonthlyData, v9StoreAuditData, v9MacroSummary,
+                v9BrandMapping, exportV9MasterWorkbook
             };
         }
     }).mount('#app');

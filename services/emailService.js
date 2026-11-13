@@ -83,10 +83,11 @@ ${userName}
 RREDCO`;
 };
 
-export const buildMailtoUrl = (toEmails, ccEmails, subject, body) => {
+export const buildMailtoUrl = (toEmails, ccEmails = 'accounting@rredco.com', subject, body) => {
     const cleanEmails = String(toEmails || '').split(/[,;\s]+/).map(e => e.trim()).filter(Boolean).join(',');
     let url = `mailto:${cleanEmails}?`;
-    if (ccEmails) url += `cc=${encodeURIComponent(ccEmails)}&`;
+    const finalCc = ccEmails || 'accounting@rredco.com';
+    if (finalCc) url += `cc=${encodeURIComponent(finalCc)}&`;
     url += `subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
     return url;
 };

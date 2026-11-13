@@ -1,0 +1,16 @@
+# Cline Rules for Credit-Resolution-Tracker
+
+## Primary Tool Constraints
+- **Strict Default to Built-in Tools**: ALWAYS prioritize built-in tools (`read_files`, `search_codebase`) over shell or terminal commands (`run_commands`).
+- **No PowerShell or Git Commands for File Reading / Searching**:
+  - NEVER use PowerShell cmdlets (such as `Get-ChildItem`, `Get-Content`, `Select-String`), Git commands (such as `git show`, `git log`, `git grep`), or ad-hoc scripts (e.g. `node -e`) to inspect files, check directory contents, or search codebase patterns.
+  - ALWAYS use `read_files` to view file contents.
+  - ALWAYS use `search_codebase` to search for text patterns, functions, classes, or keywords.
+- **Terminal Execution Restriction**:
+  - `run_commands` must only be used as a last resort when no built-in tool is capable of performing the action (for instance, running non-interactive build, test suite, or deployment commands).
+  - Do not use shell commands when native tools exist.
+
+## Code & Repo Conventions
+- **Preserve Existing Architecture**: Respect the structure of `app.js`, `standalone_tool.html`, `email-mapping.json`, and modules under `services/`.
+- **Formatting and Integrity**: Ensure all JSON files (e.g. `email-mapping.json`) remain strictly valid JSON with no trailing commas or invalid syntax.
+- **Batched Operations**: When reading multiple files or searching multiple terms, emit them in parallel in a single tool call whenever possible.

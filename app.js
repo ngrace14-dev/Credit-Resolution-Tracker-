@@ -56,6 +56,7 @@ createApp({
         const sleep = () => new Promise(resolve => setTimeout(resolve, 0));
 
         const isGlobalLoading = ref(false);
+        const isEtlCollapsed = ref(false);
         const localWbStatus = ref('Not loaded');
         const localTreezStatus = ref('Not loaded');
         const localSageStatus = ref('Not loaded');
@@ -272,9 +273,10 @@ createApp({
 
         const sendEmailDraft = () => {
             const to = selectedBrandForEmail.value?.email || '';
+            const cc = 'accounting@rredco.com';
             const subject = encodeURIComponent(emailDraftSubject.value || '');
             const body = encodeURIComponent(emailDraftBody.value || '');
-            window.open(`mailto:${to}?subject=${subject}&body=${body}`, '_blank');
+            window.open(`mailto:${to}?cc=${encodeURIComponent(cc)}&subject=${subject}&body=${body}`, '_blank');
         };
 
         const processBrandRawPaste = () => {
@@ -1156,7 +1158,18 @@ createApp({
         const openWorkbookSyncModal = () => { showWorkbookSyncModal.value = true; };
         const processWorkbookSync = () => { showWorkbookSyncModal.value = false; };
         const closeEmailDraftModal = () => { showEmailDraftModal.value = false; };
-        const openEmailDraft = (brand) => { selectedBrandForEmail.value = brand; showEmailDraftModal.value = true; };
+        const openEmailDraft = (brand) => {
+            selectedBrandForEmail.value = brand;
+            const vendorName = brand?.vendor || brand?.brand || 'Vendor';
+            const reportMonth = brand?.month || activeMonth.value || 'Current Period';
+            const storeName = activeSite.value === 'Redding' ? 'Sundial Collective – Redding' : (activeSite.value === 'Red Bluff' ? 'Sundial Collective – Red Bluff' : 'Sundial Collective – All Locations');
+            const brandTotal = typeof getFilteredBrandTotal === 'function' ? getFilteredBrandTotal(brand) : (brand?.total || 0);
+            const creditsCount = brand?.credits ? brand.credits.length : 0;
+
+            emailDraftSubject.value = `Promo Credits Generated - ${reportMonth} 2026 - ${vendorName} - ${storeName}`;
+            emailDraftBody.value = `Hello ${vendorName} Team,\n\nPlease find the promotional credits generated for ${storeName} for the period of ${reportMonth} 2026.\n\nTotal Promo Credits Generated (${reportMonth}): ${new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(brandTotal)}\nTotal Qualifying Items: ${creditsCount}\n\nPlease review the attached summary and let us know when we can expect a credit memo or offset applied to our upcoming inventory invoices for these generated credits.\n\n-Accounting Specialist Nicholas Grace RREDCO`;
+            showEmailDraftModal.value = true;
+        };
         const scrollMonths = () => {}; 
         const scrollWorkbookTabs = () => {}; 
         
@@ -1172,7 +1185,7 @@ createApp({
             isProcessing, progressPercent, progressMessage, progressDetails, progressETA,
             isGlobalLoading, allAvailablePromos, globalPromoFilters,
             toggleGlobalPromo, setAllGlobalPromos, isPromoSelected,
-            localWbStatus, localTreezStatus, localSageStatus, localSyncSummary,
+            localWbStatus, localTreezStatus, localSageStatus, localSyncSummary, isEtlCollapsed,
             handleLocalWbUpload, handleLocalTreezUpload, handleLocalSageUpload,
             handleLocalSyncMemory, handleLocalExportWb,
             fallbackEmailMap,
