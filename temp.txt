@@ -1,0 +1,10 @@
+﻿
+    // Add Grand Total Row
+    wsData.push([`Grand Total (${targetMonth})`, '', '', '', '', '', '', grandTotal]);
+
+    const ws = XLSX.utils.aoa_to_sheet(wsData);
+    
+    // Auto-filter settings (Optional, helps users filter columns)
+    ws['!autofilter'] = { ref: `A1:H${wsData.length}` };
+
+    // Set Column Widths for better visibility

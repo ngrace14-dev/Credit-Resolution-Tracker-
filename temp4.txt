@@ -1,0 +1,31 @@
+﻿
+subtotal += amt;
+grandTotal += amt;
+
+hiddenRows.push(wsData.length);
+wsData.push([promoName, date, month, site, brand, prodName, units, amt]);
+});
+
+wsData[summaryRowIndex][7] = subtotal;
+});
+
+wsData.push([`Grand Total (${targetMonth === 'All' ? 'YTD' : targetMonth})`, '', '', '', '', '', '', grandTotal]);
+
+const ws = XLSX.utils.aoa_to_sheet(wsData);
+
+ws['!cols'] = [
+    { wch: 30 }, 
+    { wch: 15 }, 
+    { wch: 15 }, 
+    { wch: 20 }, 
+    { wch: 20 }, 
+    { wch: 40 }, 
+    { wch: 15 }, 
+    { wch: 20 }  
+];
+
+ws['!rows'] = [];
+hiddenRows.forEach(rowIndex => {
+    ws['!rows'][rowIndex] = { hidden: true, level: 1 };
+});
+

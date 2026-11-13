@@ -1,0 +1,31 @@
+﻿if (targetSite !== 'All' && eSite !== targetSite) return;
+const eBrand = resolveToTreezBrandName(e.brand || e['Mapped Brand'] || 'Unmapped', masterWorkbook.value?.data, treesSalesData.value);
+if (targetVendor !== 'All' && eBrand !== targetVendor) return;
+monthGenMap[e.isolation_month] += (Number(e.amount) || 0);
+});
+
+unifiedRecoveryEvents.value.forEach(e => {
+if (!Object.prototype.hasOwnProperty.call(monthAppMap, e.isolation_month)) return;
+const eSite = detectSiteFromName(e.site || e.Store || '');
+if (targetSite !== 'All' && eSite !== targetSite) return;
+const eBrand = resolveToTreezBrandName(e.brand || 'Unmapped', masterWorkbook.value?.data, treesSalesData.value);
+if (targetVendor !== 'All' && eBrand !== targetVendor) return;
+monthAppMap[e.isolation_month] += (Number(e.amount) || 0);
+});
+months.forEach(m => {
+const monthGen = monthGenMap[m] || 0;
+const monthApp = monthAppMap[m] || 0;
+const remaining = monthGen - monthApp;
+let status = 'No Activity';
+if (remaining > 0) status = 'Outstanding';
+if (remaining < 0) status = 'Pending';
+if (monthGen > 0 && remaining === 0) status = 'Resolved';
+wsData.push([`${m} 2026`, targetSite, targetVendor, monthGen, monthApp, remaining, status]);
+ytdGenerated += monthGen;
+ytdApplied += monthApp;
+});
+const ytdRemaining = ytdGenerated - ytdApplied;
+let ytdStatus = 'No Activity';
+if (ytdRemaining > 0) ytdStatus = 'Outstanding';
+if (ytdRemaining < 0) ytdStatus = 'Pending';
+if (ytdGenerated > 0 && ytdRemaining === 0) ytdStatus = 'Resolved';

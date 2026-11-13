@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -280,62 +280,132 @@
             </div>
 
             <!-- TAB: BRAND REPORTS -->
-            <div v-if="activeTab === 'Reports'" class="flex-1 flex flex-col p-4 md:p-6 bg-gray-100 overflow-y-auto">
-                <div class="mb-4">
-                    <h2 class="text-xl font-bold text-gray-900">Monthly Brand Reports</h2>
-                    <p class="text-sm text-gray-500">Generate audit statements from local memory.</p>
-                </div>
-                <div v-if="monthlyReportSummaries.length === 0" class="text-center py-16 bg-white rounded-xl border border-gray-200 shadow-sm text-gray-500 font-bold">
-                    No report entries found. Fast load data below.
-                </div>
-                <div v-else class="space-y-6">
-                    <div v-for="monthGroup in monthlyReportSummaries" :key="monthGroup.month" class="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
-                                                <div class="bg-gradient-to-r from-gray-950 to-gray-800 text-white px-6 py-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-                            <div>
-                                <h3 class="text-xl font-bold tracking-wide flex items-center gap-2 text-emerald-500">
-                                    <i data-lucide="calendar" class="w-5 h-5 text-emerald-500"></i>
-                                    {{ monthGroup.month }}
-                                </h3>
-                                <p class="text-xs text-gray-300 mt-0.5">{{ monthGroup.brandList.length }} Brands • {{ monthGroup.count }} Total Entries</p>
-                            </div>
-                            <div class="flex items-center gap-3">
-                                <span class="text-lg font-extrabold text-emerald-400 bg-white/10 px-3 py-1 rounded-lg border border-white/10">{{ formatCurrency(monthGroup.total) }}</span>
-                                <button @click="downloadMonthlyReport(monthGroup)" class="bg-emerald-600 text-white hover:bg-emerald-500 px-3 py-1.5 rounded-lg font-bold text-xs shadow transition-colors flex items-center gap-1.5">
-                                    <i data-lucide="download" class="w-3.5 h-3.5"></i> Full Month CSV
-                                </button>
-                            </div>
-                        </div>
-                        <div class="p-4 sm:p-6 grid grid-cols-1 lg:grid-cols-2 gap-4">
-                            <div v-for="brand in monthGroup.brandList" :key="brand.vendor" class="bg-gray-50 border border-gray-200 rounded-xl p-4 flex flex-col justify-between hover:border-emerald-300 transition-all shadow-sm">
-                                <div class="flex justify-between items-start mb-3 border-b border-gray-200 pb-3">
-                                    <div>
-                                        <h4 class="font-bold text-gray-900 text-base">{{ brand.vendor }}</h4>
-                                        <p class="text-xs text-gray-500 font-mono mt-0.5">{{ brand.email || 'No email mapped' }}</p>
-                                    </div>
-                                                                        <div class="text-right">
-                                        <div class="text-lg font-extrabold text-gray-900">{{ formatCurrency(brand.total) }}</div>
-                                        <div class="text-[10px] text-gray-400 font-bold uppercase tracking-wider">{{ brand.credits.length }} Credits</div>
-                                    </div>
-                                </div>
-                                <div class="mb-4 text-xs text-gray-600 space-y-1 max-h-32 overflow-y-auto pr-1">
-                                    <div v-for="c in brand.credits" :key="c.id" class="flex justify-between bg-white px-2 py-1.5 rounded border border-gray-100">
-                                        <span class="truncate pr-2 font-medium">{{ c.creditType || 'Promo' }}</span>
-                                        <span class="font-bold text-gray-900 whitespace-nowrap">{{ formatCurrency(c.amount) }}</span>
-                                    </div>
-                                </div>
-                                <div class="space-y-2">
-                                    <button @click="draftEmail(brand)" class="w-full py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-lg transition-colors flex items-center justify-center gap-2 shadow">
-                                        <i data-lucide="mail" class="w-4 h-4"></i> Draft Email
-                                    </button>
-                                    <button @click="downloadMonthlyReport(brand)" class="w-full px-3 py-2 bg-white border border-gray-300 hover:bg-gray-100 text-gray-700 rounded-lg font-bold flex justify-center items-center gap-1.5 text-xs transition-colors shadow-sm">
-                                        <i data-lucide="file-spreadsheet" class="w-3.5 h-3.5 text-amber-500"></i> Download Statement CSV
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
+                        <div v-if="activeTab === 'Reports'" class="flex-1 flex flex-col p-4 md:p-6 bg-gray-100 overflow-y-auto">
+<div class="mb-4">
+<h2 class="text-xl font-bold text-gray-900">Monthly Brand Reports</h2>
+<p class="text-sm text-gray-500">Single-month generated promo credit reports (purely credits generated in the selected month).</p>
+</div>
+<div v-if="monthlyReportSummaries.length === 0" class="text-center py-16 bg-white rounded-xl border border-gray-200 shadow-sm text-gray-500 font-bold">
+No report entries found. Fast load data below.
+</div>
+<div v-else class="space-y-6">
+<div v-for="monthGroup in monthlyReportSummaries" :key="monthGroup.month" class="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+<div class="bg-gradient-to-r from-gray-950 to-gray-800 text-white px-6 py-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+<div>
+<h3 class="text-xl font-bold tracking-wide flex items-center gap-2 text-emerald-500">
+<i data-lucide="calendar" class="w-5 h-5 text-emerald-500"></i>
+{{ monthGroup.month }}
+</h3>
+<p class="text-xs text-gray-300 mt-0.5">{{ monthGroup.brandList.length }} Brands â€¢ {{ monthGroup.count }} Total Entries</p>
+</div>
+<div class="flex items-center gap-3">
+<span class="text-lg font-extrabold text-emerald-400 bg-white/10 px-3 py-1 rounded-lg border border-white/10">{{ formatCurrency(monthGroup.total) }}</span>
+<button @click="downloadMonthlyReport(monthGroup)" class="bg-emerald-600 text-white hover:bg-emerald-500 px-3 py-1.5 rounded-lg font-bold text-xs shadow transition-colors flex items-center gap-1.5">
+<i data-lucide="download" class="w-3.5 h-3.5"></i> Full Month CSV
+</button>
+</div>
+</div>
+<div class="p-4 sm:p-6 grid grid-cols-1 lg:grid-cols-2 gap-4">
+<div v-for="brand in monthGroup.brandList" :key="brand.vendor" class="bg-gray-50 border border-gray-200 rounded-xl p-4 flex flex-col justify-between hover:border-emerald-300 transition-all shadow-sm">
+<div class="flex justify-between items-start mb-3 border-b border-gray-200 pb-3">
+<div>
+<h4 class="font-bold text-gray-900 text-base">{{ brand.vendor }}</h4>
+<p class="text-xs text-gray-500 font-mono mt-0.5">{{ brand.email || 'No email mapped' }}</p>
+</div>
+<div class="text-right">
+<div class="text-lg font-extrabold text-gray-900">{{ formatCurrency(brand.total) }}</div>
+<div class="text-[10px] text-gray-400 font-bold uppercase tracking-wider">{{ brand.credits.length }} Credits</div>
+</div>
+</div>
+<div class="mb-4 text-xs text-gray-600 space-y-1 max-h-32 overflow-y-auto pr-1">
+<div v-for="c in brand.credits" :key="c.id" class="flex justify-between bg-white px-2 py-1.5 rounded border border-gray-100">
+<span class="truncate pr-2 font-medium">{{ c.creditType || 'Promo' }}</span>
+<span class="font-bold text-gray-900 whitespace-nowrap">{{ formatCurrency(c.amount) }}</span>
+</div>
+</div>
+<div class="space-y-2">
+<button @click="draftEmail(brand)" class="w-full py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-lg transition-colors flex items-center justify-center gap-2 shadow">
+<i data-lucide="mail" class="w-4 h-4"></i> Draft Report Email
+</button>
+<button @click="downloadMonthlyReport(brand)" class="w-full px-3 py-2 bg-white border border-gray-300 hover:bg-gray-100 text-gray-700 rounded-lg font-bold flex justify-center items-center gap-1.5 text-xs transition-colors shadow-sm">
+<i data-lucide="file-spreadsheet" class="w-3.5 h-3.5 text-amber-500"></i> Download Monthly Report CSV
+</button>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div v-if="activeTab === 'Statements'" class="flex-1 flex flex-col p-4 md:p-6 bg-gray-100 overflow-y-auto">
+<div class="mb-4">
+<h2 class="text-xl font-bold text-gray-900">Brand Statements (Year to Date)</h2>
+<p class="text-sm text-gray-500">Full 12-month and YTD reconciliation statements comparing generated promo credits against Sage GL recoveries.</p>
+</div>
+<div v-if="brandStatementSummaries.length === 0" class="text-center py-16 bg-white rounded-xl border border-gray-200 shadow-sm text-gray-500 font-bold">
+No statement entries found. Fast load data below.
+</div>
+<div v-else class="space-y-6">
+<div v-for="monthGroup in brandStatementSummaries" :key="monthGroup.month" class="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+<div class="bg-gradient-to-r from-gray-950 to-gray-800 text-white px-6 py-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+<div>
+<h3 class="text-xl font-bold tracking-wide flex items-center gap-2 text-emerald-500">
+<i data-lucide="calendar" class="w-5 h-5 text-emerald-500"></i>
+{{ monthGroup.month }} â€” YTD Statement View
+</h3>
+<p class="text-xs text-gray-300 mt-0.5">{{ monthGroup.brandList.length }} Brands â€¢ {{ monthGroup.count }} Total Entries</p>
+</div>
+<div class="flex items-center gap-3">
+<span class="text-lg font-extrabold text-emerald-400 bg-white/10 px-3 py-1 rounded-lg border border-white/10">{{ formatCurrency(monthGroup.total) }}</span>
+<button @click="downloadBrandStatement(monthGroup)" class="bg-emerald-600 text-white hover:bg-emerald-500 px-3 py-1.5 rounded-lg font-bold text-xs shadow transition-colors flex items-center gap-1.5">
+<i data-lucide="download" class="w-3.5 h-3.5"></i> Full YTD Statement CSV
+</button>
+</div>
+</div>
+<div class="p-4 sm:p-6 grid grid-cols-1 lg:grid-cols-2 gap-4">
+<div v-for="brand in monthGroup.brandList" :key="brand.vendor" class="bg-gray-50 border border-gray-200 rounded-xl p-4 flex flex-col justify-between hover:border-emerald-300 transition-all shadow-sm">
+<div class="flex justify-between items-start mb-3 border-b border-gray-200 pb-3">
+<div>
+<h4 class="font-bold text-gray-900 text-base">{{ brand.vendor }}</h4>
+<p class="text-xs text-gray-500 font-mono mt-0.5">{{ brand.email || 'No email mapped' }}</p>
+</div>
+<div class="text-right">
+<div class="text-lg font-extrabold text-gray-900">{{ formatCurrency(brand.total) }}</div>
+<div class="text-[10px] text-gray-400 font-bold uppercase tracking-wider">{{ brand.credits.length }} Credits</div>
+</div>
+</div>
+<div class="grid grid-cols-3 gap-2 mb-3 text-center text-xs">
+<div class="bg-white border border-gray-200 rounded-lg p-2">
+<div class="text-[10px] uppercase font-bold text-gray-400">YTD Generated</div>
+<div class="font-extrabold text-gray-900">{{ formatCurrency(brand.ytdGenerated) }}</div>
+</div>
+<div class="bg-white border border-gray-200 rounded-lg p-2">
+<div class="text-[10px] uppercase font-bold text-gray-400">YTD Applied</div>
+<div class="font-extrabold text-emerald-600">{{ formatCurrency(brand.ytdApplied) }}</div>
+</div>
+<div class="bg-white border border-gray-200 rounded-lg p-2">
+<div class="text-[10px] uppercase font-bold text-gray-400">YTD Remaining</div>
+<div class="font-extrabold" :class="brand.ytdRemaining > 0 ? 'text-red-600' : 'text-gray-700'">{{ formatCurrency(brand.ytdRemaining) }}</div>
+</div>
+</div>
+<div class="mb-4 text-xs text-gray-600 space-y-1 max-h-32 overflow-y-auto pr-1">
+<div v-for="c in brand.credits" :key="c.id" class="flex justify-between bg-white px-2 py-1.5 rounded border border-gray-100">
+<span class="truncate pr-2 font-medium">{{ c.creditType || 'Promo' }}</span>
+<span class="font-bold text-gray-900 whitespace-nowrap">{{ formatCurrency(c.amount) }}</span>
+</div>
+</div>
+<div class="space-y-2">
+<button @click="draftStatementEmail(brand)" class="w-full py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-lg transition-colors flex items-center justify-center gap-2 shadow">
+<i data-lucide="mail" class="w-4 h-4"></i> Draft Statement Email
+</button>
+<button @click="downloadBrandStatement(brand)" class="w-full px-3 py-2 bg-white border border-gray-300 hover:bg-gray-100 text-gray-700 rounded-lg font-bold flex justify-center items-center gap-1.5 text-xs transition-colors shadow-sm">
+<i data-lucide="file-spreadsheet" class="w-3.5 h-3.5 text-amber-500"></i> Download YTD Statement CSV
+</button>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
 
             <!-- STANDALONE LOCAL ETL PROCESSING PANEL (STAYS VISIBLE OR BOTTOM) -->
             <div id="local-etl-panel" class="bg-slate-900 border border-slate-700 text-white p-5 rounded-xl my-6 shadow-xl mx-4 mt-auto">
@@ -392,25 +462,53 @@ Search for the [TAG] to jump to the exact module.
 
         // --- INTEGRATED SERVICES ---
 
-    const detectMonthFromDate = (dateStr) => {
-        if (!dateStr) return '';
-        const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-        const cleanStr = String(dateStr).trim().split(' ')[0];
-        const parsedDate = new Date(cleanStr);
-        if (!isNaN(parsedDate.getTime())) {
-            return months[parsedDate.getUTCMonth()];
-        }
-        if (cleanStr.includes('-')) {
-            const parts = cleanStr.split('-');
-            const val = parts[0].length === 4 ? parseInt(parts[1], 10) : parseInt(parts[0], 10);
-            if (val >= 1 && val <= 12) return months[val - 1];
-        }
-        if (cleanStr.includes('/')) {
-            const val = parseInt(cleanStr.split('/')[0], 10);
-            if (val >= 1 && val <= 12) return months[val - 1];
-        }
-        return '';
-    };
+        const detectMonthFromDate = (dateStr) => {
+if (dateStr === null || dateStr === undefined || dateStr === '') return '';
+const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+const monthShortMap = {
+jan: 'January', feb: 'February', mar: 'March', apr: 'April',
+may: 'May', jun: 'June', jul: 'July', aug: 'August',
+sep: 'September', oct: 'October', nov: 'November', dec: 'December'
+};
+// 1. Excel serial date number (e.g. 46082 or "46082")
+const numVal = typeof dateStr === 'number' ? dateStr : (/^\d{5}(\.\d+)?$/.test(String(dateStr).trim()) ? Number(dateStr) : NaN);
+if (!isNaN(numVal) && numVal > 20000 && numVal < 80000) {
+const utcDate = new Date(Math.round((numVal - 25569) * 86400 * 1000));
+if (!isNaN(utcDate.getTime())) return months[utcDate.getUTCMonth()];
+}
+const cleanStr = String(dateStr).trim().split(' ')[0];
+// 2. Slash dates MM/DD/YYYY or M/D/YY (parse month directly before Date() to avoid local-to-UTC day shift)
+if (cleanStr.includes('/')) {
+const mPart = parseInt(cleanStr.split('/')[0], 10);
+if (mPart >= 1 && mPart <= 12) return months[mPart - 1];
+}
+// 3. Dash dates YYYY-MM-DD, MM-DD-YYYY, or 26-Mar / Mar-26
+if (cleanStr.includes('-')) {
+const parts = cleanStr.split('-');
+if (parts[0].length === 4) {
+const mPart = parseInt(parts[1], 10);
+if (mPart >= 1 && mPart <= 12) return months[mPart - 1];
+} else {
+const mPart = parseInt(parts[0], 10);
+if (mPart >= 1 && mPart <= 12 && parts.length === 3) return months[mPart - 1];
+}
+for (const p of parts) {
+const key = p.slice(0, 3).toLowerCase();
+if (monthShortMap[key]) return monthShortMap[key];
+}
+}
+// 4. Text month names (e.g. "March 2026", "Mar")
+const lower = String(dateStr).toLowerCase();
+for (const [abbr, full] of Object.entries(monthShortMap)) {
+if (new RegExp(`\\b${abbr}[a-z]*\\b`, 'i').test(lower)) return full;
+}
+// 5. Fallback local Date parse
+const parsedDate = new Date(cleanStr);
+if (!isNaN(parsedDate.getTime())) {
+return months[parsedDate.getMonth()];
+}
+return '';
+};
 
     const detectSiteFromName = (rawSite) => {
         if (!rawSite) return '';
@@ -511,11 +609,14 @@ return resolved;
 };
 
         const escapeRegExp = (str) => String(str).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const hasWordMatch = (text, keyword) => {
-        if (!text || !keyword) return false;
-        const regex = new RegExp(`\\b${escapeRegExp(keyword.toUpperCase().trim())}\\b`, 'i');
-        return regex.test(text);
-    };
+const hasWordMatch = (text, keyword) => {
+if (!text || !keyword) return false;
+const normalizedText = String(text).replace(/_/g, ' ');
+const normalizedKeyword = String(keyword).trim().replace(/_/g, ' ');
+if (!normalizedKeyword) return false;
+const regex = new RegExp(`\\b${escapeRegExp(normalizedKeyword)}\\b`, 'i');
+return regex.test(normalizedText);
+};
     
         const MULTI_BRAND_DISTRIBUTORS = [
         {
@@ -581,6 +682,28 @@ return resolved;
         { patterns: ['OAKFRUITLAND'], brand: 'Oakfruitland' }
     ];
 
+const buildSageSearchText = (row) => {
+if (!row || typeof row !== 'object') return '';
+const candidateFields = [
+row['Mapped Brand'],
+row['Memo/Description'],
+row['Description'],
+row['Line Description'],
+row['Vendor Name'],
+row['Vendor'],
+row['Payee'],
+row['Reference'],
+row['Item'],
+row['Account'],
+row['searchMemo'],
+row['memo'],
+row['brand']
+];
+return candidateFields
+.map(v => String(v || '').trim())
+.filter(Boolean)
+.join(' | ');
+};
         const resolveBrandFromSageMemo = (rawMemo, workbookData = null, brandDirectory = [], treezRows = []) => {
         if (!rawMemo) return 'Unmapped';
         const upperMemo = String(rawMemo).toUpperCase().trim();
@@ -721,16 +844,44 @@ return resolved;
 
     const workbookService = {
         ingestMasterWorkbookFile: async (file) => {
-            const buffer = await file.arrayBuffer();
-            const workbook = XLSX.read(buffer, { type: 'array' });
-            localWorkbookState.rawWorkbook = workbook;
-            const parsed = {};
-            workbook.SheetNames.forEach(sheetName => {
-                parsed[sheetName] = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { header: 1 });
-            });
-            localWorkbookState.workbookData = parsed;
-            return { sheets: workbook.SheetNames, totalSheets: workbook.SheetNames.length };
-        },
+const buffer = await file.arrayBuffer();
+const workbook = XLSX.read(buffer, { type: 'array' });
+localWorkbookState.rawWorkbook = workbook;
+const parsed = {};
+const knownHeaders = ['posted dt.', 'credit', 'debit', 'memo/description', 'mapped brand', 'standardized pos name', 'product brand', 'vendor', 'brand', 'store', 'location'];
+workbook.SheetNames.forEach(sheetName => {
+const rawMatrix = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { header: 1, defval: '' });
+if (!Array.isArray(rawMatrix) || rawMatrix.length === 0) {
+parsed[sheetName] = [];
+return;
+}
+let headerRowIdx = 0;
+for (let i = 0; i < Math.min(rawMatrix.length, 15); i++) {
+const rowCells = (rawMatrix[i] || []).map(c => String(c || '').trim().toLowerCase());
+if (rowCells.some(cell => knownHeaders.some(kh => cell.includes(kh)))) {
+headerRowIdx = i;
+break;
+}
+}
+const headers = (rawMatrix[headerRowIdx] || []).map((h, idx) => {
+const cleanH = String(h || '').trim();
+return cleanH || `__col_${idx}`;
+});
+const rowObjects = [];
+for (let r = headerRowIdx + 1; r < rawMatrix.length; r++) {
+const rowArr = rawMatrix[r] || [];
+if (rowArr.every(c => String(c || '').trim() === '')) continue;
+const obj = {};
+headers.forEach((h, idx) => {
+obj[h] = rowArr[idx] !== undefined ? rowArr[idx] : '';
+});
+rowObjects.push(obj);
+}
+parsed[sheetName] = rowObjects;
+});
+localWorkbookState.workbookData = parsed;
+return { sheets: workbook.SheetNames, totalSheets: workbook.SheetNames.length };
+},
         ingestTreezPOSCSV: async (file, activeMonth) => {
             const text = await file.text();
             return new Promise((resolve) => {
@@ -755,47 +906,49 @@ return resolved;
             });
         },
                                         ingestSageGLCSV: async (file) => {
-            const text = await file.text();
-            return new Promise((resolve) => {
-                Papa.parse(text, {
-                    header: true,
-                    skipEmptyLines: true,
-                    complete: (res) => {
-                        const cleaned = res.data
-                            .map((r, idx) => {
-                                const postedDt = String(r['Posted dt.'] || '').trim();
-                                const lowerDt = postedDt.toLowerCase();
-                                if (!postedDt || lowerDt.includes('balance forward') || lowerDt.includes('total')) {
-                                    return null;
-                                }
-                                const detectedMonth = detectMonthFromDate(postedDt);
-                                if (!detectedMonth) return null;
-                                const memo = String(r['Memo/Description'] || '').trim();
-                                const docNum = String(r['Doc'] || '').trim();
-                                const creditAmt = csvService.cleanCurrency(r['Credit'] || 0);
-                                const debitAmt = csvService.cleanCurrency(r['Debit'] || 0);
-                                const netAmt = creditAmt - debitAmt;
-                                if (netAmt === 0) return null;
-                                return {
-                                    id: `sage_${idx}`,
-                                    ...r,
-                                    type: 'RECOVERY',
-                                    amount: netAmt,
-                                    site: detectSiteFromName(r['Location'] || memo),
-                                    date: postedDt,
-                                    doc: docNum,
-                                    memo: memo,
-                                    brand: r['Mapped Brand'] || memo,
-                                    isolation_month: detectedMonth
-                                };
-                            })
-                            .filter(Boolean);
-                        localWorkbookState.sageData = cleaned;
-                        resolve(cleaned);
-                    }
-                });
-            });
-        },
+const text = await file.text();
+return new Promise((resolve) => {
+Papa.parse(text, {
+header: true,
+skipEmptyLines: true,
+complete: (res) => {
+const cleaned = res.data
+.map((r, idx) => {
+const postedDt = String(r['Posted dt.'] || '').trim();
+const lowerDt = postedDt.toLowerCase();
+if (!postedDt || lowerDt.includes('balance forward') || lowerDt.includes('total')) {
+return null;
+}
+const detectedMonth = detectMonthFromDate(postedDt);
+if (!detectedMonth) return null;
+const displayMemo = String(r['Memo/Description'] || r['Description'] || r['Vendor Name'] || r['Vendor'] || '').trim();
+const searchMemo = buildSageSearchText(r);
+const docNum = String(r['Doc'] || r['Document'] || r['Reference'] || '').trim();
+const creditAmt = csvService.cleanCurrency(r['Credit'] || 0);
+const debitAmt = csvService.cleanCurrency(r['Debit'] || 0);
+const netAmt = creditAmt - debitAmt;
+if (netAmt === 0) return null;
+return {
+id: `sage_${idx}`,
+...r,
+type: 'RECOVERY',
+amount: netAmt,
+site: detectSiteFromName(r['Location'] || r['Store'] || r['Department'] || searchMemo),
+date: postedDt,
+doc: docNum,
+memo: displayMemo,
+searchMemo: searchMemo,
+brand: r['Mapped Brand'] || searchMemo,
+isolation_month: detectedMonth
+};
+})
+.filter(Boolean);
+localWorkbookState.sageData = cleaned;
+resolve(cleaned);
+}
+});
+});
+},
                 syncDataToWorkbook: (activeMonth, ledgerEvents) => {
             if (!localWorkbookState.rawWorkbook) throw new Error("Workbook not loaded.");
             if (!activeMonth || activeMonth === 'All') throw new Error("Select a specific month to sync.");
@@ -870,10 +1023,11 @@ return resolved;
             const activeWorkbookSheet = ref('Board Recon - Red Bluff');
                         const calendarMonths = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
             
-            const workspaceTabs = [
+                        const workspaceTabs = [
                 { name: 'Ledger', label: 'Master Ledger', icon: 'calculator', group: 'Workbook' },
                 { name: 'Recovery', label: 'Recovery Log', icon: 'undo-2', group: 'Workbook' },
                 { name: 'Reports', label: 'Brand Reports', icon: 'file-bar-chart', group: 'Workbook' },
+                { name: 'Statements', label: 'Brand Statements', icon: 'file-spreadsheet', group: 'Workbook' },
                 { name: 'Directory', label: 'Brand Directory', icon: 'users', group: 'Identity' }
             ];
 
@@ -1363,82 +1517,85 @@ return resolved;
                 "Bbrand": "jessicap@buddiesbrand.com"
             };
 
-                        const treesSalesData = ref([]);
-                        const ledgerEventsList = ref([]);
-            const searchQueryInput = ref('');
+                                                const treesSalesData = ref([]);
+const ledgerEventsList = ref([]);
+const selectedLedgerVendor = ref(null);
+const searchQueryInput = ref('');
 
             const unifiedRecoveryEvents = computed(() => {
-                const results = [];
-                const seenKeys = new Set();
-                
-                // 1. Process uploaded live Sage GL CSV rows
-                (ledgerEventsList.value || []).forEach(e => {
-                    const eDate = e.date || 'N/A';
-                    const eSite = detectSiteFromName(e.site || e.Store || '');
-                    const eAmount = csvService.cleanCurrency(e.amount);
-                    const eMemo = String(e.memo || '').trim();
-                    const eBrand = resolveBrandFromSageMemo(e.memo || e.brand, masterWorkbook.value?.data, masterBrands.value, treesSalesData.value);
-                    
-                    const dedupeKey = `${eDate}|${eSite}|${eAmount.toFixed(2)}|${eMemo.slice(0, 40).toUpperCase()}`;
-                    if (!seenKeys.has(dedupeKey)) {
-                        seenKeys.add(dedupeKey);
-                        results.push({
-                            id: `live_${results.length}`,
-                            type: 'RECOVERY',
-                            date: eDate,
-                            isolation_month: detectMonthFromDate(eDate),
-                            site: eSite,
-                            brand: eBrand,
-                            amount: eAmount,
-                            memo: eMemo,
-                            source: 'Live CSV'
-                        });
-                    }
-                });
-
-                // 2. Process historical 'GL Raw by Store' rows from workbook
-                const rawGlRows = masterWorkbook.value?.data?.['GL Raw by Store'] || [];
-                rawGlRows.forEach(row => {
-                    const postedDt = row['Posted dt.'] || '';
-                    if (!postedDt) return;
-                    
-                    const rSite = detectSiteFromName(row['Store'] || row['Location'] || '');
-                    const rAmount = csvService.cleanCurrency(row['Credit']);
-                    if (rAmount === 0) return;
-                    
-                    const rMemo = String(row['Memo/Description'] || '').trim();
-                    
-                    let rBrand = '';
-                    const mappedBrand = String(row['Mapped Brand'] || '').trim();
-                    
-                    if (!mappedBrand || mappedBrand.startsWith('Nabifive Portfolio') || mappedBrand === 'Unassigned Distributor GL Entry') {
-                        rBrand = resolveBrandFromSageMemo(rMemo, masterWorkbook.value?.data, masterBrands.value, treesSalesData.value);
-                    } else if (mappedBrand.includes(',')) {
-                        rBrand = 'Nabifive LLC (Unallocated Pool)';
-                    } else {
-                        rBrand = resolveToTreezBrandName(mappedBrand, masterWorkbook.value?.data, treesSalesData.value);
-                    }
-
-                    const dedupeKey = `${postedDt}|${rSite}|${rAmount.toFixed(2)}|${rMemo.slice(0, 40).toUpperCase()}`;
-                    
-                    if (!seenKeys.has(dedupeKey)) {
-                        seenKeys.add(dedupeKey);
-                        results.push({
-                            id: `hist_${results.length}`,
-                            type: 'RECOVERY',
-                            date: postedDt,
-                            isolation_month: detectMonthFromDate(postedDt),
-                            site: rSite,
-                            brand: rBrand,
-                            amount: rAmount,
-                            memo: rMemo,
-                            source: 'Historical GL'
-                        });
-                    }
-                });
-
-                return results;
-            });
+const results = [];
+const seenKeys = new Set();
+// 1. Process uploaded live Sage GL CSV rows
+(ledgerEventsList.value || []).forEach(e => {
+const eDate = e.date || e['Posted dt.'] || 'N/A';
+const eSearchText = buildSageSearchText(e);
+const eSite = detectSiteFromName(e.site || e.Store || e.Location || eSearchText);
+const eAmount = csvService.cleanCurrency(e.amount);
+if (eAmount === 0) return;
+const eMemo = String(e.memo || e['Memo/Description'] || '').trim();
+const eDoc = String(e.doc || e.Doc || e.Document || e.Reference || '').trim();
+const eBrand = resolveBrandFromSageMemo(eSearchText || eMemo || e.brand, masterWorkbook.value?.data, masterBrands.value, treesSalesData.value);
+const dedupeKey = `${eDate}|${eSite}|${eAmount.toFixed(2)}|${eDoc}|${eMemo.slice(0, 40).toUpperCase()}`;
+if (!seenKeys.has(dedupeKey)) {
+seenKeys.add(dedupeKey);
+results.push({
+id: `live_${results.length}`,
+type: 'RECOVERY',
+date: eDate,
+doc: eDoc,
+isolation_month: e.isolation_month || detectMonthFromDate(eDate),
+site: eSite,
+brand: eBrand,
+amount: eAmount,
+memo: eMemo,
+searchMemo: eSearchText,
+source: 'Live CSV'
+});
+}
+});
+// 2. Process historical 'GL Raw by Store' rows from workbook
+const rawGlRows = masterWorkbook.value?.data?.['GL Raw by Store'] || [];
+rawGlRows.forEach(row => {
+const postedDt = row['Posted dt.'] || '';
+if (!postedDt) return;
+const rSearchText = buildSageSearchText(row);
+const rSite = detectSiteFromName(row['Store'] || row['Location'] || rSearchText);
+const rCredit = csvService.cleanCurrency(row['Credit']);
+const rDebit = csvService.cleanCurrency(row['Debit']);
+const rAmount = rCredit - rDebit;
+if (rAmount === 0) return;
+const rMemo = String(row['Memo/Description'] || row['Description'] || '').trim();
+const rDoc = String(row['Doc'] || row['Document'] || row['Reference'] || '').trim();
+let rBrand = '';
+const mappedBrand = String(row['Mapped Brand'] || '').trim();
+if (!mappedBrand || mappedBrand.startsWith('Nabifive Portfolio') || mappedBrand === 'Unassigned Distributor GL Entry') {
+rBrand = resolveBrandFromSageMemo(rSearchText, masterWorkbook.value?.data, masterBrands.value, treesSalesData.value);
+} else if (mappedBrand.includes(',')) {
+const resolvedFromMemo = resolveBrandFromSageMemo(rSearchText, masterWorkbook.value?.data, masterBrands.value, treesSalesData.value);
+rBrand = (resolvedFromMemo && resolvedFromMemo !== 'Unmapped') ? resolvedFromMemo : 'Nabifive LLC (Unallocated Pool)';
+} else {
+rBrand = resolveToTreezBrandName(mappedBrand, masterWorkbook.value?.data, treesSalesData.value);
+}
+const dedupeKey = `${postedDt}|${rSite}|${rAmount.toFixed(2)}|${rDoc}|${rMemo.slice(0, 40).toUpperCase()}`;
+if (!seenKeys.has(dedupeKey)) {
+seenKeys.add(dedupeKey);
+results.push({
+id: `hist_${results.length}`,
+type: 'RECOVERY',
+date: postedDt,
+doc: rDoc,
+isolation_month: detectMonthFromDate(postedDt),
+site: rSite,
+brand: rBrand,
+amount: rAmount,
+memo: rMemo,
+searchMemo: rSearchText,
+source: 'Historical GL'
+});
+}
+});
+return results;
+});
 
             const inMemoryLedgerEvents = computed(() => {
                 return [
@@ -1515,8 +1672,14 @@ return resolved;
                             }
                         });
                     });
-                                        localTreezStatus.value = `Loaded (${rows.length} rows)`;
-                    treesSalesData.value = rows;
+                                                                                localTreezStatus.value = `Loaded (${rows.length} rows)`;
+treesSalesData.value = rows;
+                    const detectedPromos = [...new Set(
+                        rows
+                        .map(r => r.discountTitle || 'Promo')
+                        .filter(t => !String(t).toUpperCase().includes('CUSTOM PRICE ADJUSTMENT'))
+                    )];
+                    globalPromoFilters.value = detectedPromos;
                 } catch (err) {
                     alert(err.message);
                 } finally { 
@@ -1526,18 +1689,20 @@ return resolved;
             };
 
                         const handleLocalSageUpload = async (e) => {
-                const file = e.target.files[0];
-                if (!file) return;
-                isGlobalLoading.value = true;
-                try {
-                                        const rows = await workbookService.ingestSageGLCSV(file);
-                    localSageStatus.value = `Loaded (${rows.length} rows)`;
-                    ledgerEventsList.value = rows;
-                } finally { 
-                    isGlobalLoading.value = false;
-                    e.target.value = '';
-                }
-            };
+const file = e.target.files[0];
+if (!file) return;
+isGlobalLoading.value = true;
+try {
+const rows = await workbookService.ingestSageGLCSV(file);
+localSageStatus.value = `Loaded (${rows.length} rows)`;
+ledgerEventsList.value = rows;
+} catch (err) {
+alert(err.message);
+} finally {
+isGlobalLoading.value = false;
+e.target.value = '';
+}
+};
 
                         // ==========================================
             // [MOD_PARSER] - Intake Parsers & Normalization Utils
@@ -1765,14 +1930,94 @@ if (sale.isolation_month !== month) return;
 const saleSite = detectSiteFromName(sale.site || '');
 if (activeSite.value !== 'All' && saleSite !== activeSite.value) return;
 const promoTitle = sale.discountTitle || 'Promo';
-if (!globalPromoFilters.value.includes(promoTitle)) return; // Excluded by filter
+if (globalPromoFilters.value.length > 0 && !globalPromoFilters.value.includes(promoTitle)) return;
 // Safely resolve the standardized brand
 const rawBrand = sale.brand || 'Unmapped';
-const vendor = getStandardizedBrandName(rawBrand, masterWorkbook.value?.data) || rawBrand;
+const vendor = resolveToTreezBrandName(rawBrand, masterWorkbook.value?.data, treesSalesData.value) || rawBrand;
 if (!vendor) return;
 if (!brandMap[vendor]) {
-const email = masterBrands.value.find(b => b.vendor === vendor)?.email || '';
-brandMap[vendor] = { vendor, email, total: 0, credits: [] };
+const vendorLower = vendor.toLowerCase();
+const email = masterBrands.value.find(b => {
+const bResolved = resolveToTreezBrandName(b.vendor, masterWorkbook.value?.data, treesSalesData.value);
+return String(b.vendor || '').trim().toLowerCase() === vendorLower || bResolved.toLowerCase() === vendorLower;
+})?.email || '';
+brandMap[vendor] = { vendor, email, month, total: 0, credits: [] };
+}
+const amt = Number(sale.amount) || 0;
+brandMap[vendor].total += amt;
+brandMap[vendor].credits.push({
+id: sale.id,
+creditType: promoTitle,
+amount: amt
+});
+monthTotal += amt;
+});
+const brandList = Object.values(brandMap).sort((a, b) => b.total - a.total);
+if (brandList.length > 0) {
+results.push({
+month,
+total: monthTotal,
+count: brandList.reduce((acc, b) => acc + b.credits.length, 0),
+brandList
+});
+}
+});
+return results;
+});
+
+const brandStatementSummaries = computed(() => {
+const results = [];
+const targetMonth = activeMonth.value;
+const monthsToProcess = targetMonth === 'All' ? calendarMonths : [targetMonth];
+// Precompute YTD Generated & YTD Applied per brand at activeSite
+const ytdGenByBrand = {};
+const ytdAppByBrand = {};
+inMemoryLedgerEvents.value.forEach(e => {
+const eSite = detectSiteFromName(e.site || e.Store || '');
+if (activeSite.value !== 'All' && eSite !== activeSite.value) return;
+const amt = Number(e.amount) || 0;
+if (e.type === 'GENERATED') {
+const promoTitle = e.discountTitle || 'Promo';
+if (globalPromoFilters.value.length > 0 && !globalPromoFilters.value.includes(promoTitle)) return;
+const b = resolveToTreezBrandName(e.brand || 'Unmapped', masterWorkbook.value?.data, treesSalesData.value) || 'Unmapped';
+ytdGenByBrand[b] = (ytdGenByBrand[b] || 0) + amt;
+}
+if (e.type === 'RECOVERY') {
+const b = resolveToTreezBrandName(e.brand || 'Unmapped', masterWorkbook.value?.data, treesSalesData.value) || 'Unmapped';
+ytdAppByBrand[b] = (ytdAppByBrand[b] || 0) + amt;
+}
+});
+monthsToProcess.forEach(month => {
+const brandMap = {};
+let monthTotal = 0;
+inMemoryLedgerEvents.value.forEach(sale => {
+if (sale.type !== 'GENERATED') return;
+if (sale.isolation_month !== month) return;
+const saleSite = detectSiteFromName(sale.site || '');
+if (activeSite.value !== 'All' && saleSite !== activeSite.value) return;
+const promoTitle = sale.discountTitle || 'Promo';
+if (globalPromoFilters.value.length > 0 && !globalPromoFilters.value.includes(promoTitle)) return;
+const rawBrand = sale.brand || 'Unmapped';
+const vendor = resolveToTreezBrandName(rawBrand, masterWorkbook.value?.data, treesSalesData.value) || rawBrand;
+if (!vendor) return;
+if (!brandMap[vendor]) {
+const vendorLower = vendor.toLowerCase();
+const email = masterBrands.value.find(b => {
+const bResolved = resolveToTreezBrandName(b.vendor, masterWorkbook.value?.data, treesSalesData.value);
+return String(b.vendor || '').trim().toLowerCase() === vendorLower || bResolved.toLowerCase() === vendorLower;
+})?.email || '';
+const ytdGen = ytdGenByBrand[vendor] || 0;
+const ytdApp = ytdAppByBrand[vendor] || 0;
+brandMap[vendor] = {
+vendor,
+email,
+month,
+total: 0,
+ytdGenerated: ytdGen,
+ytdApplied: ytdApp,
+ytdRemaining: ytdGen - ytdApp,
+credits: []
+};
 }
 const amt = Number(sale.amount) || 0;
 brandMap[vendor].total += amt;
@@ -1975,27 +2220,54 @@ return results;
             };
 
                                                 const masterLedgerData = computed(() => {
-                const map = {};
-                const allEvents = inMemoryLedgerEvents.value;
-
-                allEvents.forEach(e => {
-                    const rawBrand = e.type === 'RECOVERY' ? resolveBrandFromSageMemo(e.memo || e.brand, masterWorkbook.value?.data, masterBrands.value, treesSalesData.value) : (e.brand || e['Mapped Brand'] || 'Unmapped');
-                    const b = rawBrand;
-                    const s = e.site || e.Store || '';
-                    if (activeSite.value !== 'All' && detectSiteFromName(s) !== activeSite.value) return;
-                    if (!map[b]) map[b] = { vendor: b, site: activeSite.value, generated: 0, recovered: 0, outstanding: 0, variance: 0, recoveryEvents: [] };
-                    if (e.type === 'GENERATED') map[b].generated += e.amount;
-                    if (e.type === 'RECOVERY') {
-                        map[b].recovered += e.amount;
-                        map[b].recoveryEvents.push({ date: e.date || 'N/A', ref: e.memo || 'GL', amount: e.amount });
-                    }
-                });
-
-                return Object.values(map).map(v => {
-                    v.outstanding = v.generated - v.recovered;
-                    return v;
-                }).sort((a, b) => b.outstanding - a.outstanding);
-            });
+const map = {};
+const allEvents = inMemoryLedgerEvents.value;
+const targetMonth = activeMonth.value;
+allEvents.forEach(e => {
+const eventMonth = e.isolation_month || detectMonthFromDate(e.date || e.dateClosed || '');
+if (targetMonth !== 'All' && eventMonth !== targetMonth) return;
+const s = e.site || e.Store || '';
+if (activeSite.value !== 'All' && detectSiteFromName(s) !== activeSite.value) return;
+if (e.type === 'GENERATED') {
+const promoTitle = e.discountTitle || 'Promo';
+if (globalPromoFilters.value.length > 0 && !globalPromoFilters.value.includes(promoTitle)) return;
+}
+const b = e.type === 'RECOVERY'
+? resolveToTreezBrandName(
+e.brand || resolveBrandFromSageMemo(buildSageSearchText(e), masterWorkbook.value?.data, masterBrands.value, treesSalesData.value),
+masterWorkbook.value?.data,
+treesSalesData.value
+)
+: resolveToTreezBrandName(e.brand || e['Mapped Brand'] || 'Unmapped', masterWorkbook.value?.data, treesSalesData.value);
+if (!map[b]) {
+map[b] = {
+vendor: b,
+site: activeSite.value,
+generated: 0,
+recovered: 0,
+outstanding: 0,
+variance: 0,
+recoveryEvents: []
+};
+}
+const amt = Number(e.amount) || 0;
+if (e.type === 'GENERATED') map[b].generated += amt;
+if (e.type === 'RECOVERY') {
+map[b].recovered += amt;
+map[b].recoveryEvents.push({
+date: e.date || 'N/A',
+month: eventMonth,
+ref: e.memo || e.doc || 'GL',
+amount: amt
+});
+}
+});
+return Object.values(map).map(v => {
+v.outstanding = v.generated - v.recovered;
+v.variance = v.recovered - v.generated;
+return v;
+}).sort((a, b) => b.outstanding - a.outstanding);
+});
 
                         const ledgerTotals = computed(() => {
                 return masterLedgerData.value.reduce((acc, curr) => {
@@ -2066,125 +2338,291 @@ return results;
                 }
             };
 
-            const draftEmail = (brand) => {
-                const to = brand.email || '';
-                const subject = `Promo Credit Reconciliation - ${activeMonth.value} 2026 - ${brand.vendor}`;
-                const body = `Hello Team,\n\nPlease find the attached promo credit reconciliation for ${activeMonth.value}.\n\nTotal Generated: ${formatCurrency(brand.total)}\nTotal Credits: ${brand.credits.length}\n\nPlease review the attached CSV statement and let us know if you have any questions.\n\nBest,\n${loggedInUser.value || 'Accounting'}`;
-                window.location.href = emailService.buildMailtoUrl(to, '', subject, body);
-            };
+            // Pure single-month generated report email (Brand Reports tab)
+const draftEmail = (brand) => {
+const reportMonth = brand.month || activeMonth.value;
+const to = brand.email || '';
+const subject = `Promo Credits Generated - ${reportMonth} 2026 -${brand.vendor}`;
+const body = `Hello Team,\n\nPlease find the promo credits generated for ${reportMonth} 2026.\n\nTotal Promo Credits Generated (${reportMonth}): ${formatCurrency(brand.total)}\nTotal Qualifying Items:${brand.credits.length}\n\nPlease review the attached ${reportMonth} report Excel file and let us know if you have any questions.\n\nBest,\n${loggedInUser.value || 'Accounting'}`;
+window.location.href = emailService.buildMailtoUrl(to, '', subject, body);
+};
+// Full YTD reconciliation statement email (Brand Statements tab)
+const draftStatementEmail = (brand) => {
+const statementMonth = brand.month || activeMonth.value;
+const to = brand.email || '';
+const subject = `Promo Credit Statement (YTD) - ${statementMonth} 2026 -${brand.vendor}`;
+const body = `Hello Team,\n\nPlease find the attached Year-to-Date promo credit statement through ${statementMonth} 2026.\n\n${statementMonth} Credits Generated: ${formatCurrency(brand.total)}\nYTD Credits Generated:${formatCurrency(brand.ytdGenerated)}\nYTD Credits Applied: ${formatCurrency(brand.ytdApplied)}\nYTD Remaining Balance:${formatCurrency(brand.ytdRemaining)}\n\nPlease review the attached YTD Excel statement and let us know if you have any questions.\n\nBest,\n${loggedInUser.value || 'Accounting'}`;
+window.location.href = emailService.buildMailtoUrl(to, '', subject, body);
+};
+// Pure single-month generated promo CSV export (Brand Reports tab - NO YTD, NO GL applied/remaining)
+const downloadMonthlyReport = (brandOrMonthGroup) => {
+    const isSingleBrand = !!brandOrMonthGroup.vendor;
+    const targetVendor = isSingleBrand ? resolveToTreezBrandName(brandOrMonthGroup.vendor, masterWorkbook.value?.data, treesSalesData.value) : 'All';
+    const targetMonth = brandOrMonthGroup.month || activeMonth.value;
+    const targetSite = activeSite.value;
 
-                                                const downloadMonthlyReport = (brandOrMonthGroup) => {
-                                                const isSingleBrand = !!brandOrMonthGroup.vendor;
-                                                const targetVendor = isSingleBrand ? resolveToTreezBrandName(brandOrMonthGroup.vendor, masterWorkbook.value?.data, treesSalesData.value) : 'All';
-                                                const targetMonth = activeMonth.value;
-                                                const targetSite = activeSite.value;
-                                                let csvContent = "";
-                                                // SECTION 1: SUMMARY (12-Month & YTD)
-                                                csvContent += "Period,Location,Brand,New_Cred,Credits_Applied,Remaining,Status\n";
-                                                const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-                                                let ytdGenerated = 0;
-                                                                                                let ytdApplied = 0;
-                                                const monthGenMap = Object.fromEntries(months.map(m => [m, 0]));
-                                                const monthAppMap = Object.fromEntries(months.map(m => [m, 0]));
-                                                inMemoryLedgerEvents.value.forEach(e => {
-                                                    if (e.type !== 'GENERATED' || !Object.prototype.hasOwnProperty.call(monthGenMap, e.isolation_month)) return;
-                                                    const eSite = detectSiteFromName(e.site || e.Store || '');
-                                                    if (targetSite !== 'All' && eSite !== targetSite) return;
-                                                    const eBrand = resolveToTreezBrandName(e.brand || e['Mapped Brand'] || 'Unmapped', masterWorkbook.value?.data, treesSalesData.value);
-                                                    if (targetVendor !== 'All' && eBrand !== targetVendor) return;
-                                                    monthGenMap[e.isolation_month] += (Number(e.amount) || 0);
-                                                });
-                                                unifiedRecoveryEvents.value.forEach(e => {
-                                                    if (!Object.prototype.hasOwnProperty.call(monthAppMap, e.isolation_month)) return;
-                                                    const eSite = detectSiteFromName(e.site || e.Store || '');
-                                                    if (targetSite !== 'All' && eSite !== targetSite) return;
-                                                    if (targetVendor !== 'All' && e.brand !== targetVendor) return;
-                                                    monthAppMap[e.isolation_month] += (Number(e.amount) || 0);
-                                                });
-                                                months.forEach(m => {
-                                                    const monthGen = monthGenMap[m] || 0;
-                                                    const monthApp = monthAppMap[m] || 0;
-                                                    const remaining = monthGen - monthApp;
-                                                    let status = 'No Activity';
-                                                    if (remaining > 0) status = 'Outstanding';
-                                                    if (remaining < 0) status = 'Pending';
-                                                    if (monthGen > 0 && remaining === 0) status = 'Resolved';
-                                                    csvContent += `"${m}-26","${targetSite}","${targetVendor}","${monthGen.toFixed(2)}","${monthApp.toFixed(2)}","${remaining.toFixed(2)}","${status}"\n`;
-                                                    ytdGenerated += monthGen;
-                                                    ytdApplied += monthApp;
-                                                });
-                                                const ytdRemaining = ytdGenerated - ytdApplied;
-                                                let ytdStatus = 'No Activity';
-                                                if (ytdRemaining > 0) ytdStatus = 'Outstanding';
-                                                if (ytdRemaining < 0) ytdStatus = 'Pending';
-                                                if (ytdGenerated > 0 && ytdRemaining === 0) ytdStatus = 'Resolved';
-                                                csvContent += `"YTD Total","${targetSite}","${targetVendor}","${ytdGenerated.toFixed(2)}","${ytdApplied.toFixed(2)}","${ytdRemaining.toFixed(2)}","${ytdStatus}"\n`;
-                                                if (isSingleBrand) {
-                                                const parentDist = MULTI_BRAND_DISTRIBUTORS.find(d =>
-                                                d.childBrands.some(cb => resolveToTreezBrandName(cb.brand, masterWorkbook.value?.data, treesSalesData.value).toUpperCase() === targetVendor.toUpperCase())
-                                                );
-                                                if (parentDist) {
-                                                const unallocatedPoolTotal = unifiedRecoveryEvents.value
-                                                .filter(e => {
-                                                const eSite = detectSiteFromName(e.site || e.Store || '');
-                                                if (targetSite !== 'All' && eSite !== targetSite) return false;
-                                                return e.brand === parentDist.poolLabel;
-                                                })
-                                                .reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
-                                                if (unallocatedPoolTotal > 0) {
-                                                csvContent += `"Note","${targetSite}","${targetVendor}","0.00","${unallocatedPoolTotal.toFixed(2)}","0.00","Unallocated ${parentDist.name} GL pool held separately (not double-counted)"\n`;
-                                                }
-                                                }
-                                                }
-                                                csvContent += "\n--- SECTION 2: ITEMIZED ACTIVITY GROUPED BY PROMOTION ---\n\n";
-                                                // SECTION 2: ITEMIZED (Uses activeMonth filter)
-                                                const rawSales = inMemoryLedgerEvents.value.filter(sale => {
-                                                if (sale.type !== 'GENERATED') return false;
-                                                if (targetMonth !== 'All' && sale.isolation_month !== targetMonth) return false;
-                                                const saleSite = detectSiteFromName(sale.site || '');
-                                                if (targetSite !== 'All' && saleSite !== targetSite) return false;
-                                                const promoTitle = sale.discountTitle || 'Promo';
-                                                if (!globalPromoFilters.value.includes(promoTitle)) return false;
-                                                const v = resolveToTreezBrandName(sale.brand || 'Unmapped', masterWorkbook.value?.data, treesSalesData.value);
-                                                if (targetVendor !== 'All' && v !== targetVendor) return false;
-                                                return true;
-                                                });
-                                                const promoGroups = {};
-                                                rawSales.forEach(sale => {
-                                                const p = sale.discountTitle || 'Unknown Promo';
-                                                if (!promoGroups[p]) promoGroups[p] = [];
-                                                promoGroups[p].push(sale);
-                                                });
-                                                Object.keys(promoGroups).forEach(promoName => {
-                                                csvContent += `PROMOTION: ${promoName}\n`;
-                                                csvContent += "Date Closed,Month,Store Location,Product Brand,Product Name,Units Sold,Discount,Credit Amount Owed\n";
-                                                let subtotal = 0;
-                                                promoGroups[promoName].forEach(sale => {
-                                                const date = sale.date || '';
-                                                const month = sale.isolation_month || '';
-                                                const site = detectSiteFromName(sale.site || '');
-                                                const brand = resolveToTreezBrandName(sale.brand, masterWorkbook.value?.data, treesSalesData.value);
-                                                const prodName = String(sale['Product Name'] || sale.productName || 'N/A').replace(/"/g, '""');
-                                                const units = sale['Qty Sold'] || sale.qty || sale.units || 1;
-                                                const amt = Number(sale.amount) || 0;
-                                                subtotal += amt;
-                                                csvContent += `"${date}","${month}","${site}","${brand}","${prodName}","${units}","${amt.toFixed(2)}","${amt.toFixed(2)}"\n`;
-                                                });
-                                                csvContent += `Subtotal for ${promoName},,,,,,,"${subtotal.toFixed(2)}"\n\n`;
-                                                });
-                                                const filename = isSingleBrand
-                                                ? `${targetVendor}_${targetMonth}_2026_Statement.csv`
-                                                : `${targetMonth}_2026_Full_Promo_Report.csv`;
-                                                const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
-                                                const url = URL.createObjectURL(blob);
-                                                const link = document.createElement("a");
-                                                link.setAttribute("href", url);
-                                                link.setAttribute("download", filename);
-                                                document.body.appendChild(link);
-                                                link.click();
-                                                document.body.removeChild(link);
-                                                setTimeout(() => URL.revokeObjectURL(url), 150);
-                                                };
+    const rawSales = inMemoryLedgerEvents.value.filter(sale => {
+        if (sale.type !== 'GENERATED') return false;
+        if (targetMonth !== 'All' && sale.isolation_month !== targetMonth) return false;
+        const saleSite = detectSiteFromName(sale.site || '');
+        if (targetSite !== 'All' && saleSite !== targetSite) return false;
+        const promoTitle = sale.discountTitle || 'Promo';
+        if (globalPromoFilters.value.length > 0 && !globalPromoFilters.value.includes(promoTitle)) return false;
+        const v = resolveToTreezBrandName(sale.brand || 'Unmapped', masterWorkbook.value?.data, treesSalesData.value);
+        if (targetVendor !== 'All' && v !== targetVendor) return false;
+        return true;
+    });
+
+    const promoGroups = {};
+    rawSales.forEach(sale => {
+        const p = sale.discountTitle || 'Unknown Promo';
+        if (!promoGroups[p]) promoGroups[p] = [];
+        promoGroups[p].push(sale);
+    });
+
+    let grandTotal = 0;
+    
+    // Create Excel Workbook
+    const wb = XLSX.utils.book_new();
+    const wsData = [];
+    
+    // Header Row
+    wsData.push(['Promotion', 'Date Closed', 'Month', 'Store Location', 'Product Brand', 'Product Name', 'Units Sold', 'Credit Amount Owed']);
+
+    Object.keys(promoGroups).forEach(promoName => {
+        let subtotal = 0;
+        
+        // Add Promo Summary Row (This will be visible by default)
+        const summaryRowIndex = wsData.length;
+        wsData.push([`Total for ${promoName}`, '', '', '', '', '', '', 0]); // 0 is a placeholder
+        
+        promoGroups[promoName].forEach(sale => {
+            const date = sale.date || sale.dateClosed || '';
+            const month = sale.isolation_month || '';
+            const site = detectSiteFromName(sale.site || '');
+            const brand = resolveToTreezBrandName(sale.brand, masterWorkbook.value?.data, treesSalesData.value);
+            const prodName = String(sale['Product Name'] || sale.productName || 'N/A').replace(/"/g, '""');
+            const units = sale['Qty Sold'] || sale.unitsSold || sale.qty || sale.units || 1;
+            const amt = Number(sale.amount) || 0;
+            
+            subtotal += amt;
+            grandTotal += amt;
+            
+            // Add Line Item Row
+            wsData.push([promoName, date, month, site, brand, prodName, units, amt]);
+        });
+        
+        // Update the summary row with the actual subtotal
+        wsData[summaryRowIndex][7] = subtotal;
+    });
+
+    // Add Grand Total Row
+    wsData.push([`Grand Total (${targetMonth})`, '', '', '', '', '', '', grandTotal]);
+
+    const ws = XLSX.utils.aoa_to_sheet(wsData);
+    
+    for (let r = 1; r < wsData.length; r++) {
+        const cell = ws[XLSX.utils.encode_cell({c: 7, r: r})];
+        if (cell && typeof cell.v === 'number') cell.z = '"$"#,##0.00';
+    }
+
+    // Auto-filter settings (Optional, helps users filter columns)
+    ws['!autofilter'] = { ref: `A1:H${wsData.length}` };
+
+    // Set Column Widths for better visibility
+    ws['!cols'] = [
+        { wch: 30 }, // Promotion
+        { wch: 15 }, // Date Closed
+        { wch: 10 }, // Month
+        { wch: 15 }, // Store Location
+        { wch: 20 }, // Product Brand
+        { wch: 40 }, // Product Name
+        { wch: 10 }, // Units Sold
+        { wch: 20 }  // Credit Amount Owed
+    ];
+    
+    // Group rows logic (collapsing line items under their summary)
+    ws['!rows'] = [];
+    let currentRow = 1; // Start after header
+    Object.keys(promoGroups).forEach(promoName => {
+        currentRow++; // Skip the summary row
+        for(let i = 0; i < promoGroups[promoName].length; i++) {
+            ws['!rows'][currentRow] = { hidden: true, level: 1 };
+            currentRow++;
+        }
+    });
+
+    // Add sheet to workbook
+    XLSX.utils.book_append_sheet(wb, ws, 'Monthly Report');
+
+    const filename = isSingleBrand
+        ? `${targetVendor}_${targetMonth}_2026_Report.xlsx`
+        : `${targetMonth}_2026_Full_Promo_Report.xlsx`;
+        
+    XLSX.writeFile(wb, filename);
+};
+// Full 12-month & YTD reconciliation statement Excel export (Brand Statements tab)
+const downloadBrandStatement = (brandOrMonthGroup) => {
+const isSingleBrand = !!brandOrMonthGroup.vendor;
+const targetVendor = isSingleBrand ? resolveToTreezBrandName(brandOrMonthGroup.vendor, masterWorkbook.value?.data, treesSalesData.value) : 'All';
+const targetMonth = brandOrMonthGroup.month || activeMonth.value;
+const targetSite = activeSite.value;
+
+const wb = XLSX.utils.book_new();
+const wsData = [];
+
+// SECTION 1: SUMMARY (12-Month & YTD)
+wsData.push(['Period', 'Location', 'Brand', 'New Credits Generated', 'Credits Applied', 'Remaining Balance', 'Status']);
+
+const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+let ytdGenerated = 0;
+let ytdApplied = 0;
+const monthGenMap = Object.fromEntries(months.map(m => [m, 0]));
+const monthAppMap = Object.fromEntries(months.map(m => [m, 0]));
+
+inMemoryLedgerEvents.value.forEach(e => {
+if (e.type !== 'GENERATED' || !Object.prototype.hasOwnProperty.call(monthGenMap, e.isolation_month)) return;
+const eSite = detectSiteFromName(e.site || e.Store || '');
+if (targetSite !== 'All' && eSite !== targetSite) return;
+const eBrand = resolveToTreezBrandName(e.brand || e['Mapped Brand'] || 'Unmapped', masterWorkbook.value?.data, treesSalesData.value);
+if (targetVendor !== 'All' && eBrand !== targetVendor) return;
+monthGenMap[e.isolation_month] += (Number(e.amount) || 0);
+});
+
+unifiedRecoveryEvents.value.forEach(e => {
+if (!Object.prototype.hasOwnProperty.call(monthAppMap, e.isolation_month)) return;
+const eSite = detectSiteFromName(e.site || e.Store || '');
+if (targetSite !== 'All' && eSite !== targetSite) return;
+const eBrand = resolveToTreezBrandName(e.brand || 'Unmapped', masterWorkbook.value?.data, treesSalesData.value);
+if (targetVendor !== 'All' && eBrand !== targetVendor) return;
+monthAppMap[e.isolation_month] += (Number(e.amount) || 0);
+});
+months.forEach(m => {
+const monthGen = monthGenMap[m] || 0;
+const monthApp = monthAppMap[m] || 0;
+const remaining = monthGen - monthApp;
+let status = 'No Activity';
+if (remaining > 0) status = 'Outstanding';
+if (remaining < 0) status = 'Pending';
+if (monthGen > 0 && remaining === 0) status = 'Resolved';
+wsData.push([`${m} 2026`, targetSite, targetVendor, monthGen, monthApp, remaining, status]);
+ytdGenerated += monthGen;
+ytdApplied += monthApp;
+});
+const ytdRemaining = ytdGenerated - ytdApplied;
+let ytdStatus = 'No Activity';
+if (ytdRemaining > 0) ytdStatus = 'Outstanding';
+if (ytdRemaining < 0) ytdStatus = 'Pending';
+if (ytdGenerated > 0 && ytdRemaining === 0) ytdStatus = 'Resolved';
+wsData.push(["YTD Total", targetSite, targetVendor, ytdGenerated, ytdApplied, ytdRemaining, ytdStatus]);
+if (isSingleBrand) {
+const parentDist = MULTI_BRAND_DISTRIBUTORS.find(d =>
+d.childBrands.some(cb => resolveToTreezBrandName(cb.brand, masterWorkbook.value?.data, treesSalesData.value).toUpperCase() === targetVendor.toUpperCase())
+);
+if (parentDist) {
+const unallocatedPoolTotal = unifiedRecoveryEvents.value
+.filter(e => {
+const eSite = detectSiteFromName(e.site || e.Store || '');
+if (targetSite !== 'All' && eSite !== targetSite) return false;
+return e.brand === parentDist.poolLabel;
+})
+.reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
+if (unallocatedPoolTotal > 0) {
+wsData.push(["Note", targetSite, targetVendor, 0, unallocatedPoolTotal, 0, `Unallocated ${parentDist.name} GL pool held separately (not double-counted)`]);
+}
+}
+}
+
+wsData.push([]);
+wsData.push(["--- SECTION 2: ITEMIZED ACTIVITY GROUPED BY PROMOTION ---"]);
+wsData.push([]);
+wsData.push(['Promotion', 'Date Closed', 'Month', 'Store Location', 'Product Brand', 'Product Name', 'Units Sold', 'Credit Amount Owed']);
+
+const rawSales = inMemoryLedgerEvents.value.filter(sale => {
+if (sale.type !== 'GENERATED') return false;
+if (targetMonth !== 'All' && sale.isolation_month !== targetMonth) return false;
+const saleSite = detectSiteFromName(sale.site || '');
+if (targetSite !== 'All' && saleSite !== targetSite) return false;
+const promoTitle = sale.discountTitle || 'Promo';
+if (globalPromoFilters.value.length > 0 && !globalPromoFilters.value.includes(promoTitle)) return false;
+const v = resolveToTreezBrandName(sale.brand || 'Unmapped', masterWorkbook.value?.data, treesSalesData.value);
+if (targetVendor !== 'All' && v !== targetVendor) return false;
+return true;
+});
+const promoGroups = {};
+rawSales.forEach(sale => {
+const p = sale.discountTitle || 'Unknown Promo';
+if (!promoGroups[p]) promoGroups[p] = [];
+promoGroups[p].push(sale);
+});
+
+let grandTotal = 0;
+const hiddenRows = [];
+
+Object.keys(promoGroups).forEach(promoName => {
+let subtotal = 0;
+
+const summaryRowIndex = wsData.length;
+wsData.push([`Total for ${promoName}`, '', '', '', '', '', '', 0]); 
+
+promoGroups[promoName].forEach(sale => {
+const date = sale.date || sale.dateClosed || '';
+const month = sale.isolation_month || '';
+const site = detectSiteFromName(sale.site || '');
+const brand = resolveToTreezBrandName(sale.brand, masterWorkbook.value?.data, treesSalesData.value);
+const prodName = String(sale['Product Name'] || sale.productName || 'N/A').replace(/"/g, '""');
+const units = sale['Qty Sold'] || sale.unitsSold || sale.qty || sale.units || 1;
+const amt = Number(sale.amount) || 0;
+
+subtotal += amt;
+grandTotal += amt;
+
+hiddenRows.push(wsData.length);
+wsData.push([promoName, date, month, site, brand, prodName, units, amt]);
+});
+
+wsData[summaryRowIndex][7] = subtotal;
+});
+
+wsData.push([`Grand Total (${targetMonth === 'All' ? 'YTD' : targetMonth})`, '', '', '', '', '', '', grandTotal]);
+
+const ws = XLSX.utils.aoa_to_sheet(wsData);
+
+for (let r = 1; r < wsData.length; r++) { 
+    // Format Generated/Applied/Remaining in Section 1 (Cols D, E, F)
+    [3, 4, 5].forEach(c => {
+        const cell = ws[XLSX.utils.encode_cell({c: c, r: r})];
+        if (cell && typeof cell.v === 'number') cell.z = '"$"#,##0.00';
+    });
+    // Format Itemized Credit Amount Owed in Section 2 (Col H)
+    const cellH = ws[XLSX.utils.encode_cell({c: 7, r: r})];
+    if (cellH && typeof cellH.v === 'number') cellH.z = '"$"#,##0.00';
+}
+
+ws['!cols'] = [
+    { wch: 30 }, 
+    { wch: 15 }, 
+    { wch: 15 }, 
+    { wch: 20 }, 
+    { wch: 20 }, 
+    { wch: 40 }, 
+    { wch: 15 }, 
+    { wch: 20 }  
+];
+
+ws['!rows'] = [];
+hiddenRows.forEach(rowIndex => {
+    ws['!rows'][rowIndex] = { hidden: true, level: 1 };
+});
+
+XLSX.utils.book_append_sheet(wb, ws, 'YTD Statement');
+
+const filename = isSingleBrand 
+    ? `${targetVendor}_${targetMonth}_2026_Statement.xlsx` 
+    : `${targetMonth}_2026_Full_YTD_Statement.xlsx`;
+
+XLSX.writeFile(wb, filename);
+};
 
             const exportYTDVariancePDF = () => {
 if (typeof window.jspdf === 'undefined') {
@@ -2242,22 +2680,24 @@ doc.save(`Variance_Report_${activeSite.value.replace(/\s+/g, '_')}_${activeMonth
                         return {
                 isManagerUnlocked, showWorkspaceMenu, showAdminMenu, loggedInUser,
                 emailInput, passwordInput, authError, activeSite, activeTab,
-                activeMonth, masterWorkbook, activeWorkbookSheet, calendarMonths,
+                                activeMonth, masterWorkbook, activeWorkbookSheet, calendarMonths,
                 workspaceTabs, activeWorkspaceInfo, selectWorkspace,
                 isProcessing, isGlobalLoading, progressPercent, progressMessage,
                 progressDetails, progressETA, localWbStatus, localTreezStatus,
                 localSageStatus, localSyncSummary, treesSalesData, ledgerEventsList,
                 searchQueryInput, inMemoryLedgerEvents, handleLogin, handleLocalWbUpload,
                                 handleLocalTreezUpload, handleLocalSageUpload, handleLocalSyncMemory,
-                handleLocalExportWb, draftEmail, downloadMonthlyReport, exportYTDVariancePDF, formatCurrency, masterBrands, selectedBrands,
+                handleLocalExportWb, draftEmail, downloadMonthlyReport,
+                brandStatementSummaries, draftStatementEmail, downloadBrandStatement,
+                exportYTDVariancePDF, formatCurrency, masterBrands, selectedBrands,
                 allBrandsSelected, toggleAllBrands, deleteSelectedBrands,
                 updateBrandField, exportVendorsAndBrandsCSV, activeWorkbookHeaders,
                 definitiveBrandMetrics, brandAuditData, sageAuditData,
                 monthlyReportSummaries, filteredCredits, totalPending, totalApplied,
                 filteredTreesSalesData, displayTreesSalesData, unsyncedSalesCount,
                                 allAvailablePromos, globalPromoFilters, toggleGlobalPromo,
-                setAllGlobalPromos, getFilteredBrandTotal, masterLedgerData, ledgerTotals,
-                chartCanvas
+                                setAllGlobalPromos, getFilteredBrandTotal, masterLedgerData, ledgerTotals,
+chartCanvas, selectedLedgerVendor
             };
         }
     }).mount('#app');
